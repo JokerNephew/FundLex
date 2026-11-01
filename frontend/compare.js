@@ -3,7 +3,7 @@
   const api = window.FundLexWorkbench || {};
   const $ = id => document.getElementById(id);
   const esc = api.esc || (v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])));
-  const state = { tasks: [], task: null, pairs: [], pairIndex: 0, selectedPairId: null, view: null, selection: null, selectionDraft: null, selectionDirty: false, selectionSaving: false, selectionToken: 0, selectionSaveToken: 0, poll: null, requestToken: 0, lineFrame: null, scrollFrame: null, scrollSource: null, syncTargets: new Set(), syncSettle: null, identityToken: 0, listToken: 0, inputs: [{}], uploadDraft: null, splitRatio: .5, pendingSplitRatio: .5, splitDragging: false, leftMarks: null, rightMarks: null, mergedMarks: null, wordLeftMarks: null, wordRightMarks: null, viewMode: 'word', classicSide: 'left', classicRendered: false, wordSourcesRendered: false, diffPositions: null, docs: null, rawDocs: null, alignment: null };
+  const state = { tasks: [], task: null, pairs: [], pairIndex: 0, selectedPairId: null, view: null, selection: null, selectionDraft: null, selectionDirty: false, selectionSaving: false, selectionToken: 0, selectionSaveToken: 0, poll: null, pollTaskId: null, requestToken: 0, lineFrame: null, scrollFrame: null, scrollSource: null, syncTargets: new Set(), syncSettle: null, identityToken: 0, listToken: 0, inputs: [{}], uploadDraft: null, splitRatio: .5, pendingSplitRatio: .5, splitDragging: false, splitAlignTimer: null, splitRefreshTimer: null, lineSettle: null, linesScrolling: false, leftMarks: null, rightMarks: null, mergedMarks: null, wordLeftMarks: null, wordRightMarks: null, viewMode: 'word', classicSide: 'left', classicRendered: false, wordSourcesRendered: false, diffPositions: null, docs: null, rawDocs: null, alignment: null };
   const SPLIT_KEY = 'fundlex-compare-split-ratio', SPLIT_GUTTER = 28;
   const clampSplitRatio = value => { const number = Number(value); return value !== null && value !== '' && Number.isFinite(number) ? Math.min(.8, Math.max(.2, number)) : .5; };
   function storedSplitRatio() { try { return clampSplitRatio(localStorage.getItem(SPLIT_KEY)); } catch { return .5; } }
@@ -23,7 +23,7 @@
     const selected = [pair.left?.name || fileName(pair._left), pair.right?.name || fileName(pair._right)].filter(Boolean).join(' / ');
     const sideCard=(side,title,badge)=>{
       const name=pair[side]?.name||fileName(pair[`_${side}`]);
-      return `<div class="compare-file-card ${name?'has-file':''}" data-file-side="${side}"><div class="compare-file-card-title"><span class="compare-side-badge">${badge}</span><strong>${title}</strong></div><div class="compare-file-name" title="${esc(name)}">${esc(name||'尚未选择合同')}</div><div class="compare-file-card-action"><button type="button" class="btn btn-sm" data-compare-choose="${side}" aria-label="选择${title}">${name?'更换文件':'选择文件'}</button><span>仅支持 DOCX</span></div><input type="file" accept=".doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" data-compare-${side}="${index}" aria-label="${title}" hidden></div>`;
+      return `<div class="compare-file-card ${name?'has-file':''}" data-file-side="${side}"><div class="compare-file-card-title"><span class="compare-side-badge">${badge}</span><strong>${title}</strong></div><div class="compare-file-name" title="${esc(name)}">${esc(name||'尚未选择合同')}</div><div class="compare-file-card-action"><button type="button" class="btn btn-sm" data-compare-choose="${side}" aria-label="选择${title}">${name?'更换文件':'选择文件'}</button><span>仅支持 DOCX；.doc 请先另存为 .docx。带修订痕迹的文件可直接上传，按「接受全部修订」后的内容比对</span></div><input type="file" accept=".doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" data-compare-${side}="${index}" aria-label="${title}" hidden></div>`;
     };
     return `<div class="compare-pair-input" data-pair-index="${index}"><div class="compare-pair-head"><strong>合同组 ${String(index+1).padStart(2,'0')}</strong><button type="button" class="btn-link" data-compare-remove="${index}" ${index?'':'disabled'}>移除本组</button></div><div class="compare-side-inputs">${sideCard('left','合同A','A')}${sideCard('right','合同B','B')}</div><p class="sr-only compare-file-label" data-compare-label="${index}">${esc(selected||'尚未选择文件')}</p></div>`;
   }
@@ -32,7 +32,7 @@
   function selectedFiles() { return (state.inputs || []).map(x => ({ left: x._left || x.left, right: x._right || x.right })).filter(x => x.left || x.right); }
   function resetFolders() { state.folderLeft=[]; state.folderRight=[]; for(const id of ['compare-left-folder','compare-right-folder'])if($(id))$(id).value=''; }
   function showCreate(show=true) { $('compare-create').hidden = !show; if (show) { clearTimeout(state.poll); state.requestToken++; $('compare-detail').hidden=true; setFullscreenViewer(false); state.view=null; state.mergedMarks=state.leftMarks=state.rightMarks=null; state.uploadDraft=null; state.inputs=[{}]; resetFolders(); $('compare-upload-message').textContent=''; $('compare-retry').hidden=true; $('compare-lines')?.replaceChildren(); for(const pane of [$('compare-word-merged-pane'),$('compare-word-left-pane'),$('compare-word-right-pane'),$('compare-left-pane'),$('compare-right-pane')]){clearVirtual(pane);if(pane)pane.innerHTML='';} renderInputs(); } }
-  function statusLabel(v) { return ({pending:'待上传',queued:'排队中',leased:'处理中',running:'处理中',succeeded:'已处理',incomplete:'覆盖不完整',failed:'失败',retry_wait:'等待重试',sealed:'已提交',uploading:'上传中',completed:'已处理'}[v] || v || '—'); }
+  function statusLabel(v) { return ({...(window.FUNDLEX_STATUS_LABELS||{}),pending:'待上传',succeeded:'已处理',incomplete:'覆盖不完整',failed:'失败',sealed:'已提交',completed:'已处理'}[v] || '—'); }
   function taskMetrics(task) {
     const pairs=task.pairs||[], counts=task.counts||{};
     const count=status=>pairs.length?pairs.filter(p=>p.status===status).length:(counts[status]||0);
@@ -57,9 +57,19 @@
   function renderTask(task) {
     state.task=task; state.pairs=task.pairs||[]; $('compare-detail').hidden=false; $('compare-task-name').textContent=task.name||'未命名任务';api.setObjectTitle?.('compare',task.name); $('compare-task-status').textContent=`${taskMetrics(task).status} · ${state.pairs.length} 组`;
     state.tasks=state.tasks.map(t=>t.id===task.id?task:t); renderTasks(); renderPairs();
+    const hasResult=state.pairs.some(p=>['succeeded','incomplete'].includes(p.status));
+    const pendingNote=$('compare-pending-note'); if(pendingNote)pendingNote.hidden=hasResult;
+  }
+  function failureStageLabel(v) { return ({claim_setup:'开始处理',input_integrity:'文件检查',compare:'文本比对',heartbeat:'处理中',finish:'保存结果'} [v] || v || '未知阶段'); }
+  function pairErrorLabel(p) {
+    if (p.viewError) return p.viewError;
+    if (!p.error_code) return '';
+    const failure=p.diagnostics?.failure;
+    if (!failure || failure.error_code!==p.error_code) return `处理失败，请稍后重试`;
+    return `处理失败：${failureStageLabel(failure.stage)}环节出错${failure.retryable?'，可重试':'，请重新创建合同组'}`;
   }
   function renderPairs() {
-    $('compare-pair-list').innerHTML=`<div class="compare-pair-statuses">${state.pairs.map((p,i)=>`<button type="button" class="compare-pair-status ${p.id===state.selectedPairId?'is-selected':''} ${['succeeded','incomplete'].includes(p.status)?'is-done':''} ${p.status==='incomplete'?'is-incomplete':''} ${p.status==='failed'||p.viewError?'is-failed':''}" data-compare-pair="${i}"><span class="compare-pair-number">${String(i+1).padStart(2,'0')}</span><span class="compare-pair-main"><strong>${esc(p.label||`第 ${i+1} 组`)}</strong><small>合同A：${esc(p.left?.name||'未命名')} / 合同B：${esc(p.right?.name||'未命名')}</small></span><span class="compare-pair-state">${esc(statusLabel(p.status))}${p.summary?` · ${p.summary.total} 处`:''}</span>${p.error_code||p.viewError?`<span class="compare-pair-error" role="status">${esc(p.viewError||`处理失败：${p.error_code}`)}</span>`:''}</button>`).join('')}</div>`;
+    $('compare-pair-list').innerHTML=`<div class="compare-pair-statuses">${state.pairs.map((p,i)=>`<button type="button" class="compare-pair-status ${p.id===state.selectedPairId?'is-selected':''} ${['succeeded','incomplete'].includes(p.status)?'is-done':''} ${p.status==='incomplete'?'is-incomplete':''} ${p.status==='failed'||p.viewError?'is-failed':''}" data-compare-pair="${i}"><span class="compare-pair-number">${String(i+1).padStart(2,'0')}</span><span class="compare-pair-main"><strong>${esc(p.label||`第 ${i+1} 组`)}</strong><small>合同A：${esc(p.left?.name||'未命名')} / 合同B：${esc(p.right?.name||'未命名')}</small></span><span class="compare-pair-state">${esc(statusLabel(p.status))}${p.summary?` · ${p.summary.total} 处`:''}</span>${p.error_code||p.viewError?`<span class="compare-pair-error" role="status">${esc(pairErrorLabel(p))}</span>`:''}</button>`).join('')}</div>`;
   }
   function markFiles(form, files, pair) { const ids=[]; for (const side of ['left','right']) { form.append('files',files[side],pair[side].name); ids.push(pair[side].client_id); } form.append('client_ids', JSON.stringify(ids)); }
   async function continueUploads() {
@@ -71,10 +81,11 @@
         const form=new FormData(); markFiles(form,x,draft.pairs[i]); const uploaded=await json(`/api/compare/tasks/${encodeURIComponent(draft.task.id)}/uploads`,{method:'POST',body:form});
         if(identity!==state.identityToken)return; const receipts=uploaded.receipts||[],bad=['left','right'].map(side=>receipts.find(r=>r.client_id===draft.pairs[i][side].client_id)).filter(r=>!r||!['accepted','already_accepted'].includes(r.status));
         if(bad.length)throw Error(`第 ${i+1} 组上传未完成：${bad.map(r=>r?`${r.client_id}（${uploadErrorLabel(r.error_code)||r.status}）`:'缺少上传回执').join('、')}`);
+        draft.acceptedRevisions=(draft.acceptedRevisions||0)+receipts.reduce((n,r)=>n+(r&&Number(r.revisions_accepted)>0?1:0),0);
         draft.next=i+1;
       }
       message.textContent='文件已上传，正在提交对比任务…'; await json(`/api/compare/tasks/${encodeURIComponent(draft.task.id)}/seal`,{method:'POST'}); if(identity!==state.identityToken)return;
-      message.textContent='已提交，对比任务正在处理。'; state.uploadDraft=null; showCreate(false); await loadTasks(); await openTask(draft.task.id);
+      message.textContent='已提交，对比任务正在处理。'+(draft.acceptedRevisions>0?`其中 ${draft.acceptedRevisions} 份文件带修订痕迹，已按「接受全部修订」后的内容参与比对。`:''); state.uploadDraft=null; showCreate(false); await loadTasks(); await openTask(draft.task.id);
     } catch(e) { if(identity===state.identityToken){message.textContent=`上传中断：${e.message}。已完成的文件已保留，可点击“继续上传”。`; $('compare-retry').hidden=false;} }
     finally { if(identity===state.identityToken)$('compare-submit').disabled=false; }
   }
@@ -83,7 +94,7 @@
     const legacy=files.flatMap(x=>[x.left,x.right]).filter(f=>f&&legacyDoc(f));
     if(legacy.length){message.textContent=legacyDocMessage(legacy);return;}
     if (!files.length || files.some(x=>!x.left||!x.right)) { message.textContent='每组都需要同时选择合同A和合同B的 DOCX 文件。'; return; }
-    const identity=state.identityToken; const name=($('compare-name').value||'合同比对').trim(); const pairs=files.map((x,i)=>{const leftId=`L${i}-${crypto.randomUUID()}`,rightId=`R${i}-${crypto.randomUUID()}`;return {client_pair_id:`P${i+1}`,label:`合同 ${i+1}`,left:{client_id:leftId,name:fileName(x.left),size:x.left.size},right:{client_id:rightId,name:fileName(x.right),size:x.right.size}};});
+    const identity=state.identityToken; const name=($('compare-name').value||'').trim()||`合同比对 ${new Date().toLocaleString('zh-CN',{hour12:false})}`; const pairs=files.map((x,i)=>{const leftId=`L${i}-${crypto.randomUUID()}`,rightId=`R${i}-${crypto.randomUUID()}`;return {client_pair_id:`P${i+1}`,label:`合同 ${i+1}`,left:{client_id:leftId,name:fileName(x.left),size:x.left.size},right:{client_id:rightId,name:fileName(x.right),size:x.right.size}};});
     const key=`compare-${Date.now()}-${crypto.randomUUID()}`; message.textContent='正在创建对比任务…'; $('compare-submit').disabled=true;
     try { const task=await json('/api/compare/tasks',{method:'POST',headers:{'Content-Type':'application/json','Idempotency-Key':key},body:JSON.stringify({name,pairs})}); if(identity!==state.identityToken)return; state.uploadDraft={task,pairs,files,next:0}; await continueUploads(); }
     catch(e) { if(identity===state.identityToken){message.textContent=`创建任务失败：${e.message}`;$('compare-submit').disabled=false;} }
@@ -121,6 +132,10 @@
       if (!dragging) return;
       event.preventDefault(); state.pendingSplitRatio = ratioAt(event); showPreview(state.pendingSplitRatio);
     };
+    const scheduleAlign = () => {
+      clearTimeout(state.splitAlignTimer);
+      state.splitAlignTimer = setTimeout(alignPanels, 120);
+    };
     const finish = apply => {
       if (!dragging) return;
       dragging = false; state.splitDragging = false;
@@ -128,6 +143,10 @@
       if (preview) { preview.style.left = ''; preview.style.opacity = ''; }
       window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', onUp); window.removeEventListener('pointercancel', onCancel);
       applySplitRatio(apply ? state.pendingSplitRatio : state.splitRatio, true); refreshVirtualLayouts(); drawLines();
+      // The re-wrap above invalidates every pane's own anchor; re-align the
+      // panes through the block-index model so the correspondence survives
+      // the width change (FL-D841).
+      if (apply) scheduleAlign();
     };
     const onUp = () => finish(true);
     const onCancel = () => finish(false);
@@ -141,31 +160,46 @@
       showPreview(state.splitRatio);
       window.addEventListener('pointermove', move); window.addEventListener('pointerup', onUp); window.addEventListener('pointercancel', onCancel);
     });
-    gutter.addEventListener('dblclick', () => applySplitRatio(.5));
+    gutter.addEventListener('dblclick', () => { applySplitRatio(.5); refreshVirtualLayouts(); drawLines(); scheduleAlign(); });
     gutter.addEventListener('keydown', event => {
       const step = event.shiftKey ? .05 : .02; let next = state.splitRatio;
       if (event.key === 'ArrowLeft') next -= step;
       else if (event.key === 'ArrowRight') next += step;
       else if (event.key === 'Home') next = .2;
       else if (event.key === 'End') next = .8;
-      else if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); applySplitRatio(.5); return; }
+      else if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); applySplitRatio(.5); refreshVirtualLayouts(); drawLines(); scheduleAlign(); return; }
       else return;
       event.preventDefault(); applySplitRatio(next);
+      // Keyboard nudges reflow too, but each keystroke must not pay for a
+      // full re-measure; debounce the heavy pass (FL-D840/FL-D841).
+      clearTimeout(state.splitRefreshTimer);
+      state.splitRefreshTimer = setTimeout(() => { refreshVirtualLayouts(); drawLines(); alignPanels(); }, 200);
     });
     applySplitRatio(storedSplitRatio(), false);
   }
   function bindPanelSplitters() {
     if (!window.FundLexColumnSplitter) return;
     let frame = null, alignTimer = null;
-    const refresh = () => {
+    const dragging = () => [$('compare-rail-splitter'), $('compare-word-splitter')].some(h => h?.classList.contains('is-dragging'));
+    const refresh = (final = false) => {
       state.diffPositions = null;
+      if (!final && dragging()) {
+        // Width changes continuously while dragging; the browser reflows the
+        // text on its own. Re-measuring every pane per frame here is what
+        // made the splitter drag stutter (FL-D840), so only the fallback
+        // line redraw stays live and the heavy pass runs once on pointerup.
+        setLinesScrolling(true);
+        drawLines();
+        return;
+      }
+      setLinesScrolling(false);
       if (!frame) frame = requestAnimationFrame(() => {
         frame = null;
         refreshVirtualLayouts();
         drawLines();
       });
       clearTimeout(alignTimer);
-      alignTimer = setTimeout(alignPanels, 160);
+      alignTimer = setTimeout(alignPanels, 120);
     };
     window.FundLexColumnSplitter($('compare-rail-splitter'), $('compare-view-body'), document.querySelector('.compare-word-revisions'), {
       key: 'fundlex-compare-revisions-width',
@@ -173,7 +207,8 @@
       min: 220, max: 660, minOther: 480, fallback: 300,
       side: () => state.viewMode === 'classic' ? 'right' : 'left',
       disabled: () => matchMedia('(max-width: 760px)').matches,
-      onChange: refresh,
+      onChange: () => refresh(false),
+      onEnd: () => refresh(true),
     });
     window.FundLexColumnSplitter($('compare-word-splitter'), $('compare-word-layout'), $('compare-word-sources'), {
       key: 'fundlex-compare-sources-width',
@@ -181,7 +216,8 @@
       min: 240, max: 720, minOther: 480, fallback: 360,
       side: 'right',
       disabled: () => matchMedia('(max-width: 760px)').matches,
-      onChange: refresh,
+      onChange: () => refresh(false),
+      onEnd: () => refresh(true),
     });
   }
   function refreshDiffMarks() {
@@ -195,17 +231,6 @@
     state.leftMarks = marks('compare-left-pane');
     state.rightMarks = marks('compare-right-pane');
   }
-  function cacheDiffPositions() {
-    if(!state.view||!state.leftMarks||!state.rightMarks)return;
-    const left=$('compare-left-pane'),right=$('compare-right-pane'); if(!left||!right)return;
-    const lr=left.getBoundingClientRect(),rr=right.getBoundingClientRect(),positions=[];
-    for(const d of state.view.diffs||[]){
-      const l=state.leftMarks.get(d.id),r=state.rightMarks.get(d.id); if(!l||!r)continue;
-      const a=l.getBoundingClientRect(),b=r.getBoundingClientRect();
-      positions.push({id:d.id,leftY:a.top-lr.top+left.scrollTop,rightY:b.top-rr.top+right.scrollTop,leftH:a.height,rightH:b.height,leftX:a.right-lr.left,rightX:b.left-rr.left});
-    }
-    state.diffPositions=positions;
-  }
   function drawLines() {
     if(state.lineFrame!==null)return;
     state.lineFrame=requestAnimationFrame(()=>{
@@ -216,28 +241,44 @@
       const cr=cols.getBoundingClientRect(); if(!cr.width||!cr.height)return;
       const left=$('compare-left-pane'),right=$('compare-right-pane'); if(!left||!right)return;
       const lr=left.getBoundingClientRect(),rr=right.getBoundingClientRect();
-      if(!state.diffPositions)cacheDiffPositions();
-      if(!state.diffPositions)return;
+      const leftMarks=left._virtualDoc?.marks,rightMarks=right._virtualDoc?.marks;
+      if(!leftMarks||!rightMarks)return;
       const active=visibleDiffs()[state.diffIndex]?.id;
       const leftTop=left.scrollTop,leftBottom=leftTop+left.clientHeight,rightTop=right.scrollTop,rightBottom=rightTop+right.clientHeight;
       const fragment=document.createDocumentFragment(); let count=0;
-      for(const p of state.diffPositions){
-        if(p.id!==active){
-          const above=p.leftY+p.leftH<leftTop-80&&p.rightY+p.rightH<rightTop-80;
-          const below=p.leftY>leftBottom+80&&p.rightY>rightBottom+80;
+      for(const d of state.view.diffs||[]){
+        const lm=leftMarks.get(d.id),rm=rightMarks.get(d.id);
+        if(!lm||!rm)continue;
+        if(d.id!==active){
+          const above=lm.top+lm.height<leftTop-80&&rm.top+rm.height<rightTop-80;
+          const below=lm.top>leftBottom+80&&rm.top>rightBottom+80;
           if(above||below)continue;
         }
-        const x1=lr.left-cr.left+p.leftX,y1=lr.top-cr.top+(p.leftY-leftTop)+p.leftH/2;
-        const x2=rr.left-cr.left+p.rightX,y2=rr.top-cr.top+(p.rightY-rightTop)+p.rightH/2;
-        if(p.id!==active&&((y1<-40&&y2<-40)||(y1>cr.height+40&&y2>cr.height+40)))continue;
+        const x1=lr.left-cr.left+lm.rightX,y1=lr.top-cr.top+(lm.top-leftTop)+lm.height/2;
+        const x2=rr.left-cr.left+rm.leftX,y2=rr.top-cr.top+(rm.top-rightTop)+rm.height/2;
+        if(d.id!==active&&((y1<-40&&y2<-40)||(y1>cr.height+40&&y2>cr.height+40)))continue;
         const path=document.createElementNS('http://www.w3.org/2000/svg','path');
         path.setAttribute('d',`M ${x1} ${y1} C ${(x1+x2)/2} ${y1}, ${(x1+x2)/2} ${y2}, ${x2} ${y2}`);
-        path.dataset.diffId=p.id;path.classList.toggle('active',p.id===active);fragment.append(path);
+        path.dataset.diffId=d.id;path.classList.toggle('active',d.id===active);fragment.append(path);
         if(++count>=240)break;
       }
       svg.setAttribute('viewBox',`0 0 ${cr.width} ${cr.height}`);
       svg.replaceChildren(fragment);
     });
+  }
+  function setLinesScrolling(on) {
+    // Fade the connector lines while a scroll gesture is in flight; they are
+    // recomputed once scrolling settles instead of being rebuilt every frame
+    // (FL-D840). The class is only meaningful in the classic view.
+    if (state.linesScrolling === on) return;
+    state.linesScrolling = on;
+    $('compare-viewer')?.classList.toggle('is-sync-scrolling', on);
+  }
+  function drawLinesDeferred() {
+    if ($('compare-classic-view')?.hidden || $('compare-viewer')?.hidden) return;
+    setLinesScrolling(true);
+    clearTimeout(state.lineSettle);
+    state.lineSettle = setTimeout(() => { setLinesScrolling(false); drawLines(); }, 90);
   }
   function visiblePanels() {
     return allPanels().filter(pane => pane.offsetParent !== null && pane.clientHeight > 0);
@@ -337,8 +378,8 @@
   function syncPaneScroll(source) {
     if(state.focusScrolling){drawLines();return;}
     if (window.matchMedia('(max-width: 760px)').matches) { drawLines(); return; }
-    if (state.syncTargets.has(source)) { drawLines(); return; }
-    if (state.scrollFrame !== null) { drawLines(); return; }
+    if (state.syncTargets.has(source)) { drawLinesDeferred(); return; }
+    if (state.scrollFrame !== null) { drawLinesDeferred(); return; }
     const targets = visiblePanels().filter(p => p !== source);
     if (!targets.length) return;
     state.scrollSource = source;
@@ -396,6 +437,11 @@
               ? (source.id.includes('left')?currentModel.leftToMerged[latestLeft]:currentModel.rightToMerged[latestRight] ?? latestRight)
               : target.id === 'compare-word-left-pane' || target.id === 'compare-left-pane'
                 ? latestLeft : latestRight;
+            // Verify before forcing: while the gesture is still running this
+            // settle fires every 150 ms; panes already on the target block
+            // must not pay for scrollToBlockIndex's force refreshes (FL-D840).
+            const current = doc.visibleBlock?.();
+            if (current && current.index === index && Math.abs(current.fraction - latest.fraction) < .25) return;
             doc.scrollToBlockIndex(index, latest.fraction, false);
           });
         }, 150);
@@ -416,11 +462,12 @@
           target.scrollTop = ratio * targetMax;
         });
       }
-      drawLines();
+      drawLinesDeferred();
       clearTimeout(state.syncRelease);
       state.syncRelease=setTimeout(() => {
         state.syncTargets.clear();
         state.scrollSource = null;
+        setLinesScrolling(false);
         drawLines();
       }, 220);
     });
@@ -477,7 +524,7 @@
   function selectionCurrent(context) { return context.pairId===state.selectedPairId&&context.token===state.selectionToken&&context.identity===state.identityToken; }
   function resetSelection() {
     state.selectionToken++;state.selectionSaveToken++;state.selection=null;state.selectionDraft=null;
-    state.selectionDirty=false;state.selectionSaving=false;state.selectionBusy=false;state.generationKey=null;
+    state.selectionDirty=false;state.selectionSaving=false;state.selectionBusy=false;state.selectionSaved=false;state.generationKey=null;
     selectionStatus('');$('compare-selection-downloads')?.replaceChildren();renderSelection();syncSelectionControls();
   }
   function renderSelectionDownloads() {
@@ -485,7 +532,7 @@
     const artifacts=state.selectionDirty?[]:(state.selection?.artifacts||[]);
     if(!artifacts.length){box.replaceChildren();return;}
     const labels={selected_final:'下载选择结果 DOCX',selected_redline:'下载选择结果（带修订痕迹）DOCX',selection_report_markdown:'下载选择报告（Markdown）',selection_report_json:'下载选择报告（JSON）'};
-    box.innerHTML=artifacts.map(item=>`<div class="compare-artifact"><button class="btn btn-sm" type="button" data-selection-download="${esc(item.download_url)}" data-selection-filename="${esc(`compare-v${item.version}-${item.kind}${item.kind.endsWith('docx')?'.docx':''}`)}" ${item.status==='stale'?'title="该版本已过期，仅作追溯"':''}>${esc(labels[item.kind]||item.kind)} · v${item.version}${item.status==='stale'?' · 已过期':''}</button><small>SHA-256：${esc(item.sha256)}</small></div>`).join('');
+    box.innerHTML=artifacts.map(item=>`<div class="compare-artifact"><button class="btn btn-sm" type="button" data-selection-download="${esc(item.download_url)}" data-selection-filename="${esc(`compare-v${item.version}-${item.kind}${item.kind.endsWith('docx')?'.docx':''}`)}" ${item.status==='stale'?'title="该版本已过期，仅作追溯"':''}>${esc(labels[item.kind]||item.kind)} · v${item.version}${item.status==='stale'?' · 已过期':''}</button></div>`).join('');
   }
   function renderSelection() {
     const s=state.selection, node=$('compare-selection-progress'), buttons=document.querySelectorAll('#compare-selection-left-all,#compare-selection-right-all,#compare-selection-preview,#compare-selection-generate,#compare-selection-save,#compare-selection-pending');
@@ -506,7 +553,7 @@
   }
   async function loadSelection(pairId) {
     resetSelection();const token=state.selectionToken;
-    try { const payload=await json(`/api/compare/pairs/${encodeURIComponent(pairId)}/selection`); if(token!==state.selectionToken||pairId!==state.selectedPairId)return; state.selection=normalizeSelection(payload);state.selectionDraft={...(state.selection?.decisions||{})};renderSelection();syncSelectionControls(); }
+    try { const payload=await json(`/api/compare/pairs/${encodeURIComponent(pairId)}/selection`); if(token!==state.selectionToken||pairId!==state.selectedPairId)return; state.selection=normalizeSelection(payload);state.selectionDraft={...(state.selection?.decisions||{})};state.selectionSaved=(state.selection?.selection_epoch??0)>=1;renderSelection();syncSelectionControls(); }
     catch(e){if(token===state.selectionToken){selectionStatus(`读取选择状态失败：${e.message}`,true);renderSelection();}}
   }
   async function saveSelectionDraft(updateIds) {
@@ -519,14 +566,14 @@
       selectionStatus('正在保存选择…');renderSelection();if(ids)ids.forEach(updateSelectionItem);else syncSelectionControls();
       const payload=await json(`/api/compare/pairs/${encodeURIComponent(context.pairId)}/selection`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({...binding,decisions})});
       if(!selectionCurrent(context)||token!==state.selectionSaveToken)return;
-      state.selection=normalizeSelection(payload);state.selectionDraft={...(state.selection?.decisions||{})};state.selectionDirty=false;state.generationKey=null;selectionStatus('已保存');
+      state.selection=normalizeSelection(payload);state.selectionDraft={...(state.selection?.decisions||{})};state.selectionDirty=false;state.selectionSaved=true;state.generationKey=null;selectionStatus('已保存');
     } catch(e) {
       if(!selectionCurrent(context)||token!==state.selectionSaveToken)return;
       if(e.raw==='SELECTION_EPOCH_CONFLICT') {
         try {
           const latest=await json(`/api/compare/pairs/${encodeURIComponent(context.pairId)}/selection`);
           if(!selectionCurrent(context)||token!==state.selectionSaveToken)return;
-          if(['result_sha256','left_source_sha256','right_source_sha256'].every(k=>latest[k]===state.selection[k]))state.selection=normalizeSelection(latest);
+          if(['result_sha256','left_source_sha256','right_source_sha256'].every(k=>latest[k]===state.selection[k])){state.selection=normalizeSelection(latest);state.selectionSaved=(state.selection?.selection_epoch??0)>=1;}
         } catch { /* Keep the local map; a failed reload must not discard it. */ }
       }
       if(selectionCurrent(context)){state.selectionDirty=true;selectionStatus('保存未完成，本地选择已保留。请核对后点击“保存当前选择”重试。',true);}
@@ -536,6 +583,7 @@
   function setAllSelections(choice) { if(!state.selection||state.selectionSaving||state.selectionBusy)return; const next={};(state.view?.diffs||[]).forEach(item=>{next[item.id]=choice;});state.selectionDraft=next;state.selectionDirty=true;syncSelectionControls();saveSelectionDraft(); }
   async function selectionAction(kind) {
     const binding=selectionBinding();if(!binding||state.selectionSaving||state.selectionBusy||state.selectionDirty||(kind==='generate'&&!selectionCanGenerate()))return;
+    if(kind==='generate'&&binding.expected_epoch<1&&!state.selectionSaved){selectionStatus('请先保存当前选择，再生成选择结果。',true);return;}
     const context=selectionContext();state.selectionBusy=true;
     selectionStatus(kind==='generate'?'正在生成选择结果 DOCX，请稍候…':'正在检查生成条件…');renderSelection();syncSelectionControls();
     const headers={'Content-Type':'application/json'};
@@ -698,7 +746,7 @@
   const DIFF_ITEM_HEIGHT=136, DIFF_RENDER_COUNT=24;
   function diffItemHtml(x,index,choice,disabled){
     const kind=x.type==='modify'?'修改':x.type==='insert'?'插入':'删除';
-    return `<div class="compare-diff-item ${choice!=='pending'?'is-selected-choice':''}" data-compare-diff="${esc(x.id)}"><button type="button" class="compare-diff-jump" data-compare-diff="${esc(x.id)}"><span class="compare-diff-index">${index+1}</span><span class="compare-diff-kind is-${esc(x.type)}">${esc(kind)}</span><span class="compare-diff-preview"><small>FundLex 对比</small><span>${esc(x.section||'正文')} · ${esc(x.left?.text||'')} ${x.right?.text?'→ '+esc(x.right.text):''}</span></span></button><div class="compare-choice" role="group" aria-label="${esc(x.id)} 采用 A 或 B"><label class="${choice==='left'?'is-checked':''}"><input type="radio" name="choice-${esc(x.id)}" value="left" data-selection-choice="left" data-diff-id="${esc(x.id)}" ${choice==='left'?'checked':''} ${disabled?'disabled':''}>采用 A</label><label class="${choice==='right'?'is-checked':''}"><input type="radio" name="choice-${esc(x.id)}" value="right" data-selection-choice="right" data-diff-id="${esc(x.id)}" ${choice==='right'?'checked':''} ${disabled?'disabled':''}>采用 B</label></div></div>`;
+    return `<div class="compare-diff-item ${choice!=='pending'?'is-selected-choice':''}" data-compare-diff="${esc(x.id)}"><button type="button" class="compare-diff-jump" data-compare-diff="${esc(x.id)}"><span class="compare-diff-index">${index+1}</span><span class="compare-diff-kind is-${esc(x.type)}">${esc(kind)}</span><span class="compare-diff-preview"><span>${esc(x.section||'正文')} · ${esc(x.left?.text||'')} ${x.right?.text?'→ '+esc(x.right.text):''}</span></span></button><div class="compare-choice" role="group" aria-label="${esc(x.id)} 采用 A 或 B"><label class="${choice==='left'?'is-checked':''}"><input type="radio" name="choice-${esc(x.id)}" value="left" data-selection-choice="left" data-diff-id="${esc(x.id)}" ${choice==='left'?'checked':''} ${disabled?'disabled':''}>采用 A</label><label class="${choice==='right'?'is-checked':''}"><input type="radio" name="choice-${esc(x.id)}" value="right" data-selection-choice="right" data-diff-id="${esc(x.id)}" ${choice==='right'?'checked':''} ${disabled?'disabled':''}>采用 B</label></div></div>`;
   }
   function renderDiffWindow(start){
     const list=$('compare-diff-list'),items=state.diffList||[];if(!list)return;
@@ -760,6 +808,7 @@
       this.container=container; this.blocks=document.blocks||[]; this.style=document.style||'';
       this.chunkSize=options.chunkSize||20; this.overscan=options.overscan||2;
       this.charsPerLine=options.charsPerLine||46; this.merged=Boolean(options.merged);
+      this.collectMarks=Boolean(options.collectMarks); this.marks=new Map();
       this.onChange=options.onChange||null; this.chunks=[]; this.first=0; this.last=0; this.frame=null; this.anchorLockUntil=0;
       this.blockIndex=new Map(); this.blocks.forEach((block,index)=>[block.blockId,...(block.blockIds||[]),...(block.diffIds||[])].filter(Boolean).forEach(id=>this.blockIndex.set(id,index)));
       this.scrollHandler=()=>this.schedule();
@@ -810,6 +859,15 @@
       if(!this.chunks.length)return;
       const [first,last]=forcedRange||this.currentRange(this.container.scrollTop,this.container.clientHeight||600);
       if(!force&&first===this.first&&last===this.last)return;
+      // Fast path: a forced refresh that would not mount, unmount or
+      // re-measure anything is a no-op. scrollToBlockIndex settles and the
+      // scroll-sync settle pass hit this constantly during linked scrolling
+      // (FL-D840); without it every call pays for two full layout passes.
+      if(first===this.first&&last===this.last){
+        let dirty=false;
+        for(let i=first;i<last;i++){const chunk=this.chunks[i];if(!chunk.el||!chunk.measured){dirty=true;break;}}
+        if(!dirty)return;
+      }
       const anchor=this.anchor(),anchorTop=this.totalBefore(anchor.index);
       const visible=!forcedRange?this.visibleBlock():null;
       const visibleNode=visible?this.chunks.find(chunk=>visible.index>=chunk.start&&visible.index<chunk.end)?.el?.children[visible.index%this.chunkSize]:null;
@@ -834,6 +892,18 @@
       }
       this.windowEl.replaceChildren(...this.chunks.slice(first,last).map(chunk=>chunk.el).filter(Boolean));
       for(let i=first;i<last;i++){const chunk=this.chunks[i];if(!chunk.measured&&chunk.el){chunk.height=Math.max(1,chunk.el.getBoundingClientRect().height);chunk.measured=true;}}
+      if(this.collectMarks){
+        // Collect diff-anchor geometry in the same layout pass as chunk
+        // measurement. drawLines reads this map instead of forcing its own
+        // 240-rect recache after every invalidation (FL-D840 classic view).
+        const paneRect=this.container.getBoundingClientRect(),scrollTop=this.container.scrollTop;
+        const marks=new Map();
+        for(const node of this.windowEl.querySelectorAll('[data-diff-id]')){
+          const r=node.getBoundingClientRect();
+          marks.set(node.dataset.diffId,{top:r.top-paneRect.top+scrollTop,height:r.height,leftX:r.left-paneRect.left,rightX:r.right-paneRect.left});
+        }
+        this.marks=marks;
+      }
       this.top.style.height=`${this.totalBefore(first)/this.scale}px`;
       this.bottom.style.height=`${this.totalAfter(last)/this.scale}px`;
       this.wrapper.style.minHeight='';
@@ -947,7 +1017,7 @@
 
   function onVirtualChange(){
     refreshDiffMarks();markActiveDiff();
-    if(state.viewMode==='classic'){state.diffPositions=null;drawLines();}
+    if(state.viewMode==='classic'){state.diffPositions=null;drawLinesDeferred();}
   }
   function clearVirtual(container){if(container?._virtualDoc){container._virtualDoc.destroy();container._virtualDoc=null;}}
   function ensureDoc(side){
@@ -963,8 +1033,8 @@
   }
   function renderClassicView() {
     if(!state.view||state.classicRendered||!state.docs)return;
-    virtualize($('compare-left-pane'),ensureDoc('left'),{charsPerLine:40,onChange:onVirtualChange});
-    virtualize($('compare-right-pane'),ensureDoc('right'),{charsPerLine:40,onChange:onVirtualChange});
+    virtualize($('compare-left-pane'),ensureDoc('left'),{charsPerLine:40,collectMarks:true,onChange:onVirtualChange});
+    virtualize($('compare-right-pane'),ensureDoc('right'),{charsPerLine:40,collectMarks:true,onChange:onVirtualChange});
     state.classicRendered=true;state.diffPositions=null;refreshDiffMarks();markActiveDiff();
   }
   function setFullscreenViewer(open) {
@@ -1031,6 +1101,14 @@
     try {const payload=await json(`/api/compare/pairs/${encodeURIComponent(p.id)}/view`);if(token===state.requestToken){p.viewError='';renderPairs();renderViewer(payload);await loadSelection(p.id);}}
     catch(e){if(token===state.requestToken){p.viewError=`读取结果失败：${e.message}`;renderPairs();}}
   }
+  function schedulePoll(id){
+    clearTimeout(state.poll);state.pollTaskId=id;
+    // A hidden tab must not keep re-fetching the whole task every 2.5s; the
+    // visibilitychange handler below schedules a refresh when it returns to
+    // the foreground (B13 F7).
+    if(document.visibilityState!=='visible')return;
+    state.poll=setTimeout(()=>openTask(id),2500);
+  }
    async function openTask(id) {
      if(api.navigate&&(api.route?.().view!=='compare'||api.route?.().mode!=='detail'||api.route?.().id!==id)){api.navigate('compare',{mode:'detail',id});return;}
      clearTimeout(state.poll);const token=++state.requestToken;
@@ -1038,7 +1116,7 @@
        const previousPairId=api.route?.().pair||state.selectedPairId;renderTask(task);
        const kept=state.pairs.findIndex(p=>p.id===previousPairId),idx=kept>=0?kept:state.pairs.findIndex(p=>['succeeded','incomplete'].includes(p.status));
        if(idx>=0){if(state.selectedPairId===state.pairs[idx]?.id&&state.view){$('compare-viewer').hidden=false;$('compare-pair-counter').textContent=`${idx+1} / ${state.pairs.length}`;}else await openPair(idx,true);}else $('compare-viewer').hidden=true;
-       if(['queued','running','uploading'].includes(state.task?.status))state.poll=setTimeout(()=>openTask(id),2500);
+       if(['queued','running','uploading'].includes(state.task?.status))schedulePoll(id);
      }catch(e){
        if(token!==state.requestToken)return;
        // A deep link may outlive the account that created the task. Do not
@@ -1068,6 +1146,10 @@
     document.addEventListener('click',e=>{const page=e.target.closest('[data-compare-list-page]');if(page)api.navigate('compare',{...api.route(),mode:'list',page:page.dataset.compareListPage});});
     window.FundLexCompare={hasUnsavedChanges:()=>state.selectionDirty};
     document.addEventListener('fundlex:route',e=>applyRoute(e.detail));
+    document.addEventListener('visibilitychange',()=>{
+      // Resume a task poll that was suspended while the tab was hidden.
+      if(document.visibilityState==='visible'&&state.pollTaskId&&['queued','running','uploading'].includes(state.task?.status))schedulePoll(state.pollTaskId);
+    });
     document.addEventListener('click',e=>{
       const choose=e.target.closest('[data-compare-choose]');if(choose){choose.closest('.compare-file-card').querySelector('input[type=file]').click();return;}
       const folder=e.target.closest('[data-compare-folder]');if(folder)$(`compare-${folder.dataset.compareFolder}-folder`).click();
@@ -1085,7 +1167,7 @@
     $('compare-viewer-backdrop')?.addEventListener('click',closeViewer);
     document.addEventListener('click',event=>{const chip=$('compare-coverage-chip');if(chip&&chip.open&&!event.target.closest('#compare-coverage-chip'))chip.open=false;});
     document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!$('compare-viewer').hidden){event.preventDefault();closeViewer();}});
-    $('compare-prev-diff')?.addEventListener('click',()=>focusDiff(state.diffIndex-1)); $('compare-next-diff')?.addEventListener('click',()=>focusDiff(state.diffIndex+1)); $('compare-prev-pair')?.addEventListener('click',()=>openPair(Math.max(0,state.pairIndex-1))); $('compare-next-pair')?.addEventListener('click',()=>openPair(Math.min(state.pairs.length-1,state.pairIndex+1))); $('compare-report')?.addEventListener('click',()=>{if(!state.view)return;const blob=new Blob([JSON.stringify(state.view,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`${state.task?.name||'合同比对'}-差异报告.json`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}); $('compare-selection-left-all')?.addEventListener('click',()=>setAllSelections('left')); $('compare-selection-right-all')?.addEventListener('click',()=>setAllSelections('right')); $('compare-selection-pending')?.addEventListener('click',()=>{const index=visibleDiffs().findIndex(item=>selectionDecision(item.id)==='pending');if(index>=0)focusDiff(index);}); $('compare-selection-save')?.addEventListener('click',()=>saveSelectionDraft()); $('compare-selection-preview')?.addEventListener('click',previewSelection); $('compare-selection-generate')?.addEventListener('click',generateSelection); $('compare-active-only')?.addEventListener('change',drawLines); $('compare-diff-filter')?.addEventListener('change',()=>{state.diffIndex=0;renderDiffList();focusDiff(0);}); $('compare-diff-list')?.addEventListener('scroll',onDiffListScroll,{passive:true}); $('compare-retry')?.addEventListener('click',continueUploads); document.querySelectorAll('[data-word-pane]').forEach(btn=>btn.addEventListener('click',()=>setMobilePane(btn.dataset.wordPane))); $('compare-show-sources')?.addEventListener('change',e=>setSourcesVisible(e.target.checked)); $('compare-markup-mode')?.addEventListener('change',e=>setMarkupMode(e.target.value)); document.querySelectorAll('[data-compare-sources-close]').forEach(btn=>btn.addEventListener('click',()=>setSourcesVisible(false)));
+    $('compare-prev-diff')?.addEventListener('click',()=>focusDiff(state.diffIndex-1)); $('compare-next-diff')?.addEventListener('click',()=>focusDiff(state.diffIndex+1)); $('compare-prev-pair')?.addEventListener('click',()=>openPair(Math.max(0,state.pairIndex-1))); $('compare-next-pair')?.addEventListener('click',()=>openPair(Math.min(state.pairs.length-1,state.pairIndex+1))); $('compare-selection-left-all')?.addEventListener('click',()=>setAllSelections('left')); $('compare-selection-right-all')?.addEventListener('click',()=>setAllSelections('right')); $('compare-selection-pending')?.addEventListener('click',()=>{const index=visibleDiffs().findIndex(item=>selectionDecision(item.id)==='pending');if(index>=0)focusDiff(index);}); $('compare-selection-save')?.addEventListener('click',()=>saveSelectionDraft()); $('compare-selection-preview')?.addEventListener('click',previewSelection); $('compare-selection-generate')?.addEventListener('click',generateSelection); $('compare-active-only')?.addEventListener('change',drawLines); $('compare-diff-filter')?.addEventListener('change',()=>{state.diffIndex=0;renderDiffList();focusDiff(0);}); $('compare-diff-list')?.addEventListener('scroll',onDiffListScroll,{passive:true}); $('compare-retry')?.addEventListener('click',continueUploads); document.querySelectorAll('[data-word-pane]').forEach(btn=>btn.addEventListener('click',()=>setMobilePane(btn.dataset.wordPane))); $('compare-show-sources')?.addEventListener('change',e=>setSourcesVisible(e.target.checked)); $('compare-markup-mode')?.addEventListener('change',e=>setMarkupMode(e.target.value)); document.querySelectorAll('[data-compare-sources-close]').forEach(btn=>btn.addEventListener('click',()=>setSourcesVisible(false)));
       document.addEventListener('click',e=>{ const back=e.target.closest('[data-compare-back-list]');if(back){api.navigate?.('compare',{mode:'list'});return;}const task=e.target.closest('[data-compare-task]');if(task){openTask(task.dataset.compareTask);return;}const pair=e.target.closest('[data-compare-pair]');if(pair){openPair(Number(pair.dataset.comparePair));return;}const download=e.target.closest('[data-selection-download]');if(download){downloadSelection(download.dataset.selectionDownload,download.dataset.selectionFilename);return;}const diff=e.target.closest('[data-compare-diff]');if(diff&&!e.target.closest('input')){focusDiff(visibleDiffs().findIndex(x=>x.id===diff.dataset.compareDiff));return;}const mark=e.target.closest('#compare-word-merged-pane [data-diff-id],#compare-word-left-pane [data-diff-id],#compare-word-right-pane [data-diff-id],#compare-left-pane [data-diff-id],#compare-right-pane [data-diff-id]');if(mark){focusDiff(visibleDiffs().findIndex(x=>x.id===mark.dataset.diffId));return;}const remove=e.target.closest('[data-compare-remove]');if(remove){const index=Number(remove.dataset.compareRemove),row=remove.closest('.compare-pair-input');state.inputs.splice(index,1);row?.remove();if(!state.inputs.length){state.inputs=[{}];renderInputs();}else syncInputIndexes();return;} });
      document.addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&e.target.matches('#compare-word-merged-pane [data-diff-id],#compare-word-left-pane [data-diff-id],#compare-word-right-pane [data-diff-id],#compare-left-pane [data-diff-id],#compare-right-pane [data-diff-id]')){e.preventDefault();focusDiff(visibleDiffs().findIndex(x=>x.id===e.target.dataset.diffId));}});
       document.addEventListener('change',e=>{const choice=e.target.closest('[data-selection-choice]');if(choice){chooseSelection(choice.dataset.diffId,choice.value);return;}const row=e.target.closest('.compare-pair-input');if(row&&e.target.matches('input[type=file]')){const i=Number(row.dataset.pairIndex),entry=state.inputs[i]||(state.inputs[i]={});entry[e.target.matches('[data-compare-left]')?'_left':'_right']=e.target.files?.[0]||null;row.querySelector('.compare-file-label').textContent=[entry._left?.name,entry._right?.name].filter(Boolean).join(' / ')||'尚未选择文件';return;}if(e.target.id==='compare-left-folder'||e.target.id==='compare-right-folder'){const side=e.target.id.includes('left')?'left':'right';state[`folder${side[0].toUpperCase()+side.slice(1)}`]=[...e.target.files].filter(f=>fileName(f).toLowerCase().endsWith('.docx')).sort((a,b)=>relativePath(a).localeCompare(relativePath(b)));const other=side==='left'?state.folderRight:state.folderLeft;if(!other?.length)return;const left=state.folderLeft||[],right=state.folderRight||[],map=new Map(right.map(f=>[relativePath(f),f])),used=new Set(),entries=left.map(f=>{const r=map.get(relativePath(f));if(r)used.add(r);return {_left:f,_right:r||null};});for(const f of right)if(!used.has(f))entries.push({_left:null,_right:f});state.inputs=entries;renderInputs();$('compare-upload-message').textContent=`已按相对路径配对 ${entries.filter(x=>x._left&&x._right).length} 组；${entries.filter(x=>!x._left||!x._right).length} 个文件未配对，可手工补齐。`;}});

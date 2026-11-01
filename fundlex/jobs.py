@@ -7,6 +7,7 @@ import tempfile
 import time
 import threading
 from concurrent.futures import ThreadPoolExecutor
+import logging
 import os
 import sqlite3
 import shutil
@@ -20,6 +21,8 @@ from .db import DatabaseError
 from .config import local_data_dir
 
 
+_logger = logging.getLogger(__name__)
+
 RETRYABLE_MODEL_CODES = {"MODEL_NETWORK_ERROR", "MODEL_RETRY_EXHAUSTED", "MODEL_CIRCUIT_OPEN",
                          "MODEL_GLOBAL_CALL_BUDGET_EXCEEDED", "MODEL_COST_BUDGET_EXCEEDED", "MODEL_CALL_BUDGET_EXCEEDED",
                          "MODEL_LEDGER_UNAVAILABLE", "MODEL_CHECKPOINT_UNAVAILABLE",
@@ -27,6 +30,40 @@ RETRYABLE_MODEL_CODES = {"MODEL_NETWORK_ERROR", "MODEL_RETRY_EXHAUSTED", "MODEL_
                          "MODEL_CONCURRENCY_LIMIT", "MODEL_RESERVATION_EXPIRED"}
 
 Processor = Callable[[Path, Path, str], dict[str, Any]]
+
+# Name of the liveness marker written into every ``fundlex_job_*`` workspace.
+_WORKSPACE_MARKER = "workspace.json"
+
+
+def _pid_alive(pid: int) -> bool:
+    """POSIX liveness probe.  Never use ``os.kill`` on Windows: any signal
+    value there terminates the process, so non-POSIX platforms report alive
+    and the caller must rely on its fencing-token check instead."""
+    if pid <= 0 or os.name == "nt":
+        return True
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    except OSError:
+        return True  # inconclusive: stay conservative, treat as alive
+    return True
+
+
+def _disabled_rule_ids(raw: Any) -> list[str]:
+    """A damaged snapshot must not silently enable rules the user disabled."""
+    if raw is None or raw == "":
+        return []
+    try:
+        value = json.loads(raw) if isinstance(raw, str) else raw
+    except ValueError:
+        raise ValueError("GUIDE_RULE_SETTINGS_INVALID") from None
+    if not isinstance(value, list) or any(not isinstance(item, str) or not item.strip()
+                                          for item in value):
+        raise ValueError("GUIDE_RULE_SETTINGS_INVALID")
+    return value
 
 
 @contextmanager
@@ -63,7 +100,8 @@ def _document_trace(job: dict[str, Any], store: RunStore) -> Iterator[None]:
 def _default_processor(input_path: Path, output_dir: Path, ruleset_version: str, *, engine_id: str = "",
                        guide_version_id: str = "", guide_document: dict[str, Any] | None = None,
                        checkpoint_dir: Path | None = None, gateway: Any = None,
-                       mode: str = "delivery") -> dict[str, Any]:
+                       mode: str = "delivery",
+                       disabled_rule_ids: list[str] | None = None) -> dict[str, Any]:
     # The runtime serves exactly one engine: the guide-bound recall-first
     # pipeline. The retired rulesets are no longer reachable from the worker, so
     # an unbound or legacy job fails closed instead of silently running the old
@@ -75,7 +113,8 @@ def _default_processor(input_path: Path, output_dir: Path, ruleset_version: str,
     # its own error report.
     from .recall_pipeline import process_recall_first
     return process_recall_first(input_path, output_dir, guide_document=guide_document, gateway=gateway,
-                                checkpoint_dir=checkpoint_dir, execution_mode="delivery")
+                                checkpoint_dir=checkpoint_dir, execution_mode="delivery",
+                                disabled_rule_ids=disabled_rule_ids)
 
 
 class Worker:
@@ -86,6 +125,28 @@ class Worker:
         if lease_seconds <= 0:
             raise ValueError("lease_seconds must be positive")
         self.lease_seconds = lease_seconds
+        self._last_retention_sweep = 0.0
+
+    def _prune_storage(self, now: float) -> None:
+        """Periodic bounded-retention sweep (B13 F5 / FL-D557).
+
+        Runs lazily inside the worker loop like ``_reap_stale_workspaces``:
+        no extra systemd unit to deploy, the same policy covers the dev
+        profile, and any failure is logged and contained — retention must
+        never take the worker or a job down.
+        """
+        from . import retention
+        if now - self._last_retention_sweep < retention.retention_interval_seconds():
+            return
+        self._last_retention_sweep = now
+        try:
+            stats = retention.prune_checkpoints(self.store.root, now=now)
+        except Exception as exc:  # noqa: BLE001 - retention must be fail-closed
+            _logger.warning("checkpoint retention sweep failed: %s", type(exc).__name__)
+            return
+        if stats["removed_files"] or stats["removed_dirs"]:
+            _logger.info("checkpoint retention removed %d files (%d bytes) and %d dirs",
+                         stats["removed_files"], stats["removed_bytes"], stats["removed_dirs"])
 
     @contextmanager
     def _worker_lock(self):
@@ -140,18 +201,79 @@ class Worker:
         with self._worker_lock():
             return self._run_once()
 
+    @staticmethod
+    def _is_takeover(exc: BaseException) -> bool:
+        """True when the lease predicate rejected a write: a newer attempt owns
+        the document now, so the stale worker simply stands down (fail-closed)."""
+        return isinstance(exc, Conflict) and str(exc) in {"stale worker lease", "expired worker lease"}
+
+    def _reap_attempt_objects(self, document_id: str, token: int) -> None:
+        """Drop result objects copied by a ``finish`` that failed before commit.
+
+        Object keys are namespaced per attempt (``results/<doc>/<token>/``), so
+        once ``finish`` raised, everything under the prefix was copied by this
+        attempt and is referenced by no database row: the terminal UPDATE and
+        the artifact inserts commit or roll back together (B14-02)."""
+        shutil.rmtree(self.store.object_path(f"results/{document_id}/{int(token)}"),
+                      ignore_errors=True)
+
+    def _mark_workspace(self, workspace: str, doc_id: str, token: int) -> None:
+        try:
+            (Path(workspace) / _WORKSPACE_MARKER).write_text(json.dumps({
+                "document_id": doc_id, "fencing_token": int(token),
+                "store_root": str(self.store.root.resolve()), "pid": os.getpid(),
+            }), encoding="utf-8")
+        except OSError:
+            pass  # the marker only enables stale-workspace reaping
+
+    def _reap_stale_workspaces(self) -> None:
+        """Remove ``fundlex_job_*`` workspaces orphaned by a killed worker (B14-04).
+
+        A workspace is only removed when its marker proves it belongs to this
+        store root, its owning pid is dead, and the recorded attempt is no
+        longer the live fencing epoch, so a live or foreign worker's directory
+        is never touched.  Legacy marker-less directories are left to the OS.
+        """
+        try:
+            candidates = list(Path(tempfile.gettempdir()).glob("fundlex_job_*"))
+        except OSError:
+            return
+        for path in candidates:
+            try:
+                marker = json.loads((path / _WORKSPACE_MARKER).read_text(encoding="utf-8"))
+                if marker.get("store_root") != str(self.store.root.resolve()):
+                    continue
+                pid = int(marker.get("pid") or 0)
+                if _pid_alive(pid):
+                    continue
+                document_id = str(marker.get("document_id") or "")
+                token = int(marker.get("fencing_token") or 0)
+                if not document_id or not token:
+                    continue
+                with self.store._connect() as db:
+                    row = db.execute("SELECT fencing_token,status FROM documents WHERE id=?",
+                                     (document_id,)).fetchone()
+                if (row is not None and int(row["fencing_token"]) == token
+                        and row["status"] in ("leased", "running")):
+                    continue  # the recorded attempt is still the live epoch
+                shutil.rmtree(path, ignore_errors=True)
+            except Exception:  # noqa: BLE001 - reaping is best-effort
+                continue
 
     def _run_once(self) -> bool:
         min_free = int(os.environ.get("FUNDLEX_MIN_FREE_BYTES", str(256 * 1024 * 1024)))
         if shutil.disk_usage(self.store.root).free < min_free:
             raise OSError("local storage below configured free-space reserve")
+        self._reap_stale_workspaces()
+        self._prune_storage(time.time())
         if self._run_guide_job():
             return True
         job = self.store.claim(lease_seconds=self.lease_seconds)
         if job is None:
             return False
         doc_id, token = job["id"], job["fencing_token"]
-        with tempfile.TemporaryDirectory(prefix="fundlex_job_") as workspace:
+        with tempfile.TemporaryDirectory(prefix="fundlex_job_", ignore_cleanup_errors=True) as workspace:
+            self._mark_workspace(workspace, doc_id, token)
             output_dir = Path(workspace) / "out"
             output_dir.mkdir()
             source = self.store.object_path(job["input_key"])
@@ -168,13 +290,28 @@ class Worker:
                 if job.get("engine_build") and (job["engine_build"] != engine_build() or job["schema_version"] != SCHEMA_VERSION):
                     raise ValueError("ENGINE_SCHEMA_MISMATCH")
                 guide_document = self._bound_guide_document(job)
+                from . import model_settings
+                preferences = model_settings.decode_snapshot(job.get("model_preferences") or "{}")
                 with self._lease_heartbeat(doc_id, token):
                     if self.processor is _default_processor:
-                        with _document_trace(job, self.store):
-                            report = self.processor(source, output_dir, job["ruleset_version"],
-                                engine_id=job.get("engine_id", ""), guide_version_id=job.get("guide_version_id", ""),
-                                guide_document=guide_document, checkpoint_dir=self.store.root / "checkpoints" / doc_id,
-                                mode=job.get("mode", "delivery"))
+                        gateway = (model_settings.gateway_for(preferences, store=self.store,
+                                     owner=job.get("owner")) if preferences else None)
+                        try:
+                            with _document_trace(job, self.store):
+                                report = self.processor(source, output_dir, job["ruleset_version"],
+                                    engine_id=job.get("engine_id", ""), guide_version_id=job.get("guide_version_id", ""),
+                                    guide_document=guide_document, checkpoint_dir=self.store.root / "checkpoints" / doc_id,
+                                    mode=job.get("mode", "delivery"), gateway=gateway,
+                                    disabled_rule_ids=_disabled_rule_ids(job.get("disabled_rule_ids")))
+                        finally:
+                            # Explicitly injected gateways are caller-owned in the
+                            # pipeline API; this Worker created this one per job.
+                            close = getattr(gateway, "close", None)
+                            if callable(close):
+                                try:
+                                    close()
+                                except Exception:  # noqa: BLE001 - cleanup must not mask job result
+                                    pass
                     else:
                         report = self.processor(source, output_dir, job["ruleset_version"])
                 if isinstance(report, dict) and report.get("error_code") in RETRYABLE_MODEL_CODES:
@@ -183,6 +320,8 @@ class Worker:
                     return True
                 if not isinstance(report, dict):
                     raise ValueError("INVALID_PIPELINE_REPORT")
+                if preferences:
+                    report["model_preferences"] = preferences
                 report["document_id"] = doc_id
                 report["engine_build"] = job.get("engine_build", "")
                 if is_recall_report(report):
@@ -299,12 +438,18 @@ class Worker:
                     paths["report_md"] = md
                 # A pipeline-written report.md already carries the per-change detail;
                 # appending the worker header would only duplicate the stub.
-                self.store.finish(doc_id, token, report=report, artifacts=paths,
-                                  failed=bool(report.get("qualification_status") == "failed" or report.get("error_code")),
-                                  error_code=report.get("error_code"))
+                try:
+                    self.store.finish(doc_id, token, report=report, artifacts=paths,
+                                      failed=bool(report.get("qualification_status") == "failed" or report.get("error_code")),
+                                      error_code=report.get("error_code"))
+                except BaseException:
+                    # finish commits its UPDATE and artifact rows atomically;
+                    # on raise, this attempt's copied objects are unreferenced.
+                    self._reap_attempt_objects(doc_id, token)
+                    raise
             except Conflict as exc:
                 # An expired worker cannot publish over a newer attempt.
-                if str(exc) in {"stale worker lease", "expired worker lease"}:
+                if self._is_takeover(exc):
                     return True
                 raise
             except Exception as exc:
@@ -312,11 +457,21 @@ class Worker:
                     # Recoverable model/transport stop: retry under the normal
                     # lease policy (budget/circuit stops also pause the task) and
                     # leave the model budget ledger to the next attempt.
-                    self.store.retry(doc_id, token, error_code=exc.code,
-                                    report=getattr(exc, "report", None))
+                    try:
+                        self.store.retry(doc_id, token, error_code=exc.code,
+                                        report=getattr(exc, "report", None))
+                    except Conflict as lease_exc:
+                        # A2-F4: the lease was taken over mid-processing; the
+                        # newer epoch owns the retry decision (fail-closed).
+                        if not self._is_takeover(lease_exc):
+                            raise
                     return True
                 if isinstance(exc, (OSError, sqlite3.OperationalError, DatabaseError)) or getattr(exc, "code", "") in RETRYABLE_MODEL_CODES:
-                    self.store.retry(doc_id, token, error_code=getattr(exc, "code", "TEMPORARY_STORAGE_FAILURE"))
+                    try:
+                        self.store.retry(doc_id, token, error_code=getattr(exc, "code", "TEMPORARY_STORAGE_FAILURE"))
+                    except Conflict as lease_exc:
+                        if not self._is_takeover(lease_exc):
+                            raise
                     return True
                 raw_code = str(exc)
                 known_codes = {"INPUT_INTEGRITY_FAILED", "RULESET_HASH_MISMATCH", "RULESET_RETIRED",
@@ -343,9 +498,16 @@ class Worker:
                 md.write_text(self._markdown(report), encoding="utf-8")
                 report_path = output_dir / "report.json"
                 report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
-                self.store.finish(doc_id, token, report=report,
-                                  artifacts={"report_json": report_path, "report_md": md},
-                                  failed=True, error_code=code)
+                try:
+                    self.store.finish(doc_id, token, report=report,
+                                      artifacts={"report_json": report_path, "report_md": md},
+                                      failed=True, error_code=code)
+                except BaseException as finish_exc:
+                    self._reap_attempt_objects(doc_id, token)
+                    # A2-F4: a newer attempt took over; its epoch owns the
+                    # terminal state and this failure report must not land.
+                    if not self._is_takeover(finish_exc):
+                        raise
         return True
 
     def _run_guide_job(self) -> bool:
@@ -391,10 +553,21 @@ class Worker:
                     raise
             return True
         try:
-            guide_store.finish_guide_job(self.store, job["id"], job["fencing_token"], document=document)
+            finished = guide_store.finish_guide_job(self.store, job["id"],
+                                                    job["fencing_token"], document=document)
         except Conflict as lease_exc:
             if str(lease_exc) != "stale guide job lease":
                 raise
+            return True
+        if finished["version"]["status"] == "parsed":
+            # Deterministic footprint smoke against the version's lineage
+            # baseline: silent regressions the model verifier missed become an
+            # advisory needs_review verdict.  The stamp must never kill a job.
+            try:
+                from .guide_smoke import review_version_footprint
+                review_version_footprint(self.store, job["owner"], job["guide_version_id"])
+            except Exception:  # noqa: BLE001 - advisory marking only
+                pass
         return True
 
     def _bound_guide_document(self, job: dict[str, Any]) -> dict[str, Any] | None:
@@ -506,9 +679,26 @@ class Worker:
         from . import guide_store
         guide_store._ensure_tables(self.store)
         stopped = stop_event or threading.Event()
+        try:
+            transient_limit = max(1, int(os.environ.get("FUNDLEX_WORKER_DB_FAILURE_LIMIT", "6")))
+        except ValueError:
+            transient_limit = 6
         def consume():
+            transient_failures = 0
             while not stopped.is_set():
-                if not self._run_once():
+                try:
+                    progressed = self._run_once()
+                except (sqlite3.OperationalError, DatabaseError):
+                    # B14-01: a transient claim-time database fault must not
+                    # kill the consume loop.  Back off bounded; only give up
+                    # when the outage persists beyond the failure limit.
+                    transient_failures += 1
+                    if transient_failures >= transient_limit:
+                        raise
+                    stopped.wait(min(30.0, 0.5 * (2 ** (transient_failures - 1))))
+                    continue
+                transient_failures = 0
+                if not progressed:
                     stopped.wait(poll_seconds)
         with self._worker_lock():
             with ThreadPoolExecutor(max_workers=concurrency, thread_name_prefix="fundlex") as pool:

@@ -162,6 +162,56 @@ def valid_parsed() -> dict:
     return result
 
 
+def worker_parsed() -> dict:
+    """Parse fixture for the worker integration lane: every positional
+    operation identity resolves to a registered contract, so the version
+    passes the executability canary and keeps the parse→enable happy path
+    covered (``valid_parsed`` pins 3 ops on G02 while the registry ships 2).
+    """
+    result = {
+        "groups": [
+            {
+                "rule_id": "G01",
+                "title": "释义-基金份额类别定义",
+                "section_hint": "释义",
+                "requirement": "在释义的份额类别定义后追加直销机构申购的收费安排。",
+                "operations": [{"op": "append", "new_text": DIRECT_SALES_NEW,
+                                "condition": {"kind": "none", "value": None}}],
+                "old_text_variants": [CLASS_DEFINITION],
+                "slot_tokens": ["A类基金份额", "C类基金份额"],
+                "class_substitution": True,
+                "references": [],
+                "source_paragraphs": [0, 1, 2, 3, 4],
+                "notes": "",
+            },
+            {
+                "rule_id": "G02",
+                "title": "基金的基本情况-份额类别设置",
+                "section_hint": "基金的基本情况",
+                "requirement": "有销售服务费类别时把调低赎回费率改为调低销售服务费率，否则删除。",
+                "operations": [
+                    {"op": "replace", "old_text": "调低赎回费率", "new_text": "调低销售服务费率",
+                     "condition": {"kind": "has_service_fee", "value": True}},
+                    {"op": "delete", "old_text": "、调低赎回费率",
+                     "condition": {"kind": "has_service_fee", "value": False}},
+                ],
+                "old_text_variants": [CLASS_CHANGE_OLD],
+                "slot_tokens": [],
+                "class_substitution": False,
+                "references": [],
+                "source_paragraphs": [5, 6, 7, 8, 9, 10, 11, 12, 13],
+                "notes": "",
+            },
+        ],
+        "notes": "synthetic guide (worker lane)",
+    }
+    for group in result["groups"]:
+        for operation in group["operations"]:
+            operation["group_kind"] = "INDEPENDENT"
+            operation["one_of_group"] = ""
+    return result
+
+
 class ScriptedGateway:
     """Pops one scripted response per guide call; ModelError entries are raised."""
 

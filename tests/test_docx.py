@@ -262,3 +262,36 @@ def test_generated_content_check_true_is_accepted(tmp_path: Path) -> None:
     edit["content_source"] = "generated"
     plan = validate_edit_plan(source, [edit], {}, content_check=lambda _edit: True)
     assert plan.edits and plan.edits[0]["replacement"] == "已确认的新条款"
+
+
+def test_expected_old_text_and_hash_guard_fail_closed(tmp_path: Path) -> None:
+    """FL-D558 M2: the docx-layer stale-anchor guard must fail closed.
+
+    ``validate_edit_plan`` compares the live paragraph slice against both
+    ``expected_old_text`` and ``expected_old_hash`` and raises
+    ``EXPECTED_TEXT_MISMATCH`` on any divergence.  No other assertion in the
+    suite pins this code, so a regression that disabled the check would ship
+    silently; this test nails the documented contract for both tripwires.
+    """
+    source = fixture_docx(tmp_path)
+    # Baseline: a correct plan passes validation (guard satisfied, not broken).
+    good = edit_for(source, "p2", "原有收费条款")
+    plan = validate_edit_plan(source, [good], {"T": "已确认的新条款"})
+    assert plan.edits and plan.edits[0]["location"] == "p2"
+    # Text tripwire: expected_old_text tampered (and its hash recomputed to
+    # match the tampered text) is still rejected — the text compare fires by
+    # itself, the guard is not a hash-only check.
+    text_tampered = edit_for(source, "p2", "原有收费条款")
+    stale = "被篡改的旧文锚点"
+    text_tampered["expected_old_text"] = stale
+    text_tampered["expected_old_hash"] = sha256(stale.encode()).hexdigest()
+    with pytest.raises(DocxError) as error:
+        validate_edit_plan(source, [text_tampered], {"T": "已确认的新条款"})
+    assert error.value.code == "EXPECTED_TEXT_MISMATCH"
+    # Hash tripwire: text intact but expected_old_hash tampered is rejected —
+    # the hash compare fires independently of the text compare.
+    hash_tampered = edit_for(source, "p2", "原有收费条款")
+    hash_tampered["expected_old_hash"] = "0" * 64
+    with pytest.raises(DocxError) as error:
+        validate_edit_plan(source, [hash_tampered], {"T": "已确认的新条款"})
+    assert error.value.code == "EXPECTED_TEXT_MISMATCH"

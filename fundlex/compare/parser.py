@@ -31,9 +31,14 @@ MC = "http://schemas.openxmlformats.org/markup-compatibility/2006"
 def _text(element: etree._Element) -> str:
     # ``w:t`` is visible text; delText is retained defensively for input files
     # containing existing revisions, although compare's normal contract forbids
-    # them. fld instructions are deliberately excluded.
+    # them. fld instructions are deliberately excluded.  Property subtrees
+    # (``w:pPr``) are skipped: their ``w:tabs/w:tab`` entries are tab-stop
+    # *definitions*, not content tabs, and must not count as text (FL-D595).
     out: list[str] = []
-    for node in element.iter():
+
+    def walk(node: etree._Element) -> None:
+        if node.tag == Q("pPr"):
+            return
         if node.tag in {Q("t"), Q("delText")}:
             out.append(node.text or "")
         elif node.tag in {Q("br"), Q("cr")}:
@@ -42,6 +47,10 @@ def _text(element: etree._Element) -> str:
             out.append("\t")
         elif node.tag in {Q("noBreakHyphen")}:
             out.append("\u2011")
+        for child in node:
+            walk(child)
+
+    walk(element)
     return "".join(out)
 
 
@@ -160,8 +169,20 @@ def _parse_parts(parts: Mapping[str, bytes], *, filename: str = "", side: str = 
         except Exception:
             story_root, story_text = None, ""
         root_local = etree.QName(story_root).localname if story_root is not None and isinstance(story_root.tag, str) else ""
-        if story_text.strip() or (story_root is not None and root_local != expected_root):
-            warning = f"UNSUPPORTED_VISIBLE_CONTENT:{label}"
+        # Story parts are only text-inspected.  A drawing/image difference
+        # (for example a changed letterhead logo) carries no detectable text;
+        # it must still surface as a partial-coverage warning instead of a
+        # silent "complete".
+        story_marker = ""
+        if story_root is not None:
+            for node in story_root.iter():
+                local = etree.QName(node).localname if isinstance(node.tag, str) else "unknown"
+                if local in {"drawing", "pict", "object", "AlternateContent", "txbxContent", "sym"}:
+                    story_marker = local
+                    break
+        if story_text.strip() or (story_root is not None and root_local != expected_root) or story_marker:
+            detail = "" if story_text.strip() else (f":{story_marker}" if story_marker else "")
+            warning = f"UNSUPPORTED_VISIBLE_CONTENT:{label}{detail}"
             if warning not in warnings:
                 warnings.append(warning)
 
@@ -180,11 +201,12 @@ def _parse_parts(parts: Mapping[str, bytes], *, filename: str = "", side: str = 
                     row: int | None, cell: int | None, paragraph: int | None,
                     table_meta: Mapping[str, Any] | None = None) -> None:
         nonlocal current_section
-        walk_unsupported(p)
-        raw = _text(p)
         style = _style(p)
         paragraph_format, run_base = presentation.paragraph(p)
-        runs = presentation.runs(p, run_base)
+        # A single subtree pass collects both the visible text and the styled
+        # run segments; unsupported-content markers were already recorded by
+        # the one whole-subtree walk at the body level.
+        runs, raw = presentation.runs(p, run_base)
         if _is_heading(style, raw) and normalize_match(raw):
             current_section = normalize_match(raw)
         blocks.append(_block(f"{side}{len(blocks):06d}", len(blocks), location, kind, raw,
@@ -249,9 +271,12 @@ def _parse_parts(parts: Mapping[str, bytes], *, filename: str = "", side: str = 
                                     table_meta=table_meta)
                         pi += 1
                     elif node.tag == Q("sdt"):
+                        # The ``pI`` address counts the cell's direct w:p
+                        # children only, matching ``docx._paragraph_element``.
+                        # Paragraphs inside a control keep their own
+                        # ``.../sdtK/pM`` address and never consume ``pi``.
                         append_sdt(node, table=ti, row=ri, cell=ci, paragraph_start=pi,
                                    table_meta=table_meta)
-                        pi += 1
                     elif node.tag == Q("tbl"):
                         warning = "UNSUPPORTED_NESTED_TABLE"
                         if warning not in warnings:
@@ -284,7 +309,7 @@ def _parse_parts(parts: Mapping[str, bytes], *, filename: str = "", side: str = 
                    paragraph_start: int = 0,
                    table_meta: Mapping[str, Any] | None = None) -> None:
         """Treat content controls as transparent, including nested controls."""
-        nonlocal body_para, table_index
+        nonlocal table_index
         content = sdt.find(Q("sdtContent"))
         if content is None:
             content = sdt
@@ -292,17 +317,19 @@ def _parse_parts(parts: Mapping[str, bytes], *, filename: str = "", side: str = 
         for node in content:
             if node.tag == Q("p"):
                 if table is None:
-                    location = f"sdt{len(blocks)}/p{body_para}"
-                    paragraph = body_para
-                    body_para += 1
+                    # ``pN`` addresses are reserved for the body's direct w:p
+                    # children so that the writer-side resolver in docx.py
+                    # finds the same element.  Control paragraphs therefore
+                    # keep an independent ``sdtN/pM`` address and do not
+                    # consume the ``body_para`` counter.
+                    location = f"sdt{len(blocks)}/p{paragraph_no}"
                     kind = "paragraph"
                 else:
                     location = f"tbl{table}/r{row}/c{cell}/sdt{len(blocks)}/p{paragraph_no}"
-                    paragraph = paragraph_no
-                    paragraph_no += 1
                     kind = "table_paragraph"
                 append_para(node, location, kind=kind, table=table, row=row, cell=cell,
-                            paragraph=paragraph, table_meta=table_meta)
+                            paragraph=paragraph_no, table_meta=table_meta)
+                paragraph_no += 1
             elif node.tag == Q("tbl"):
                 append_table(node, table_index)
                 table_index += 1
@@ -310,7 +337,6 @@ def _parse_parts(parts: Mapping[str, bytes], *, filename: str = "", side: str = 
                 append_sdt(node, table=table, row=row, cell=cell, paragraph_start=paragraph_no,
                            table_meta=table_meta)
             elif _text(node).strip():
-                walk_unsupported(node)
                 warning = "UNSUPPORTED_VISIBLE_CONTENT:sdt"
                 if warning not in warnings:
                     warnings.append(warning)

@@ -125,9 +125,9 @@ def test_verification_blocked_report_explains_waiting_without_business_residual(
     task, _ = seed(ui, states=[("retry_wait", "eligible", "not_generated")], report=report)
     page = open_task(ui, task)
     page.locator("#doc-rows [data-detail]").first.click()
-    page.get_by_role("heading", name="验证暂未完成，等待恢复处理").wait_for()
-    assert page.locator("#detail-body").get_by_text("当前文件尚未通过最终交付校验。", exact=False).is_visible()
-    assert page.get_by_role("button", name="最终版 DOCX", exact=True).count() == 0
+    page.get_by_text("验证暂未完成，恢复任务后将继续校验").wait_for()
+    assert page.locator("#detail-body").get_by_text("当前文件尚未通过最终交付核验。", exact=False).is_visible()
+    assert page.get_by_role("button", name="最终版", exact=True).count() == 0
 
 
 def presentation(ui, count=1, execution_mode="", summary=False, delivery="incomplete"):
@@ -204,8 +204,6 @@ def test_object_heading_long_parent_and_deep_link_return(ui, width):
 def test_overview_units_filters_and_single_supported_mode(ui):
     task, _ = seed(ui, states=[("succeeded", "eligible", "complete")])
     page = open_page(ui)
-    page.wait_for_function("document.querySelector('#overview-average').textContent==='90'")
-    assert "90 秒 秒" not in page.inner_text("#overview-description")
     page.fill("#task-search", "不存在的筛选")
     page.wait_for_function("document.querySelector('#task-rows').textContent.includes('没有任务')")
     assert page.locator("#first-run-guide").is_hidden()
@@ -230,7 +228,8 @@ def test_revision_task_columns_detail_metadata_and_responsive_layout(ui):
     page.goto(base + f"/#task?id={task}")
     page.wait_for_selector("#doc-rows [data-detail]")
     page.wait_for_function("!document.querySelector('#task-guide-meta').hidden")
-    assert page.locator("#task-guide-value").inner_text() == f"{guide['filename']} · 版本 {guide_id}"
+    # FL-D717 定稿文案：任务绑定指引快照后显示「文件名 · 已锁定」（不直显 version_id）
+    assert page.locator("#task-guide-value").inner_text() == f"{guide['filename']} · 已锁定"
 
     page.goto(base + "/#overview")
     row = page.locator(f'#task-rows tr:has([data-task="{task}"])')
@@ -338,13 +337,13 @@ def test_report_does_not_mark_unexecuted_targets_applied(ui):
     assert "已修改" not in row.inner_text()
     assert "完整联合改文" in page.locator("#detail-body").text_content()
     assert "首片段" not in page.locator("#detail-body").text_content()
-    assert "工作文件（未完成）" in page.locator('[data-download="selected_final"]').inner_text()
+    assert "选择版" in page.locator('[data-download="selected_final"]').inner_text()
 
 
 def test_report_shows_incomplete_business_issues(ui):
     presentation(ui, summary=True)
     page = ui[0]
-    assert "仍需人工核对 · 1 项" in page.inner_text("#detail-body")
+    assert "还要人工核 · 1 处" in page.inner_text("#detail-body")
     assert "未执行条款" in page.inner_text("#detail-body")
     assert "未改原文" in page.inner_text("#detail-body")
     assert "未找到可安全修改的正文位置" in page.inner_text("#detail-body")
@@ -364,7 +363,7 @@ def test_exception_delivery_remains_downloadable_without_direct_use_claim(ui):
     presentation(ui, delivery="complete_with_exceptions")
     page = ui[0]
     conclusion = page.locator("#detail-body .result-summary")
-    assert "需核对例外" in conclusion.inner_text()
+    assert "待人工核" in conclusion.inner_text()
     assert "已通过交付校验" not in conclusion.inner_text()
     assert page.locator('[data-download="final"]').is_visible()
     assert "按例外清单人工核对" in page.inner_text("#detail-body")
@@ -378,27 +377,26 @@ def test_contract_result_compact_summary_actions_and_folded_evidence(ui, width, 
     page.set_viewport_size({'width': width, 'height': 1000})
     presentation(ui, delivery=delivery, execution_mode='evaluation' if delivery.startswith('evaluation') else '')
     expect(page.locator('.result-summary')).to_be_visible()
-    expect(page.locator('.result-status-grid>div')).to_have_count(3)
-    expect(page.locator('.result-evidence')).not_to_have_attribute('open', '')
-    expect(page.locator('.result-evidence .detail-grid')).to_be_hidden()
+    expect(page.locator('.result-status-grid>div')).to_have_count(1)
+    expect(page.locator('.result-evidence')).to_have_count(0)
+    
     assert page.locator('.result-summary').bounding_box()['height'] < (320 if width == 390 else 230)
     boxes = [node.bounding_box() for node in page.locator('.result-status-grid>div').all()]
     assert max(box['y'] for box in boxes) - min(box['y'] for box in boxes) < 2
     if delivery == 'complete_with_exceptions':
         expect(page.locator('[data-download="final"]')).to_be_visible()
-        expect(page.locator('.result-summary')).to_contain_text('需核对例外')
+        expect(page.locator('.result-summary')).to_contain_text('待人工核')
     elif delivery.startswith('evaluation'):
         expect(page.locator('.result-summary')).to_contain_text('评测文件不能作为正式合同')
         expect(page.locator('[data-action="open-review"]')).to_have_count(0)
     else:
-        expect(page.locator('.result-summary')).to_contain_text('结果不完整')
+        expect(page.locator('.result-summary')).to_contain_text('待人工核')
         expect(page.locator('[data-action="open-review"]')).to_be_visible()
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
     if os.getenv('FUNDLEX_UX_EVIDENCE'):
         out=Path(os.environ['FUNDLEX_UX_EVIDENCE']);out.mkdir(parents=True,exist_ok=True)
         page.screenshot(path=str(out / f'result-{delivery}-{width}.png'))
-    page.locator('.result-evidence>summary').click()
-    expect(page.locator('.result-evidence .detail-grid')).to_be_visible()
+
 
 
 @pytest.mark.parametrize('view', ['overview', 'task'])
@@ -470,6 +468,125 @@ def test_guide_configuration_and_panels_do_not_expose_hashes(ui):
         page.locator('#guide-overlay-close').click()
 
 
+def test_guide_rule_switches_and_model_settings_are_editable(ui, monkeypatch):
+    from cryptography.fernet import Fernet
+    monkeypatch.setenv('FUNDLEX_MODEL_SECRETS_KEY', Fernet.generate_key().decode())
+    from playwright.sync_api import expect
+    page, context, _, base = ui
+    page = open_page(ui, 'guide')
+    rules_button = page.locator('#guide-rows [data-guide-rules]').first
+    guide_id = rules_button.get_attribute('data-guide-rules')
+    rules_button.click()
+    expect(page.locator('#guide-overlay-body')).to_contain_text('规则开关')
+    toggle = page.locator('[data-guide-rule-toggle]').first
+    toggle.uncheck()
+    page.locator('[data-guide-rule-save]').click()
+    page.wait_for_timeout(500)
+    settings = context.request.get(
+        base + f'/api/guides/{guide_id}/rule-settings',
+        headers={'X-FundLex-User': 'browser-check'}).json()
+    assert settings['disabled_rule_ids'], settings
+    page.locator('#guide-overlay-close').click()
+
+    page.locator('.sidebar [data-nav="models"]').click()
+    expect(page.locator('#model-settings-card')).to_be_visible()
+    expect(page.locator('#feishu-connect-card')).to_be_hidden()
+    expect(page.locator('#model-settings-body')).to_contain_text('修改模型')
+    expect(page.locator('#model-settings-body')).to_contain_text('复核模型')
+    # 读取态不显示表单，点击「修改配置」进入编辑态（FL-D750 读取态/编辑态重做）
+    expect(page.locator('#model-settings-form')).to_have_count(0)
+    page.locator('[data-model-edit="primary"]').click()
+    expect(page.locator('#model-settings-form')).to_be_visible()
+    for label in ('超时', 'tokens', '重试次数', '上下文字符', 'JSON'):
+        assert label not in page.locator('#model-settings-form').inner_text()
+    page.locator('[data-model-role="primary"] [data-model-source-opt="personal"]').click()
+    page.locator('#model-primary-provider').select_option('openai')
+    page.locator('#model-primary-api_key').fill('browser-fixture-execution-key')
+    page.locator('#model-primary-model').fill('personal-browser-model')
+    with page.expect_response(lambda r: '/api/settings/model' in r.url and r.request.method == 'PUT') as saved:
+        page.locator('[data-action="model-settings-save"][data-model-save="primary"]').click()
+    assert saved.value.status == 200
+    page.locator('[data-model-edit="review"]').click()
+    page.locator('[data-model-role="review"] [data-model-source-opt="personal"]').click()
+    page.locator('#model-review-provider').select_option('deepseek')
+    page.locator('#model-review-api_key').fill('browser-fixture-review-key')
+    page.locator('#model-review-model').fill('different-check-model')
+    with page.expect_response(lambda r: '/api/settings/model' in r.url and r.request.method == 'PUT') as saved_review:
+        page.locator('[data-action="model-settings-save"][data-model-save="review"]').click()
+    assert saved_review.value.status == 200
+    expect(page.locator('#model-settings-source')).to_have_text('我的模型配置')
+    expect(page.locator('#model-settings-body')).to_contain_text('personal-browser-model')
+    expect(page.locator('#model-settings-body')).to_contain_text('different-check-model')
+    page.reload()
+    page.locator('[data-model-edit="primary"]').click()
+    expect(page.locator('#model-primary-model')).to_have_value('personal-browser-model')
+    expect(page.locator('#model-primary-api_key')).to_have_value('')
+    page.locator('[data-model-edit-cancel]').click()
+    page.locator('[data-model-edit="review"]').click()
+    expect(page.locator('#model-review-model')).to_have_value('different-check-model')
+    expect(page.locator('#model-review-provider')).to_have_value('deepseek')
+    expect(page.locator('#model-review-api_key')).to_have_value('')
+    page.locator('[data-model-edit-cancel]').click()
+    page.locator('[data-action="model-copy-primary"]').click()
+    expect(page.locator('#model-review-model')).to_have_value('personal-browser-model')
+    expect(page.locator('#model-review-provider')).to_have_value('openai')
+    with page.expect_response(lambda r: '/api/settings/model' in r.url and r.request.method == 'PUT'):
+        page.locator('[data-action="model-settings-save"][data-model-save="review"]').click()
+    page.once('dialog', lambda dialog: dialog.accept())
+    page.locator('[data-action="model-settings-reset"][data-model-reset="primary"]').click()
+    page.once('dialog', lambda dialog: dialog.accept())
+    page.locator('[data-action="model-settings-reset"][data-model-reset="review"]').click()
+    expect(page.locator('#model-settings-source')).to_have_text('系统默认')
+
+
+def test_model_and_feishu_pages_are_separate(ui):
+    from playwright.sync_api import expect
+    page, _, _, _ = ui
+    requests = []
+    page.on('request', lambda request: requests.append(request.url))
+    open_page(ui, 'models')
+    # 读取态为角色卡，无表单（FL-D750）；卡容器即模型页标识
+    expect(page.locator('#model-settings-card')).to_be_visible()
+    expect(page.locator('#model-settings-body')).to_contain_text('修改模型')
+    expect(page.locator('#feishu-connect-card')).to_be_hidden()
+    assert not any('/api/integrations/feishu/binding' in url for url in requests)
+    page.reload()
+    expect(page.locator('#model-settings-card')).to_be_visible()
+    expect(page.locator('#feishu-connect-card')).to_be_hidden()
+    requests.clear()
+    page.locator('.sidebar [data-nav="settings"]').click()
+    expect(page.locator('#feishu-connect-card')).to_be_visible()
+    expect(page.locator('#model-settings-card')).to_be_hidden()
+    expect(page.locator('#breadcrumb')).to_contain_text('设置')
+    assert not any('/api/settings/model' in url for url in requests)
+
+
+def test_model_connection_check_is_explicit_and_edit_invalidates_result(ui):
+    from playwright.sync_api import expect
+    page, context, _, _ = ui
+    calls = []
+    def fake_test(route):
+        calls.append(route.request.post_data_json)
+        route.fulfill(status=200, json={'ok': True, 'message': '连接正常，测试响应已收到。'})
+    context.route('**/api/settings/model/test', fake_test)
+    open_page(ui, 'models')
+    # 读取态默认无表单（FL-D750）：未点击「验证连接」不得发起测试请求
+    expect(page.locator('#model-settings-form')).to_have_count(0)
+    assert not calls
+    page.locator('[data-model-edit="primary"]').click()
+    expect(page.locator('#model-settings-form')).to_be_visible()
+    assert not calls
+    page.locator('[data-model-role="primary"] [data-model-source-opt="personal"]').click()
+    page.locator('#model-primary-model').fill('example-model')
+    page.locator('#model-primary-api_key').fill('browser-fixture-test-key')
+    page.locator('[data-model-test="primary"]').click()
+    expect(page.locator('#model-primary-status')).to_contain_text('连接正常')
+    assert len(calls) == 1
+    page.locator('#model-primary-model').fill('another-model')
+    expect(page.locator('#model-primary-status')).to_contain_text('尚未验证')
+    assert len(calls) == 1
+
+
 def test_revision_pair_checkbox_keyboard_and_insert_navigation(ui):
     presentation(ui)
     page = ui[0]
@@ -531,7 +648,7 @@ def test_old_review_failure_cannot_overwrite_new_report(ui):
     page.wait_for_selector('[data-action="open-review"]')
     pending[0].fulfill(status=503, json={"detail": "fixture failure"})
     page.wait_for_timeout(100)
-    assert "业务结论" in page.inner_text("#detail-body")
+    assert "结论" in page.inner_text("#detail-body")
     assert "无法生成合同呈现" not in page.inner_text("#detail-body")
     assert page.locator("#detail-title").inner_text() == "合同1.docx"
 
@@ -580,7 +697,9 @@ def test_failed_guide_can_be_retried_from_page(ui):
         job = guide_store.claim_guide_job(app.state.store)
         guide_store.finish_guide_job(app.state.store, job["id"], job["fencing_token"], error_code="GUIDE_PARSE_FAILED")
     open_page(ui, "guide")
-    button = page.locator(f'[data-guide-parse="{version["id"]}"]')
+    # 重新解析已收敛到指引详情弹层（FL-D753 行内操作收敛），先打开详情
+    page.locator(f'[data-guide-issues="{version["id"]}"]').click()
+    button = page.locator(f'#guide-overlay-body [data-guide-parse="{version["id"]}"]')
     assert button.is_enabled()
     button.click()
     page.wait_for_function("document.querySelector('#guide-rows').textContent.includes('待解析')")
@@ -620,9 +739,9 @@ def test_login_expiry_message_and_role_hash_guard(ui, monkeypatch):
     assert page.locator("#view-users").is_hidden()
     page.evaluate("location.hash='settings'")
     page.wait_for_timeout(100)
-    # V1 settings is now the member-facing Feishu page, not dev-only settings.
+    # V1 settings is now the member-facing settings centre (账户+飞书绑定), not dev-only settings.
     assert page.locator("#view-settings").is_visible()
-    assert page.locator('#breadcrumb [aria-current="page"]').inner_text() == '飞书绑定'
+    assert page.locator('#breadcrumb [aria-current="page"]').inner_text() == '设置'
     assert page.locator('#feishu-binding-code-btn').count() == 0
     page.locator('.sidebar [data-nav="overview"]').click()
     token = page.evaluate("sessionStorage.getItem('fundlex-auth-token')")
@@ -704,7 +823,7 @@ def test_generation_blocks_duplicate_requests_and_late_reply(ui):
     page.wait_for_timeout(100)
     assert page.locator("#detail-title").inner_text() == "合同1.docx"
     assert not page.locator('[data-action="download-selected"]').count()
-    assert "业务结论" in page.inner_text("#detail-body")
+    assert "结论" in page.inner_text("#detail-body")
 
 
 def test_generation_preserves_disabled_review_navigation(ui):
@@ -729,14 +848,6 @@ def test_overview_polls_other_task_after_selected_task_completed(ui):
     page.wait_for_selector(f'#task-rows [data-task="{another}"]', timeout=10000)
     assert "后台新建任务" in page.inner_text("#task-rows")
 
-
-def test_failed_stats_are_unavailable_instead_of_zero(ui):
-    page, context, _, _ = ui
-    context.route("**/api/tasks/stats", lambda route: route.fulfill(status=503, json={"detail": "fixture failure"}))
-    open_page(ui)
-    page.wait_for_timeout(100)
-    for element in ["stat-month-contracts", "stat-completion-rate", "stat-average"]:
-        assert page.locator("#" + element).inner_text() == "—"
 
 
 def test_download_all_stays_disabled_until_terminal_result_exists(ui):

@@ -17,7 +17,8 @@ _correlation_id: ContextVar[str] = ContextVar("fundlex_correlation_id", default=
 _SAFE_CODE = re.compile(r"^[A-Z][A-Z0-9_.-]{1,96}$")
 _MESSAGES = {
     400: "请求无效。", 401: "需要登录后才能执行此操作。", 403: "当前账号无权执行此操作。",
-    404: "请求的资源不存在。", 409: "请求与当前资源状态冲突。", 413: "上传内容超过允许大小。",
+    404: "请求的资源不存在。", 405: "请求方法不受支持。", 406: "响应格式不受支持。",
+    409: "请求与当前资源状态冲突。", 410: "请求的资源已下线。", 413: "上传内容超过允许大小。",
     415: "文件格式不受支持。", 422: "请求或文件无法处理。", 500: "服务暂时不可用，请稍后重试。",
     503: "服务暂时不可用，请稍后重试。",
 }
@@ -62,9 +63,10 @@ def code_from_detail(detail: Any, status_code: int) -> str:
     if code:
         return code
     return {400: "INVALID_REQUEST", 401: "AUTHENTICATION_REQUIRED", 403: "FORBIDDEN",
-            404: "NOT_FOUND", 409: "CONFLICT", 413: "UPLOAD_TOO_LARGE",
-            415: "UNSUPPORTED_FILE", 422: "INVALID_REQUEST", 503: "SERVICE_UNAVAILABLE"}.get(
-                status_code, "INTERNAL_ERROR")
+            404: "NOT_FOUND", 405: "METHOD_NOT_ALLOWED", 406: "NOT_ACCEPTABLE",
+            409: "CONFLICT", 410: "GONE", 413: "UPLOAD_TOO_LARGE",
+            415: "UNSUPPORTED_FILE", 422: "INVALID_REQUEST", 429: "RATE_LIMITED",
+            503: "SERVICE_UNAVAILABLE"}.get(status_code, "INTERNAL_ERROR")
 
 
 def message_for(status_code: int) -> str:

@@ -137,24 +137,24 @@ export function ReviewPage() {
   const generate = async () => {
     if (!taskId || !document?.document_id || busy) return
     if (pendingCount) {
-      setError(`还有 ${pendingCount} 条修订处于“待处理”，请逐条决定或使用批量接受/拒绝。`)
+      setError(`还有 ${pendingCount} 条没定下来；可以逐条选，或用上方批量按钮。`)
       return
     }
     const selectionEpoch = Number.isInteger(revisions.data?.selection_epoch) ? revisions.data?.selection_epoch : 0
     const manifestHash = typeof revisions.data?.manifest_hash === 'string' ? revisions.data.manifest_hash : ''
-    setBusy(true); setError(''); setMessage('正在生成选择版合同…')
+    setBusy(true); setError(''); setMessage('正在生成新合同…')
     try {
       const allAccepted = items.every((item) => decisions[String(item.del_id)] === 'accept')
       const result = await reviewMutation.mutateAsync({ taskId, documentId: document.document_id, allAccepted, selectionEpoch, manifestHash, decisions: items.map((item) => ({
           del_id: item.del_id,
           decision: decisions[String(item.del_id)] === 'reject' ? 'reject' : 'accept',
         })) })
-      setMessage(`已生成选择版合同：接受 ${result.accepted?.length || 0} 条，拒绝 ${result.rejected?.length || 0} 条。`)
+      setMessage(`新合同已生成：采用了 ${result.accepted?.length || 0} 处修改，放弃 ${result.rejected?.length || 0} 处。`)
       await Promise.all([documents.refetch(), revisions.refetch()])
     } catch (nextError) {
       const conflict = (nextError as { status?: number }).status === 409 || /SELECTION_(EPOCH|MANIFEST)/.test(String((nextError as { code?: string }).code || ''))
       if (conflict) {
-        setError('选择版本已变化，已重新读取当前修订；请核对后再次生成。')
+        setError('修订内容更新过，已重新加载；再看一眼再生成。')
         await revisions.refetch()
       } else {
         setError(nextError instanceof Error ? nextError.message : '生成选择版合同失败，请稍后重试。')
@@ -192,19 +192,19 @@ export function ReviewPage() {
   return <div className="fundlex-review-page">
     
     <header className="fundlex-review-header">
-      <div><div className="fundlex-review-meta"><Link to={`/tasks/${taskId}/documents/${document.document_id}/report`}>← 返回合同详情</Link><StatusBadge value={document.delivery_status} /></div><h1>修订复核</h1><p className="muted">{document.name} · 已处理 {resolvedCount} / {items.length} 条</p></div>
+      <div><div className="fundlex-review-meta"><Link to={`/tasks/${taskId}/documents/${document.document_id}/report`}>← 返回合同详情</Link><StatusBadge value={document.delivery_status} /></div><h1>修订复核</h1><p className="muted">{document.name}</p></div>
        <div className="fundlex-review-actions"><DocumentNavigator index={currentIndex} total={usableDocuments.length} disabled={busy} onPrevious={() => moveDocument(-1)} onNext={() => moveDocument(1)} /><Button variant="primary" type="button" disabled={busy || !items.length || pendingCount > 0} onClick={() => void generate()}>生成选择版合同</Button></div>
     </header>
     {(error || message) && <div className={`fundlex-message${error ? ' error' : ''}`} role={error ? 'alert' : 'status'}>{error || message}</div>}
-    <div className="fundlex-review-toolbar"><span className="fundlex-review-toolbar__keys">快捷键：A 接受 · R 拒绝 · ↑ / ↓ 定位上一条或下一条</span><span className="fundlex-muted">进度：{resolvedCount} / {items.length} · 待处理 {pendingCount}</span></div>
+    <div className="fundlex-review-toolbar"><span className="fundlex-muted">快捷键 A 接受 / R 拒绝 / ↑ ↓ 定位；没决定的修订不会写进新合同。</span></div>
     <SplitPane
        left={<><div className="fundlex-review-toolbar"><strong>合同原文与修订</strong><span className="fundlex-muted">点击高亮内容可定位右侧修订</span></div><DocumentViewer ref={viewerRef} html={html} activeRevisionId={activeRevisionId} activeRevisionIds={activeRevisionIds} decisions={markerDecisions} onRevisionClick={(id) => { setMobilePane('right'); selectRevision(id) }} /></>}
         right={<RevisionPanel revisions={revisionData as RevisionItem[]} decisions={decisions} activeRevisionId={activeRevisionId} busy={busy} onFocus={(id) => { setMobilePane('left'); selectRevision(id) }} onDecision={setRevisionDecision} onPrevious={() => moveRevision(-1)} onNext={() => moveRevision(1)} previousDisabled={activeRevisionIndex <= 0} nextDisabled={activeRevisionIndex < 0 || activeRevisionIndex >= items.length - 1} onBulkDecision={(decision) => updateDecisions(Object.fromEntries(items.map((item) => [String(item.del_id), decision])))} />}
        leftLabel="合同呈现"
-       rightLabel="修订清单"
+       rightLabel="改动清单"
        mobilePane={mobilePane}
        onMobilePaneChange={setMobilePane}
      />
-     <footer className="fundlex-review-actions"><Button type="button" disabled={busy || !items.length} onClick={() => updateDecisions(Object.fromEntries(items.map((item) => [String(item.del_id), 'accept'])))}>批量接受</Button><Button type="button" variant="danger" disabled={busy || !items.length} onClick={() => updateDecisions(Object.fromEntries(items.map((item) => [String(item.del_id), 'reject'])))}>批量拒绝</Button><span className="fundlex-muted">选择版会按每条修订的接受/拒绝结果生成；待处理项不会被默认为接受。</span></footer>
+     <footer className="fundlex-review-actions"><Button type="button" disabled={busy || !items.length} onClick={() => updateDecisions(Object.fromEntries(items.map((item) => [String(item.del_id), 'accept'])))}>批量接受</Button><Button type="button" variant="danger" disabled={busy || !items.length} onClick={() => updateDecisions(Object.fromEntries(items.map((item) => [String(item.del_id), 'reject'])))}>批量拒绝</Button></footer>
   </div>
 }

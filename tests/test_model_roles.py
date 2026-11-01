@@ -70,6 +70,21 @@ def test_default_task_roles_keep_review_independent():
     assert DEFAULT_TASK_ROLES["recall_joint_compose"] == "primary"
 
 
+def test_same_endpoint_different_role_limits_build_separate_transports():
+    from fundlex.models.config import ModelRoleConfig
+    from dataclasses import replace
+    primary = ModelRoleConfig(role="primary", model="m", base_url="https://example.invalid", api_key="fixture", max_tokens=1000)
+    review = replace(primary, role="review", max_tokens=2000)
+    seen = []
+    def factory(cfg, budget):
+        seen.append((cfg.role, cfg.max_tokens))
+        return StubGateway(cfg.model)
+    gateway = build_role_gateway(configs={"primary": primary, "review": review},
+                                 gateway_factory=factory, budget=object())
+    assert gateway.primary is not gateway.review
+    assert seen == [("primary", 1000), ("review", 2000)]
+
+
 def test_role_gateway_routes_and_records_without_sharing_context():
     primary, review = StubGateway("primary-m"), StubGateway("review-m")
     gateway = RoleGateway(primary, review)

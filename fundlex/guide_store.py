@@ -29,6 +29,19 @@ BUILTIN_GUIDE_ID = "builtin-v1"
 BUILTIN_GUIDE_PATH = Path(__file__).resolve().parent.parent / "guides" / "builtin_guide_v1.json"
 GUIDE_SOURCE_DIR = "guides"
 ENABLEABLE_STATUSES = frozenset({"released", "parsed"})
+# Certification lifecycle: a parsed version only becomes enableable when its
+# parse went through the same quality channel as the built-in guide
+# (deterministic validation clean + independent verification without leftover
+# findings).  Reparse always creates a new version, so certification is never
+# inherited from a predecessor.
+QUALIFICATION_NOT_RUN = "not_run"
+QUALIFICATION_CERTIFIED = "certified"
+QUALIFICATION_FROZEN = "frozen_builtin"
+# Parsed clean but the executability canary found runtime-fatal drift
+# (FL-D648): the version enters the owner-visible review list and cannot be
+# enabled until re-parsed into an executable shape.
+QUALIFICATION_NEEDS_REVIEW = "needs_review"
+ENABLEABLE_QUALIFICATIONS = frozenset({QUALIFICATION_CERTIFIED, QUALIFICATION_FROZEN})
 PARSEABLE_STATUSES = frozenset({"uploaded", "parse_failed", "parsed", "failed"})
 # User-initiated "reparse" is a new version whenever the version may already
 # have been observed by a task.  Only an unpublished, never-parsed version can
@@ -50,6 +63,11 @@ CREATE TABLE IF NOT EXISTS guide_versions (
 );
 CREATE TABLE IF NOT EXISTS guide_config (
     owner TEXT PRIMARY KEY, guide_version_id TEXT NOT NULL, updated_at REAL NOT NULL
+);
+CREATE TABLE IF NOT EXISTS guide_rule_config (
+    owner TEXT NOT NULL, guide_version_id TEXT NOT NULL,
+    disabled_json MEDIUMTEXT NOT NULL DEFAULT '[]', updated_at REAL NOT NULL,
+    PRIMARY KEY (owner, guide_version_id)
 );
 CREATE TABLE IF NOT EXISTS guide_jobs (
     id TEXT PRIMARY KEY, guide_version_id TEXT NOT NULL, owner TEXT NOT NULL, status TEXT NOT NULL,
@@ -129,9 +147,107 @@ def _document_sha(doc: dict[str, Any]) -> str:
     return guide_document_sha256(doc)
 
 
+def _validation_clean(validation: dict[str, Any]) -> bool:
+    """The built-in channel's exit condition, recomputed from components.
+
+    Mirrors :func:`fundlex.guide.build_guide_document`: no deterministic
+    errors, no uncovered paragraphs and no verifier leftovers.  Missing keys
+    count as empty so older fixtures stay valid; anything present and
+    non-empty fails closed.
+    """
+    if not isinstance(validation, dict):
+        return False
+    if validation.get("errors") or validation.get("coverage_gaps"):
+        return False
+    verification = validation.get("verification")
+    if isinstance(verification, dict):
+        if verification.get("findings") or verification.get("invalid_findings"):
+            return False
+    return True
+
+
+def _quality_failure_issues(validation: dict[str, Any]) -> dict[str, Any]:
+    """Structured, user-facing reasons when the quality channel rejects a parse."""
+    verification = validation.get("verification")
+    verification = verification if isinstance(verification, dict) else {}
+    issues: dict[str, Any] = {
+        "error_code": "GUIDE_VALIDATION_UNCLEAN",
+        "clean": False,
+        "errors": validation.get("errors") or [],
+        "warnings": validation.get("warnings") or [],
+        "coverage_gaps": validation.get("coverage_gaps") or [],
+        "verification": {"findings": verification.get("findings") or [],
+                         "invalid_findings": verification.get("invalid_findings") or 0,
+                         "coverage_explanation": verification.get("coverage_explanation") or ""},
+        "rounds": validation.get("rounds") or 0,
+        "rounds_detail": validation.get("rounds_detail") or [],
+        "detail": "解析结果未通过确定性校验或独立验证，不能启用；请修正指引后重新上传解析。",
+    }
+    return issues
+
+
+def _parse_enrichment(store: RunStore, version_id: str | None,
+                      document: dict[str, Any] | None,
+                      error_code: str | None) -> dict[str, Any]:
+    """Owner-facing enrichment for a finished parse: block report + canary.
+
+    Advisory by construction — enrichment failures never fail the job or the
+    lease write; they simply reduce to no extra detail.
+    """
+    extras: dict[str, Any] = {}
+    if not version_id or (document is None and not error_code):
+        return extras
+    source = None
+    try:
+        path = _source_path(store, version_id)
+        if path.is_file():
+            from .guide import extract_guide_source
+            source = extract_guide_source(path)
+    except Exception:  # noqa: BLE001 - diagnostics must never break a finish
+        source = None
+    canary_report: dict[str, Any] | None = None
+    if document is not None:
+        try:
+            from .guide_canary import executability_report, review_dimensions
+            canary_report = executability_report(document)
+            extras["canary"] = canary_report
+            if not canary_report["passed"]:
+                from datetime import datetime, timezone
+                extras["review"] = {"status": "needs_review",
+                                    "dimensions": {"source": "executability_canary",
+                                                   **review_dimensions(canary_report)},
+                                    "evaluated_at": datetime.now(timezone.utc)
+                                    .isoformat(timespec="seconds")}
+        except Exception:  # noqa: BLE001
+            pass
+    if source is not None:
+        try:
+            from .guide_report import block_report
+            problems: dict[str, list[dict[str, Any]]] = {}
+            for finding in (canary_report or {}).get("fatal") or []:
+                rule_id = str(finding.get("rule_id") or "")
+                if rule_id:
+                    problems.setdefault(rule_id, []).append(finding)
+            extras["parse_report"] = block_report(source, document, error_code=error_code,
+                                                  rule_problems=problems or None)
+        except Exception:  # noqa: BLE001
+            pass
+    return extras
+
+
+def _job_version_id(store: RunStore, job_id: str) -> str | None:
+    """Read-only lookup of the version a parse job belongs to."""
+    _ensure_tables(store)
+    with store._connect() as db:
+        row = db.execute("SELECT guide_version_id FROM guide_jobs WHERE id=?",
+                         (job_id,)).fetchone()
+    return str(row["guide_version_id"]) if row else None
+
+
 def _version_dict(row) -> dict[str, Any]:
     rules = _json_or(row["rules_json"], {})
     groups = rules.get("groups") if isinstance(rules, dict) else None
+    issues = _json_or(row["issues_json"], {})
     return {
         "id": row["id"], "owner": row["owner"], "built_in": bool(row["built_in"]),
         "parent_version_id": row["parent_version_id"] or "",
@@ -139,8 +255,9 @@ def _version_dict(row) -> dict[str, Any]:
         "document_sha256": row["document_sha256"], "rules_sha256": row["rules_sha256"],
         "parser_version": row["parser_version"], "schema_version": row["schema_version"],
         "prompt_versions": _json_or(row["prompt_versions"], {}),
-        "status": row["status"], "issues": _json_or(row["issues_json"], {}),
+        "status": row["status"], "issues": issues,
         "qualification_status": row["qualification_status"],
+        "review": issues.get("review") if isinstance(issues.get("review"), dict) else None,
         "rules_count": len(groups) if isinstance(groups, list) else 0,
         "created_at": row["created_at"], "updated_at": row["updated_at"],
         "released_at": row["released_at"],
@@ -261,16 +378,130 @@ def set_current_guide(store: RunStore, owner: str, version_id: str) -> dict[str,
     version = get_version(store, owner, version_id)
     if version["status"] not in ENABLEABLE_STATUSES:
         raise ValueError("GUIDE_NOT_ENABLEABLE")
-    # A parsed guide is data, not executable policy.  Custom operations must
-    # have controlled registry entries before an owner can enable the guide.
-    from .generation.registry import operation_registry_coverage_gaps
-    gaps = operation_registry_coverage_gaps(guide_document(store, version_id))
+    # Enabling requires the same qualification as the built-in guide:
+    # deterministic validation clean plus verification without leftover
+    # findings.  A re-parse produces a new version that must re-qualify; the
+    # predecessor's certification never carries over.
+    if version["qualification_status"] not in ENABLEABLE_QUALIFICATIONS:
+        raise ValueError("GUIDE_NOT_CERTIFIED")
+    # A parsed guide is data, not executable policy.  Admission replays the
+    # runtime's own router predicate (FL-D648): every operation the runtime
+    # would treat as authoritative must resolve to a registered contract, so a
+    # version that would fail closed at runtime can never be enabled.
+    from .guide_canary import blocking_gaps
+    gaps = blocking_gaps(guide_document(store, version_id))
     if gaps:
         raise ValueError("GUIDE_OPERATION_REGISTRY_MISSING:" + ",".join(gaps))
     with store._connect() as db:
         db.execute("INSERT OR REPLACE INTO guide_config(owner,guide_version_id,updated_at) VALUES(?,?,?)",
                    (owner, version_id, time.time()))
     return version
+
+
+def _rule_entries(document: dict[str, Any]) -> list[dict[str, Any]]:
+    """Flatten guide groups, accepting both flat rules and nested groups."""
+    entries: list[dict[str, Any]] = []
+    for group in (document or {}).get("groups") or []:
+        if not isinstance(group, dict):
+            continue
+        nested = group.get("rules")
+        if isinstance(nested, list):
+            for rule in nested:
+                if isinstance(rule, dict) and rule.get("rule_id"):
+                    entries.append(rule)
+        elif group.get("rule_id"):
+            entries.append(group)
+    return entries
+
+
+RULE_OP_LABELS = {"append": "新增", "replace": "修改", "delete": "删除", "move": "移动", "keep": "保留"}
+
+
+def _rule_requirement(rule: dict[str, Any]) -> str:
+    """Human-readable what-change text for one rule (FL-D730: WYSIWYG rule pickers)."""
+    text = str(rule.get("requirement") or "").strip()
+    return text or str(rule.get("title") or "")
+
+
+def _rule_operations_summary(rule: dict[str, Any], *, limit: int = 4) -> list[dict[str, str]]:
+    """Condense raw rule operations into a few human-readable labels with a snippet."""
+    counts: dict[str, int] = {}
+    details: dict[str, str] = {}
+    for op in rule.get("operations") or []:
+        if not isinstance(op, dict):
+            continue
+        label = RULE_OP_LABELS.get(str(op.get("op") or ""), "调整")
+        counts[label] = counts.get(label, 0) + 1
+        if label not in details:
+            snippet = str(op.get("new_text") or op.get("old_text") or "").strip()
+            if snippet:
+                details[label] = snippet[:80] + ("…" if len(snippet) > 80 else "")
+    summary: list[dict[str, str]] = []
+    for label in list(counts)[:limit]:
+        entry: dict[str, str] = {"label": f"{label} {counts[label]} 处"}
+        if label in details:
+            entry["detail"] = details[label]
+        summary.append(entry)
+    return summary
+
+
+def rule_settings(store: RunStore, owner: str, version_id: str) -> dict[str, Any]:
+    """Owner-scoped enable/disable state for one guide version.
+
+    Disabling is a task-level business choice, not a mutation of the certified
+    guide.  The guide document and its hashes stay untouched; the task snapshot
+    records which rule ids were disabled at creation time.
+    """
+    version = get_version(store, owner, version_id)
+    if version["status"] not in ENABLEABLE_STATUSES:
+        raise ValueError("GUIDE_NOT_READY")
+    document = guide_document(store, version_id)
+    entries = _rule_entries(document)
+    with store._connect() as db:
+        row = db.execute("SELECT disabled_json FROM guide_rule_config "
+                         "WHERE owner=? AND guide_version_id=?", (owner, version_id)).fetchone()
+    raw = row["disabled_json"] if row is not None else "[]"
+    try:
+        disabled = json.loads(raw)
+    except (ValueError, TypeError):
+        raise ValueError("GUIDE_RULE_SETTINGS_INVALID") from None
+    if not isinstance(disabled, list) or any(not isinstance(item, str) for item in disabled):
+        raise ValueError("GUIDE_RULE_SETTINGS_INVALID")
+    disabled_set = {str(item) for item in disabled if isinstance(item, str)}
+    known = {str(rule.get("rule_id")) for rule in entries}
+    if disabled_set - known:
+        raise ValueError("GUIDE_RULE_SETTINGS_INVALID")
+    return {
+        "version_id": version_id,
+        "disabled_rule_ids": sorted(disabled_set),
+        "rules": [{
+            "rule_id": str(rule.get("rule_id")),
+            "title": str(rule.get("title") or ""),
+            "section_hint": str(rule.get("section_hint") or ""),
+            "enabled": str(rule.get("rule_id")) not in disabled_set,
+            "requirement": _rule_requirement(rule),
+            "operations": _rule_operations_summary(rule),
+        } for rule in entries],
+    }
+
+
+def set_rule_settings(store: RunStore, owner: str, version_id: str,
+                      disabled_rule_ids: list[str] | tuple[str, ...] | None) -> dict[str, Any]:
+    """Persist disabled rule ids after validating them against the bound guide."""
+    settings = rule_settings(store, owner, version_id)
+    known = {item["rule_id"] for item in settings["rules"]}
+    disabled = sorted({str(item).strip() for item in (disabled_rule_ids or [])
+                       if str(item).strip()})
+    unknown = sorted(set(disabled) - known)
+    if unknown:
+        raise ValueError("GUIDE_RULE_UNKNOWN:" + ",".join(unknown))
+    if known and not (known - set(disabled)):
+        raise ValueError("GUIDE_RULES_ALL_DISABLED")
+    with store._connect() as db:
+        db.execute("INSERT OR REPLACE INTO guide_rule_config"
+                   "(owner,guide_version_id,disabled_json,updated_at) VALUES(?,?,?,?)",
+                   (owner, version_id, json.dumps(disabled, ensure_ascii=False), time.time()))
+    return rule_settings(store, owner, version_id)
 
 
 def create_custom_version(store: RunStore, owner: str, filename: str, source_bytes: bytes,
@@ -477,13 +708,27 @@ def finish_guide_job(store: RunStore, job_id: str, fencing_token: int, *, docume
     """Close a claimed job; returns ``{"job": ..., "version": ...}`` records.
 
     A parsed document moves the version to ``parsed`` with its rules, hashes,
-    parser/prompt versions and validation issues.  An error moves it to
-    ``parse_failed`` (retryable) or ``failed`` once attempts are exhausted.
+    parser/prompt versions and validation issues — but only when the parse
+    passed the same quality channel as the built-in guide (deterministic
+    validation clean plus verification without leftover findings).  An unclean
+    document is converted here into a terminal ``GUIDE_VALIDATION_UNCLEAN``
+    failure with structured, user-facing reasons; low-quality parses are never
+    silently released.  A re-parse creates a new version, which must qualify
+    from scratch.  Other errors move the version to ``parse_failed``
+    (retryable) or ``failed`` once attempts are exhausted.
     """
     _ensure_tables(store)
     if document is not None and not isinstance(document, dict):
         raise ValueError("GUIDE_DOCUMENT_INVALID")
     now = time.time()
+    quality_issues: dict[str, Any] | None = None
+    if document is not None and not error_code:
+        validation = document.get("validation") if isinstance(document.get("validation"), dict) else {}
+        if not _validation_clean(validation):
+            quality_issues = _quality_failure_issues(validation)
+            error_code = "GUIDE_VALIDATION_UNCLEAN"
+    extras = _parse_enrichment(store, _job_version_id(store, job_id), document, error_code)
+    canary = extras.get("canary") if isinstance(extras.get("canary"), dict) else None
     with store._connect() as db:
         db.execute("BEGIN IMMEDIATE")
         job = db.execute("SELECT * FROM guide_jobs WHERE id=?", (job_id,)).fetchone()
@@ -495,14 +740,24 @@ def finish_guide_job(store: RunStore, job_id: str, fencing_token: int, *, docume
         version_id = job["guide_version_id"]
         if document is not None and not error_code:
             document_sha = _document_sha(document)
-            issues = document.get("validation") if isinstance(document.get("validation"), dict) else {}
+            issues = dict(document.get("validation") or {})
+            if extras.get("parse_report") is not None:
+                issues["parse_report"] = extras["parse_report"]
+            if canary is not None:
+                issues["canary"] = canary
+            if extras.get("review") is not None:
+                issues["review"] = extras["review"]
+            qualification = (QUALIFICATION_NEEDS_REVIEW
+                             if (canary is not None and not canary.get("passed"))
+                             else QUALIFICATION_CERTIFIED)
             db.execute("""UPDATE guide_versions SET status='parsed',rules_json=?,document_sha256=?,
-                rules_sha256=?,parser_version=?,schema_version=?,prompt_versions=?,issues_json=?,updated_at=?
+                rules_sha256=?,parser_version=?,schema_version=?,prompt_versions=?,issues_json=?,
+                qualification_status=?,updated_at=?
                 WHERE id=?""",
                 (json.dumps(document, ensure_ascii=False), document_sha, document_sha,
                  str(document.get("parser_version") or ""), str(document.get("schema_version") or ""),
                  json.dumps(document.get("prompt_versions") or {}, ensure_ascii=False),
-                 json.dumps(issues, ensure_ascii=False), now, version_id))
+                 json.dumps(issues, ensure_ascii=False), qualification, now, version_id))
             changed = db.execute("UPDATE guide_jobs SET status='completed',error_code=NULL,lease_until=NULL,"
                                  "updated_at=? WHERE id=? AND fencing_token=? AND status='leased' "
                                  "AND lease_until>?", (now, job_id, fencing_token, now)).rowcount
@@ -510,8 +765,17 @@ def finish_guide_job(store: RunStore, job_id: str, fencing_token: int, *, docume
                 raise Conflict("stale guide job lease")
         else:
             code = error_code or "GUIDE_PARSE_FAILED"
-            status = "failed" if job["attempts"] >= MAX_GUIDE_JOB_ATTEMPTS else "parse_failed"
-            issues = {"error_code": code, "errors": [{"code": code}], "attempts": job["attempts"]}
+            # Quality-gate rejections are terminal for this version: the same
+            # source re-parsed automatically would repeat the model spend, and
+            # the user remedy is re-upload/re-parse into a new version.
+            status = "failed" if (quality_issues is not None
+                                  or job["attempts"] >= MAX_GUIDE_JOB_ATTEMPTS) else "parse_failed"
+            issues = dict(quality_issues or {"error_code": code, "errors": [{"code": code}],
+                                             "attempts": job["attempts"]})
+            if extras.get("parse_report") is not None:
+                issues["parse_report"] = extras["parse_report"]
+            if canary is not None:
+                issues["canary"] = canary
             db.execute("UPDATE guide_versions SET status=?,issues_json=?,updated_at=? WHERE id=?",
                        (status, json.dumps(issues, ensure_ascii=False), now, version_id))
             changed = db.execute("UPDATE guide_jobs SET status=?,error_code=?,lease_until=NULL,updated_at=? "
@@ -522,6 +786,46 @@ def finish_guide_job(store: RunStore, job_id: str, fencing_token: int, *, docume
         refreshed_job = db.execute("SELECT * FROM guide_jobs WHERE id=?", (job_id,)).fetchone()
         version = db.execute("SELECT * FROM guide_versions WHERE id=?", (version_id,)).fetchone()
     return {"job": _job_dict(refreshed_job), "version": _version_dict(version)}
+
+
+def mark_guide_review(store: RunStore, owner: str, version_id: str,
+                      review: dict[str, Any] | None) -> dict[str, Any]:
+    """Record (or clear, with ``None``) a smoke-review verdict on a version.
+
+    A ``needs_review`` verdict is advisory — it never blocks enabling — but it
+    is shown to the owner with the dimensions that degraded versus the
+    built-in guide.  ``review`` must be JSON-serializable; recommended shape:
+    ``{"status": "needs_review", "dimensions": {...}, "evaluated_at": ...}``.
+    """
+    version = get_version(store, owner, version_id)
+    if review is not None:
+        if not isinstance(review, dict):
+            raise ValueError("GUIDE_REVIEW_INVALID")
+        json.dumps(review, ensure_ascii=False)  # fail fast on non-serializable values
+    issues = version.get("issues") if isinstance(version.get("issues"), dict) else {}
+    updated_issues = dict(issues)
+    if review is None:
+        updated_issues.pop("review", None)
+    else:
+        updated_issues["review"] = review
+    with store._connect() as db:
+        db.execute("UPDATE guide_versions SET issues_json=?,updated_at=? WHERE id=?",
+                   (json.dumps(updated_issues, ensure_ascii=False), time.time(), version["id"]))
+    return get_version(store, owner, version_id)
+
+
+def diff_versions(store: RunStore, owner: str, version_id: str,
+                  against_id: str) -> dict[str, Any]:
+    """Deterministic diff of two visible, parsed versions (``against`` is the base)."""
+    if not isinstance(against_id, str) or not against_id.strip():
+        raise ValueError("GUIDE_DIFF_AGAINST_REQUIRED")
+    # get_version enforces owner visibility for each side independently.
+    get_version(store, owner, version_id)
+    get_version(store, owner, against_id.strip())
+    before = guide_document(store, against_id.strip())
+    after = guide_document(store, version_id)
+    from .guide_diff import diff_guide_documents
+    return diff_guide_documents(before, after)
 
 
 def guide_source_path(store: RunStore, version_id: str) -> Path:

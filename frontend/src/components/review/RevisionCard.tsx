@@ -3,7 +3,7 @@ import type { MarkerDecision } from '../document'
 import type { RevisionItem } from './RevisionTypes'
 
 const operationLabels: Record<string, string> = { insert: '新增', delete: '删除', replace: '替换' }
-const decisionLabels: Record<MarkerDecision, string> = { pending: '待处理', accept: '接受', reject: '拒绝' }
+const decisionLabels: Record<MarkerDecision, string> = { pending: '待决定', accept: '接受', reject: '拒绝' }
 
 export function RevisionCard({
   revision,
@@ -24,7 +24,6 @@ export function RevisionCard({
     <button type="button" className="fundlex-revision-card__focus" onClick={onFocus} aria-label={`定位第 ${revision.index || 0} 条修订`}>
       <span className="fundlex-revision-card__number">#{revision.index || '—'}</span>
       <span>{operationLabels[revision.operation || ''] || revision.operation || '修改'}</span>
-      {revision.rule_id && <code>{revision.rule_id}</code>}
       {revision.section && <span className="fundlex-muted">{revision.section}</span>}
     </button>
     <div className="fundlex-revision-card__comparison">

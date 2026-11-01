@@ -2,7 +2,7 @@
   'use strict';
   const api=window.FundLexWorkbench,$=id=>document.getElementById(id),esc=api.esc;
   const kinds={revision:'合同修改',compare:'合同比对',generation:'指引生成'};
-  const phases={uploading:'等待上传',queued:'排队中',running:'处理中',leased:'处理中',paused:'已暂停',retry_wait:'等待重试',completed:'处理结束',complete:'处理结束',complete_with_unresolved:'含待处理问题',failed:'处理失败',INGEST_REGULATION:'读取法规',EXTRACT_REQUIREMENTS:'提取法规要求',VERIFY_REQUIREMENTS:'核验法规要求',BUILD_CORPUS_SNAPSHOT:'准备合同语料',DISCOVER_IMPACTS:'分析合同影响',AUTHOR_GUIDE:'起草候选指引',QUALITY_REVIEW:'质量核验',COVERAGE_REVIEW:'覆盖核验',RESIDUAL_MINING:'查漏与补充',FINALIZE_GUIDE:'整理候选指引',BUILD_EVIDENCE:'生成证据报告'};
+  const phases={...(window.FUNDLEX_STATUS_LABELS||{}),uploading:'等待上传',completed:'处理结束',complete:'处理结束',complete_with_unresolved:'含待处理问题',failed:'处理失败',INGEST_REGULATION:'读取法规',EXTRACT_REQUIREMENTS:'提取法规要求',VERIFY_REQUIREMENTS:'核验法规要求',BUILD_CORPUS_SNAPSHOT:'准备合同语料',DISCOVER_IMPACTS:'分析合同影响',AUTHOR_GUIDE:'起草候选指引',QUALITY_REVIEW:'质量核验',COVERAGE_REVIEW:'覆盖核验',RESIDUAL_MINING:'查漏与补充',FINALIZE_GUIDE:'整理候选指引',BUILD_EVIDENCE:'生成证据报告'};
   let route={},token=0,timer=null,busy=false;
   function navigate(values){api.navigate('workspace',{...route,...values});}
   function time(value){if(!value)return '—';const d=new Date(typeof value==='number'?value*1000:value);return Number.isNaN(d.getTime())?'—':d.toLocaleString('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});}
@@ -31,11 +31,11 @@
         return `<tr><td><strong class="workspace-task-name">${esc(item.name)}</strong></td><td><span class="business-type is-${esc(item.kind)}">${esc(kinds[item.kind]||item.kind)}</span></td><td>${esc(item.scale?.value??'—')} ${esc(item.scale?.unit||'')}</td><td><span>${esc(status)}</span>${phase!==status?`<small class="row-sub">${esc(phase)}</small>`:''}</td><td class="workspace-attention-cell">${attention?`<span class="workspace-attention-text">${esc(attention)}</span>`:'<span class="subnote">暂无额外待办，交付情况请查看详情</span>'}</td><td class="workspace-time">${esc(time(item.created_at))}</td><td><button type="button" class="btn-link" data-workspace-open="${esc(item.kind)}" data-id="${esc(item.id)}">进入任务</button></td></tr>`;
       }).join('')||`<tr><td colspan="7"><div class="empty"><strong>当前条件下没有任务</strong><p>${route.q||route.kind||route.status?'请清除筛选或换一个关键词。':'选择合同修改、合同比对或指引生成开始。'}</p></div></td></tr>`;
       const page=Number(data.page)||1,max=Math.max(1,Math.ceil(data.total/(data.page_size||20)));
-      $('workspace-pagination').innerHTML=`<span>第 ${page} / ${max} 页 · ${data.total} 个任务</span><button type="button" class="btn btn-sm" data-workspace-page="${page-1}" ${page<=1?'disabled':''}>上一页</button><button type="button" class="btn btn-sm" data-workspace-page="${page+1}" ${page>=max?'disabled':''}>下一页</button>`;
+      $('workspace-pagination').innerHTML=`<span>共 ${data.total} 条 · 第 ${page} / ${max} 页</span><button type="button" class="btn btn-sm" data-workspace-page="${page-1}" ${page<=1?'disabled':''}>上一页</button><button type="button" class="btn btn-sm" data-workspace-page="${page+1}" ${page>=max?'disabled':''}>下一页</button>`;
     }catch(error){
       if(current!==token||epoch!==api.epoch()||error.name==='AbortError')return;
-      $('workspace-state').textContent='任务暂时无法读取，请点击刷新重试。';
-      $('workspace-task-rows').innerHTML='<tr><td colspan="7"><div class="empty">请点击刷新重试。</div></td></tr>';
+      $('workspace-state').textContent='任务暂时无法读取，请稍后重试。';
+      $('workspace-task-rows').innerHTML='<tr><td colspan="7"><div class="empty">请稍后重试。</div></td></tr>';
       $('workspace-pagination').replaceChildren();for(const id of ['active','attention','completed'])$(`workspace-${id}`).textContent='—';
     }finally{if(current===token){busy=false;$('workspace-task-rows').removeAttribute('aria-busy');}}
   }
@@ -49,7 +49,8 @@
   });
   $('workspace-refresh').addEventListener('click',load);
   $('workspace-search').addEventListener('input',()=>{clearTimeout(timer);timer=setTimeout(()=>navigate({q:$('workspace-search').value.trim(),page:'1'}),300);});
-  for(const [id,key] of [['workspace-status','status'],['workspace-sort','sort'],['workspace-date-from','date_from'],['workspace-date-to','date_to']])$(id).addEventListener('change',()=>navigate({[key]:$(id).value,page:'1'}));
+  function validDateValue(value){if(!value)return true;if(!/^\d{4}-\d{2}-\d{2}$/.test(value))return false;const[y,m,d]=value.split('-').map(Number);if(m<1||m>12||d<1||d>31)return false;const date=new Date(Date.UTC(y,m-1,d));return date.getUTCFullYear()===y&&date.getUTCMonth()===m-1&&date.getUTCDate()===d;}
+  for(const [id,key] of [['workspace-status','status'],['workspace-sort','sort'],['workspace-date-from','date_from'],['workspace-date-to','date_to']])$(id).addEventListener('change',()=>{const input=$(id);if(id.startsWith('workspace-date-')){input.setCustomValidity(validDateValue(input.value)?'':'请使用 YYYY-MM-DD 格式输入真实日期。');if(!input.checkValidity()){input.reportValidity();return;}}navigate({[key]:input.value,page:'1'});});
   document.addEventListener('fundlex:route',e=>{if(e.detail.view!=='workspace'){token++;busy=false;clearTimeout(timer);return;}route={...e.detail};delete route.view;setInputs();load();});
   document.addEventListener('fundlex:identity-reset',()=>{token++;busy=false;route={};clearTimeout(timer);$('workspace-task-rows').replaceChildren();$('workspace-pagination').replaceChildren();$('workspace-state').textContent='';for(const id of ['active','attention','completed'])$(`workspace-${id}`).textContent='—';setInputs();});
   setInterval(()=>{if(!busy&&document.visibilityState==='visible'&&api.view()==='workspace'&&document.activeElement?.id!=='workspace-search')load();},15000);

@@ -1022,6 +1022,19 @@ def target_for_missing_operation(
         if operation_id in keys and getattr(target, "state", "") == "needs_edit" \
                 and not getattr(target, "out_of_scope", False):
             return None
+    # FL-D656 mechanism D (recovery conservatism): a satisfied target for this
+    # operation already proves the business site.  Manufacturing a second
+    # needs_edit twin for the same operation creates an unplannable blocker
+    # that poisons the Ledger (B19 G04 R036/R037: T005/T006 satisfied at p160,
+    # recovery still injected R036/R037 and flipped both obligations open).
+    # Fail-closed is preserved: only an explicit satisfied/already_satisfied
+    # state suppresses recovery, and the obligation's own open rows stay.
+    for target in targets:
+        keys = set(getattr(target, "operations", ()) or ())
+        if operation_id in keys \
+                and getattr(target, "state", "") in {"satisfied", "already_satisfied"} \
+                and not getattr(target, "out_of_scope", False):
+            return None
     section_ids = mapping.get(rule_id) or []
     section_by_id = {section.id: section for section in sections}
     scope = scopes.get(rule_id) if scopes is not None else None

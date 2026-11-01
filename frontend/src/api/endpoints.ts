@@ -1,8 +1,8 @@
 import { download, jsonBody, request, requestText, upload, type UploadProgress } from './client'
 import type {
   AuthSession, Capabilities, CreateTaskInput, Decision, DecisionResult,
-  GuideDetail, GuideSettings, GuideSummary, Paginated, Report, RevisionView, TaskDetail,
-  TaskDocument, TaskStats, TaskSummary, User, UploadResult, CompareTask,
+  GuideDetail, GuideDiffResult, GuideTextDiffResult, GuideRuleSettings, GuideSettings, GuideSummary, ModelSettings, Paginated, Report,
+  RevisionView, TaskDetail, TaskDocument, TaskStats, TaskSummary, User, UploadResult, CompareTask,
   ComparePairManifest, CompareUploadResult, CompareView,
   FeishuBinding, FeishuBindingCode, FeishuOAuthStart,
 } from '../types'
@@ -43,10 +43,18 @@ export const api = {
   guide: (id: string) => request<GuideDetail>(`/api/guides/${encodeURIComponent(id)}`),
   guideSource: (id: string) => download(`/api/guides/${encodeURIComponent(id)}/source`),
   guideRules: (id: string) => request<Record<string, unknown>>(`/api/guides/${encodeURIComponent(id)}/rules`),
+  guideDiff: (id: string, against: string) => request<GuideDiffResult>(`/api/guides/${encodeURIComponent(id)}/diff?against=${encodeURIComponent(against)}`),
+  guideTextDiff: (id: string, against: string) => request<GuideTextDiffResult>(`/api/guides/${encodeURIComponent(id)}/text-diff?against=${encodeURIComponent(against)}`),
   guideSettings: () => request<GuideSettings>('/api/settings/guide'),
   setGuide: (version_id: string | null) => request<GuideSettings>('/api/settings/guide', { method: 'PUT', body: jsonBody({ version_id }) }),
+  guideRuleSettings: (id: string) => request<GuideRuleSettings>(`/api/guides/${encodeURIComponent(id)}/rule-settings`),
+  setGuideRuleSettings: (id: string, disabled_rule_ids: string[]) => request<GuideRuleSettings>(`/api/guides/${encodeURIComponent(id)}/rule-settings`, { method: 'PUT', body: jsonBody({ disabled_rule_ids }) }),
   uploadGuide: (file: File, onProgress?: UploadProgress) => { const form = new FormData(); form.append('file', file, file.name); return upload<{ version: GuideSummary }>('/api/guides', form, onProgress) },
   parseGuide: (id: string) => request<{ version: GuideSummary }>(`/api/guides/${encodeURIComponent(id)}/parse`, { method: 'POST' }),
+  modelSettings: () => request<ModelSettings>('/api/settings/model'),
+  testModelConnection: (input: Record<string, unknown>) => request<{ ok: boolean; message: string }>('/api/settings/model/test', { method: 'POST', body: JSON.stringify(input) }),
+  resetModelSettings: () => request<ModelSettings>('/api/settings/model', { method: 'DELETE' }),
+  saveModelSettings: (input: { primary: Record<string, unknown>; review?: Record<string, unknown> | null }) => request<ModelSettings>('/api/settings/model', { method: 'PUT', body: jsonBody(input) }),
 
   documentReport: (taskId: string, documentId: string) => request<Report>(`/api/tasks/${encodeURIComponent(taskId)}/documents/${encodeURIComponent(documentId)}/report`),
   revisions: (taskId: string, documentId: string) => request<RevisionView>(`/api/tasks/${encodeURIComponent(taskId)}/documents/${encodeURIComponent(documentId)}/revisions`),

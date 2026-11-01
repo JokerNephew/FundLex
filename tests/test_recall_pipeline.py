@@ -1458,3 +1458,71 @@ def test_report_markdown_shows_failure_reason(tmp_path):
     _write_report_markdown(path, report)
     text = path.read_text(encoding="utf-8")
     assert "失败原因：文件包含未接受的修订痕迹" in text
+
+
+def test_absent_clone_bookkeeping_keeps_synthetic_and_origins(tmp_path: Path,
+                                                              monkeypatch: pytest.MonkeyPatch):
+    """FL-D563 (A7-04): absent-pass clones must land in ``synthetic``/``origins``.
+
+    The ``4872cdf`` fix moved the clone bookkeeping out of the ``if absent_sites:``
+    guard: clones that ``resolve_absent_operations``/``resolve_absent_site_targets``
+    append to ``targets`` must also be appended to the ``synthetic`` source list and
+    stamped ``origins[id] == "absent_site_clone"`` even when the site pass returned
+    no records.  Otherwise the operation-aware rebuild (``_collect_targets``) drops
+    the absent proof carrier.  This test drives the real pipeline (scripted gateway)
+    through that bookmark point and asserts both invariants on the actual run state.
+    """
+    import dataclasses
+
+    import fundlex.recall as recall
+    import fundlex.recall_pipeline as pipeline
+
+    captured: dict[str, object] = {}
+    real_run_survey = pipeline._run_survey
+
+    def spy_run_survey(model, rules, rules_by_id, facts, inspection, targets,
+                       synthetic, origins, *args, **kwargs):
+        # ``synthetic`` and ``origins`` are allocated once per run (survey stage)
+        # and mutated in place downstream; keeping the live objects lets the
+        # post-run assertions observe the final bookkeeping state.
+        captured.setdefault("synthetic", synthetic)
+        captured.setdefault("origins", origins)
+        return real_run_survey(model, rules, rules_by_id, facts, inspection, targets,
+                               synthetic, origins, *args, **kwargs)
+
+    clone_id = "ABSENT-CLONE-QA-A704"
+    real_resolve_operations = recall.resolve_absent_operations
+
+    def with_forced_clone(targets, rules_by_id, inspection, facts=None, scopes=None):
+        created = list(real_resolve_operations(targets, rules_by_id, inspection,
+                                               facts, scopes))
+        if targets and not any(target.target_id == clone_id for target in created):
+            # Same shape the real pass produces: an auditable satisfied candidate
+            # cloned from a real target geometry, operation-bound, uniquely id'ed.
+            base = targets[0]
+            created.append(dataclasses.replace(
+                base, target_id=clone_id, state="satisfied",
+                reason="OLD_WORDING_ABSENT_IN_RULE_SCOPE",
+                resolution="resolved", segment_ok=True))
+        return created
+
+    monkeypatch.setattr(pipeline, "_run_survey", spy_run_survey)
+    monkeypatch.setattr(recall, "resolve_absent_operations", with_forced_clone)
+    # The A7-04 trigger: the absent-*site* pass finds nothing, so a bookkeeping
+    # step still guarded by ``if absent_sites:`` would silently drop the clone.
+    monkeypatch.setattr(recall, "resolve_absent_site_targets",
+                        lambda targets, rules_by_id, inspection, facts=None: [])
+
+    _, _, _, report = run(tmp_path)
+
+    synthetic = captured.get("synthetic")
+    origins = captured.get("origins")
+    assert synthetic is not None and origins is not None, "survey stage must run"
+    # Invariant 1: the clone joined the synthetic source list.
+    assert any(target.target_id == clone_id for target in synthetic), (
+        "absent clone missing from synthetic — rebuild would drop the proof carrier")
+    # Invariant 2: origins attribution is stamped consistently.
+    assert origins.get(clone_id) == "absent_site_clone", (
+        f"origins[{clone_id!r}] == {origins.get(clone_id)!r}, expected 'absent_site_clone'")
+    # Prove the run really took the empty-absent_sites branch (the A7-04 condition).
+    assert "absent_site_targets" not in report

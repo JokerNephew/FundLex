@@ -766,6 +766,11 @@ def _resolve_class_basics(rule_id: str,
             evidence.extend([f"definition_candidates={count}"])
             if len(def_leaves) > 1:
                 evidence.append(f"multi_leaf={len(def_leaves)}")
+            # FL-D645 alignment: extend through the same deterministic definition
+            # group chain as G01/G02, so a 基本情况 leaf holding only the
+            # headline definition admits the rebound group end for the audit gate
+            # and the replay boundary instead of a coincidental wide leaf.
+            def_leaves = _extend_definition_group(def_leaves, spans, evidence)
             evidence.extend([_leaf_label(leaf) for leaf in def_leaves])
             evidence.append("source=basic_info_definition")
             return _class_scope(rule_id, def_leaves, resolution="resolved", base=base,
@@ -888,8 +893,51 @@ def _resolve_definition(rule_id: str, sections: Sequence[Any],
             return _unresolved(rule_id, *evidence, "glossary_class_definition_missing")
         evidence.append("fallback=glossary_class_label")
     evidence.extend(_leaf_label(leaf) for leaf in selected)
-    return _scope(rule_id, selected, resolution="resolved",
-                  copy_keys={"份额类别"}, evidence=evidence)
+    return _scope(rule_id, _extend_definition_group(selected, spans, evidence),
+                  resolution="resolved", copy_keys={"份额类别"}, evidence=evidence)
+
+
+def _extend_definition_group(selected: Sequence[LeafSection],
+                             spans: Mapping[str, Any],
+                             evidence: list[str]) -> list[LeafSection]:
+    """Include the whole class-definition group in the scope (FL-D608).
+
+    The headline class-division definition (p117 in B05) is one leaf; the
+    per-class definitions that continue its group (p118/p119) are siblings.
+    The append rebind lands on the group END, so a scope that holds only the
+    headline paragraph drops the rebound target at the audit gate and strips
+    the verified site from claim replay.  Reuse the same deterministic group
+    chain the planner uses so scope, gate and replay agree on one boundary.
+    """
+    from types import SimpleNamespace
+    try:
+        from .recall import (_definition_group_continuation_end,
+                             _split_definition_end)
+    except ImportError:
+        return list(selected)
+    shim = SimpleNamespace(paragraphs=list(spans.values()))
+    order = [str(getattr(span, "location", "")) for span in shim.paragraphs]
+    extended: list[LeafSection] = []
+    for leaf in selected:
+        locations = set(leaf.locations)
+        for location in leaf.locations:
+            anchor = spans.get(str(location))
+            if anchor is None:
+                continue
+            end = (_split_definition_end(anchor, shim)
+                   or _definition_group_continuation_end(anchor, shim))
+            end_location = getattr(end, "location", None)
+            if end_location is None or end_location not in order:
+                continue
+            start_index = order.index(str(location))
+            locations.update(order[start_index:order.index(end_location) + 1])
+            evidence.append(f"extend=definition_group_end:{location}->{end_location}")
+        if len(locations) == len(leaf.locations):
+            extended.append(leaf)
+        else:
+            extended.append(replace(leaf, locations=tuple(
+                location for location in order if location in locations)))
+    return extended
 
 
 def _resolve_fee_tax(rule_id: str, sections: Sequence[Any], leaves: Sequence[LeafSection],

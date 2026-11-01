@@ -16,6 +16,7 @@ Two invariants are enforced here on top of the core:
 """
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 import os
@@ -51,8 +52,8 @@ from .recall import (BOUNDARY_POLICY, ENGINE_ID, ENGINE_VERSION, SCHEMA_VERSION,
                       dedupe_operation_targets,
                       source_parts_contiguous,
                       absent_delete_coverage,
-                      ensure_g22_ordered_list_targets,
-                      ensure_g08_actual_rate_targets,
+                      missing_guide_site,
+                      g14_site_guard_veto,
                       ensure_class_group_noop_targets)
 from .recall_prompts import (AUDIT_INSTRUCTION, AUDIT_PROMPT_VERSION, AUDIT_SCHEMA,
                              PROMPT_VERSIONS, SWEEP_INSTRUCTION, SWEEP_PROMPT_VERSION,
@@ -171,6 +172,46 @@ def _guide_rules(guide_document: dict) -> list[dict[str, Any]]:
         elif item.get("rule_id"):
             rules.append(item)
     return rules
+
+
+def _active_guide_document(guide_document: dict,
+                           disabled_rule_ids: Sequence[str] | None) -> tuple[dict, list[dict]]:
+    """Return a processing copy with user-disabled rules removed.
+
+    The certified guide document is never mutated.  The full document remains
+    the hash/certification envelope; only the rule set handed to the engine is
+    narrowed, and the disabled ids are reported separately.
+    """
+    disabled = {str(item).strip() for item in (disabled_rule_ids or []) if str(item).strip()}
+    if not disabled:
+        return guide_document, []
+    rules = _guide_rules(guide_document)
+    known = {str(rule.get("rule_id")) for rule in rules}
+    unknown = sorted(disabled - known)
+    if unknown:
+        raise RecallError("GUIDE_RULE_UNKNOWN", {"rule_ids": unknown})
+    active = copy.deepcopy(guide_document)
+    groups: list[dict[str, Any]] = []
+    for group in active.get("groups") or []:
+        if not isinstance(group, dict):
+            continue
+        nested = group.get("rules")
+        if isinstance(nested, list):
+            kept = [rule for rule in nested
+                    if not isinstance(rule, dict) or str(rule.get("rule_id")) not in disabled]
+            if kept:
+                group["rules"] = kept
+                groups.append(group)
+        elif str(group.get("rule_id")) not in disabled:
+            groups.append(group)
+    active["groups"] = groups
+    disabled_rules = [{
+        "rule_id": str(rule.get("rule_id")),
+        "title": str(rule.get("title") or ""),
+        "section_hint": str(rule.get("section_hint") or ""),
+        "reason": "USER_DISABLED",
+    } for rule in rules if str(rule.get("rule_id")) in disabled]
+    return active, disabled_rules
 
 
 def _guide_sha(guide_document: dict) -> str:
@@ -654,6 +695,38 @@ def _plan_by_target(planned: dict[str, Any]) -> dict[str, dict[str, Any]]:
             record["operation"] = component.get("operation")
             record["replacement"] = component.get("replacement")
     return by_target
+
+
+# Plan-stage deterministic rejections that establish "this target does not bind
+# a real source site" (FL-D696).  Claim Replay must not demand an artifact
+# effect at such a candidate: demanding an edit the planner deterministically
+# refused reopens an already-adjudicated question and turns a model-driven
+# locate over-claim into a contract-blocking gap (B12 G16 p796).  Rejection
+# reasons are code-set strings, so the set is data, not model output.
+_PLAN_SITE_REJECTIONS = frozenset({"TARGET_SOURCE_MISMATCH"})
+
+
+def _replay_targets_by_id(targets: Sequence[Target],
+                          planned: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """Replay target payloads enriched with plan-stage site rejections.
+
+    ``Target.as_dict`` intentionally carries no plan state; a plan-ledger
+    rejection is however deterministic evidence that the candidate never bound
+    a source site.  Tag it so ``replay_claims`` can exclude the claim from the
+    obligation's required site set (FL-D696).  Exclusion to an empty set keeps
+    the original OPEN semantics — it never invents a closure.
+    """
+    rejected = {str(entry.get("target_id") or ""): str(entry.get("reason") or "")
+                for entry in ((planned or {}).get("ledger") or [])
+                if str(entry.get("reason") or "") in _PLAN_SITE_REJECTIONS}
+    payload: dict[str, dict[str, Any]] = {}
+    for target in targets:
+        record = target.as_dict()
+        reason = rejected.get(str(target.target_id))
+        if reason:
+            record["plan_rejected"] = reason
+        payload[str(target.target_id)] = record
+    return payload
 
 
 def _plan_ledger(planned: dict[str, Any], plan: Any) -> dict[str, Any]:
@@ -1205,13 +1278,26 @@ def _apply_scope_gate(targets: Sequence[Target], scopes: Mapping[str, Any] | Non
                 target.scope_id = f"{target.rule_id}:normalized_copy"
             continue
         if (str(target.rule_id) == "G22"
-                and ("g22_ordered_list_variant" in str(target.reason or "")
-                     or getattr(target, "semantic_replacement", None))):
-            # The ordered-list liquidation clause is source-proven by the
-            # deterministic G22 pass even when section mapping cannot form a
-            # liquidation leaf (美国房地产 p883).  Do not drop it as unscoped.
+                and getattr(target, "semantic_replacement", None)):
+            # A semantic-v2 G22 target carries its own located scope; do not
+            # drop it as unscoped when section mapping formed no liquidation leaf.
             if not target.scope_id:
-                target.scope_id = "G22:ordered_list"
+                target.scope_id = "G22:semantic"
+            continue
+        if (str(target.rule_id) in {"G01", "G03"}
+                and getattr(target, "_append_rebind_end", None) == target.location
+                and getattr(target, "_append_rebind_end", None) is not None):
+            # The plan-stage append rebind (split-definition end / definition-group
+            # end) derives the site deterministically from a scoped anchor; the
+            # physical scope computed against the PRE-rebind class-definition
+            # paragraph must not drop it (FL-D608: G01 rebound p117->p119 was
+            # killed by the audit-stage gate, leaving the obligation
+            # "verified site missing").
+            # FL-D644: the proof is the code-set ``_append_rebind_end`` attribute,
+            # never the model-writable ``target.reason`` suffix.
+            if not target.scope_id:
+                scope = scopes.get(str(target.rule_id))
+                target.scope_id = _scope_id_for(target, scope)
             continue
         ok, scope = _target_scope_ok(target, scopes)
         if not ok:
@@ -1703,6 +1789,52 @@ def _make_synthetic_target(target_id: str, rule_id: str, location: str, quote: s
 # Planning, writing and inspection
 # ---------------------------------------------------------------------------
 
+def _drop_unvalidatable_edits(input_path: Path, edits: list[dict], planned: dict,
+                              *, content_check: Any) -> list[dict] | None:
+    """Probe each planned edit through validation on its own and drop the guilty.
+
+    Returns the reduced edit list with ``planned`` updated (records removed and
+    ledger entries demoted to unresolved) when at least one edit is attributable
+    as individually invalid; ``None`` when no single edit can be blamed, so the
+    caller re-raises the original error and document-level failures stay
+    fail-closed (FL-D112, FL-D568).
+    """
+    kept: list[dict] = []
+    dropped: list[dict] = []
+    for edit in edits:
+        try:
+            validate_edit_plan(input_path, [edit], {}, content_check=content_check,
+                               allow_existing_revisions=True)
+        except DocxError:
+            dropped.append(edit)
+        else:
+            kept.append(edit)
+    if not dropped or len(dropped) == len(edits):
+        # Nothing individually guilty, or every edit fails alone (document-level
+        # problem): no single edit to degrade.
+        return None
+    dropped_keys = {(str(edit.get("target_id")), str(edit.get("location")),
+                     int(edit.get("start", -1)), int(edit.get("end", -2)))
+                    for edit in dropped}
+    removed: set[str] = set()
+    records: list[dict] = []
+    for record in planned["edits"]:
+        key = (str(record.get("target_id")), str(record.get("location")),
+               int(record.get("start", -1)), int(record.get("end", -2)))
+        if key in dropped_keys:
+            removed.add(str(record.get("target_id")))
+            removed.update(str(component.get("target_id"))
+                           for component in record.get("components") or [])
+            continue
+        records.append(record)
+    planned["edits"] = records
+    for entry in planned["ledger"]:
+        if entry.get("target_id") in removed and entry.get("status") == "planned":
+            entry["status"] = "unresolved"
+            entry["reason"] = "RECALL_EDIT_VALIDATE_REJECTED"
+    return kept
+
+
 def _plan_and_generate(model: Any, rules_by_id: dict[str, dict], targets: Sequence[Target],
                        inspection: DocumentInspection, facts: Facts, input_path: Path,
                        temp_dir: Path, *, max_compose_calls: int,
@@ -1806,6 +1938,13 @@ def _plan_and_generate(model: Any, rules_by_id: dict[str, dict], targets: Sequen
                     site_ok = True
                     target.reason = f"{target.reason}|RESIDUAL_SITE_BOUND"
             if not site_ok:
+                if g14_site_guard_veto(target.rule_id, span):
+                    # FL-D606: a retained-right discretion sentence is structurally
+                    # not the G14 fee-lowering grant; the approval only echoes the
+                    # model's mistaken site pick and must not waive the guard.
+                    target.out_of_scope = True
+                    target.reason = f"{target.reason}|TARGET_SOURCE_MISMATCH"
+                    continue
                 check = approvals.allows(target, inspection)
                 if check.ok:
                     # The model's site selection was already verified against the
@@ -1858,6 +1997,28 @@ def _plan_and_generate(model: Any, rules_by_id: dict[str, dict], targets: Sequen
     else:
         from copy import deepcopy
         planned = deepcopy(existing_plan)
+    # FL-D657 mechanism C: deterministic plan-output completeness guard.
+    # Rejected edits are pruned and demoted; one bounded replan of exactly the
+    # dirtied locations follows, never an unbounded loop.  A second rejection
+    # stays open as ledger evidence (FL-D688 truncation residuals surface this
+    # path instead of a partial silent plan).
+    from .recall import plan_output_guard
+    guard_issues = plan_output_guard(planned, targets)
+    if guard_issues:
+        dirty = {str(issue.get("location")) for issue in guard_issues
+                 if issue.get("location")}
+        if dirty:
+            try:
+                from .recall import replan_sites
+                planned = replan_sites(planned, dirty, rules_by_id, targets,
+                                       inspection, facts, model,
+                                       max_compose_calls=max_compose_calls,
+                                       obligations=obligations)
+                plan_output_guard(planned, targets)
+            except RecallError:
+                # The continuation failed; the demoted ledger rows are already
+                # the honest record of the incomplete plan.
+                pass
     g17_blocks = guard_g17_deletes_against_g16(planned, targets, inspection)
     if g17_blocks:
         planned.setdefault("business_notices", []).extend(g17_blocks)
@@ -1906,8 +2067,24 @@ def _plan_and_generate(model: Any, rules_by_id: dict[str, dict], targets: Sequen
     from .recall import _reconcile_final_plan_ledger
     _reconcile_final_plan_ledger(planned["ledger"], planned["edits"],
                                  planned.get("conflicts") or [], [], [])
-    plan = validate_edit_plan(input_path, edits, {}, content_check=content_check,
-                              allow_existing_revisions=True)
+    try:
+        plan = validate_edit_plan(input_path, edits, {}, content_check=content_check,
+                                  allow_existing_revisions=True)
+    except DocxError:
+        # A single edit failing validation on unsupported structure (e.g. a
+        # span swallowing one half of a ranged bookmark whose partner lives in
+        # another paragraph, FL-D568) must degrade to "drop that edit, keep its
+        # target unresolved" instead of scrapping the whole contract (FL-D112).
+        edits = _drop_unvalidatable_edits(input_path, edits, planned,
+                                          content_check=content_check)
+        if edits is None:
+            raise
+        _reconcile_final_plan_ledger(planned["ledger"], planned["edits"],
+                                     planned.get("conflicts") or [], [], [])
+        # The reduced plan is validated strictly; edits that only clash in
+        # combination (overlaps) still fail the whole contract here.
+        plan = validate_edit_plan(input_path, edits, {}, content_check=content_check,
+                                  allow_existing_revisions=True)
     redline, final = temp_dir / "redline.docx", temp_dir / "final.docx"
     if edits:
         artifacts = generate_artifacts(input_path, plan, redline, final,
@@ -2435,7 +2612,7 @@ def _run_audit(model: Any, rules_by_id: dict[str, dict], targets: Sequence[Targe
         approval_book = approval_book_for(rules_by_id, targets, original)
         replay = replay_claims(planned.get("edits") or [], original, actual,
                               rules_by_id=rules_by_id, facts=facts,
-                              targets_by_id={target.target_id: target.as_dict() for target in targets},
+                              targets_by_id=_replay_targets_by_id(targets, planned),
                               obligations=obligations, scopes=scopes,
                               approvals=approval_book,
                               absent_coverage_by_operation=absent_delete_coverage(
@@ -2812,10 +2989,12 @@ def _reopen_audit_disagreed_targets(issues: Sequence[dict[str, Any]],
 
 def _audit_issues(state: dict[str, Any], targets: Sequence[Target],
                   rules_by_id: Mapping[str, dict] | None = None,
-                  facts: Facts | None = None) -> list[dict[str, Any]]:
+                  facts: Facts | None = None,
+                  planned: dict | None = None) -> list[dict[str, Any]]:
     """Current unresolved audit problems: missing/incomplete verdicts and missed targets."""
     issues: list[dict[str, Any]] = []
     results = state.get("results") or {}
+    planned_edits = (planned or {}).get("edits") or []
     for target in targets:
         if target.state not in {"needs_edit", "satisfied"} or target.out_of_scope:
             continue
@@ -2845,6 +3024,42 @@ def _audit_issues(state: dict[str, Any], targets: Sequence[Target],
                     and not result.get("evidence_in_after")
                     and target_quote and target_quote in evidence_quote):
                 continue
+            # FL-D697: at a merged multi-rule site the auditor reviews one rule in
+            # isolation and can demand the survival of text that a sibling rule's
+            # authorized operation legitimately removed (B05 G16 "append"
+            # re-audited against the clause G15 was planned — and independently
+            # audited — to delete).  A quoted loss covered by a completed sibling
+            # operation's authorized old text at the same location is an
+            # authorized removal, not this rule's defect.  The quote may contain
+            # ellipses ("……"); every fragment must be covered, and the skip is
+            # only possible when at least one fragment is substantive.
+            if (result.get("evidence_verified") and result.get("evidence_in_before")
+                    and not result.get("evidence_in_after") and evidence_quote
+                    and planned_edits):
+                sibling_rules = {
+                    sibling.rule_id for sibling in targets
+                    if sibling.rule_id != target.rule_id
+                    and sibling.location == target.location
+                    and not sibling.out_of_scope
+                    and (results.get(_target_identity(sibling)) or {}).get("verdict")
+                    == "completed"}
+                if sibling_rules:
+                    fragments = [fragment for fragment in
+                                 re.split(r"…+|\.\.\.+", evidence_quote) if len(fragment) >= 4]
+                    if fragments and any(
+                            all(fragment in authorized for fragment in fragments)
+                            for authorized in (
+                                "".join(_compact(text) for text in
+                                        [str(edit.get("expected_old_text") or "")] +
+                                        [str(component.get("expected_old_text") or "")
+                                         for component in (edit.get("components") or [])]
+                                        if text)
+                                for edit in planned_edits
+                                if str(edit.get("location") or "") == target.location
+                                and any(str(key).split(":")[0] in sibling_rules
+                                        for key in (edit.get("operation_keys") or ())))
+                            if authorized):
+                        continue
             issues.append({"code": "AUDIT_NOT_COMPLETED" if result["evidence_verified"]
                            else "REVIEW_UNPROVEN", "rule_id": target.rule_id,
                            "target_id": target.target_id, "location": target.location,
@@ -3370,7 +3585,12 @@ def weak_rule_signals(rule: dict, facts: Facts, operations: Sequence[dict]) -> l
     return signals
 
 
-_DOCUMENT_COMPACT_CACHE: dict[int, str] = {}
+# Small bounded LRU of compacted document text (B13 F5).  Entries hold the
+# inspection itself, so an ``id()`` key can never be recycled onto a different
+# object while it is cached; the cap keeps the module-level dict bounded
+# (``_compact`` output of a large contract is ~1 MB).
+_DOCUMENT_COMPACT_CACHE: dict[int, tuple[DocumentInspection, str]] = {}
+_DOCUMENT_COMPACT_CACHE_MAX = 4
 
 
 def _document_compact(actual: DocumentInspection) -> str:
@@ -3378,10 +3598,15 @@ def _document_compact(actual: DocumentInspection) -> str:
     key = id(actual)
     cached = _DOCUMENT_COMPACT_CACHE.get(key)
     if cached is None:
-        cached = "".join(_compact(display_text(span.text)[0]) for span in actual.paragraphs)
-        _DOCUMENT_COMPACT_CACHE.clear()
-        _DOCUMENT_COMPACT_CACHE[key] = cached
-    return cached
+        computed = "".join(_compact(display_text(span.text)[0]) for span in actual.paragraphs)
+        if len(_DOCUMENT_COMPACT_CACHE) >= _DOCUMENT_COMPACT_CACHE_MAX:
+            # dicts keep insertion order: evict the oldest entry.
+            _DOCUMENT_COMPACT_CACHE.pop(next(iter(_DOCUMENT_COMPACT_CACHE)))
+        _DOCUMENT_COMPACT_CACHE[key] = (actual, computed)
+        return computed
+    # Refresh recency so alternating documents reuse both entries (LRU).
+    _DOCUMENT_COMPACT_CACHE[key] = _DOCUMENT_COMPACT_CACHE.pop(key)
+    return cached[1]
 
 
 def _rule_mapped_locations(rule_id: str, mapping: dict[str, list[str]],
@@ -3523,6 +3748,56 @@ def _window_rule_scope(chunks: Sequence[_Chunk], *, mapping: dict[str, list[str]
     if still_missing:
         scoped = [(chunk, ids | still_missing) for chunk, ids in scoped]
     return scoped
+
+
+def _apply_deterministic_site_closures(targets: Sequence[Target], rules_by_id: dict,
+                                       inspection: DocumentInspection, facts: Facts,
+                                       scopes: Mapping[str, Any] | None,
+                                       obligation_ledger: Any) -> None:
+    """Deterministic NO_GUIDE_SITE closures (FL-D601/FL-D602/FL-D607).
+
+    Idempotent: an obligation already closed (status != "TRUE") is skipped, so
+    this may run again after the plan stage once guard-rejected targets are
+    known dead (FL-D607-family follow-up, B15 G08 p161).
+    """
+    from .applicability import ApplicabilityDecision
+    for closed_rule_id in ("G22", "G08"):
+        missing = missing_guide_site(closed_rule_id, targets, rules_by_id,
+                                     inspection, facts)
+        if missing is None:
+            continue
+        location = str(missing.get("variant_location") or "")
+        reason = f"NO_GUIDE_SITE:{closed_rule_id}"
+        if location:
+            reason += f":variant@{location}"
+        for record in obligation_ledger.records:
+            if str(record.spec.rule_id) != closed_rule_id:
+                continue
+            if record.applicability.status != "TRUE":
+                continue
+            record.applicability = ApplicabilityDecision(
+                status="FALSE", condition=record.spec.condition,
+                rule_id=closed_rule_id, operation_id=record.spec.operation_id,
+                source="deterministic", reason=reason,
+                evidence_quote=str(missing.get("variant_quote") or ""))
+    from .recall import missing_body_append_site_g01
+    g01_scope = scopes.get("G01") if scopes else None
+    g01_missing = missing_body_append_site_g01(
+        targets, rules_by_id, inspection, facts,
+        scope_locations=(getattr(g01_scope, "locations", None) if g01_scope else None))
+    if g01_missing is not None:
+        g01_location = str(g01_missing.get("table_location") or "")
+        g01_reason = f"NO_GUIDE_SITE:G01:tbl@{g01_location}"
+        for record in obligation_ledger.records:
+            if str(record.spec.rule_id) != "G01":
+                continue
+            if record.applicability.status != "TRUE":
+                continue
+            record.applicability = ApplicabilityDecision(
+                status="FALSE", condition=record.spec.condition,
+                rule_id="G01", operation_id=record.spec.operation_id,
+                source="deterministic", reason=g01_reason,
+                evidence_quote=str(g01_missing.get("table_quote") or ""))
 
 
 def _sweep_scope_plan(chunks: Sequence[_Chunk], *, scopes: Mapping[str, Any] | None,
@@ -3731,6 +4006,10 @@ _BUSINESS_PENDING_RULES = frozenset({"G14", "G18"})
 #: an unfinished audit or a capped sweep stay review items under review_assisted.
 _FINAL_OMISSION_BLOCKER_CODES = frozenset({
     "FINAL_OPERATION_UNPROVEN", "FINAL_RESIDUAL_OLD_TEXT",
+    # A truncated final residual scan means the "no old text remains" proof is
+    # partial; it must block delivery like the other provable failures instead
+    # of depending on the generic blocker bucket (A8-F3).
+    "FINAL_RESIDUAL_SCAN_TRUNCATED",
 })
 
 
@@ -3803,17 +4082,20 @@ def _delivery_complete(unresolved: Sequence[dict[str, Any]], *, ledger: Any = No
     is delivered together with a human-review list.
 
     Independent proof layers always block, whatever the policy: a failed Claim Replay,
-    a proven final omission, or an open obligation whose own evidence is a Claim
-    Replay failure.  An unfinished audit/sweep or an unverified fact stays a review
-    item under ``review_assisted``; it is still an open Ledger record and blocks
-    ``strict`` delivery.
+    a proven final omission, an open obligation whose own evidence is a Claim Replay
+    failure, or a whole-contract qualification gap (``FUND_TYPE_UNVERIFIED``,
+    FL-D114/R2-F1 — blocking via ``requires_blocker`` in both policies).  An
+    unfinished audit/sweep or an unverified fact stays a review item under
+    ``review_assisted``; it is still an open Ledger record and blocks ``strict``
+    delivery.
     """
     mode = policy or _delivery_policy()
     if ledger is not None:
         from .obligations import open_obligations
         # The Ledger owns business completion.  The unresolved argument is only
-        # its diagnostic projection plus orphan/resource blockers, so it may
-        # never close an open record and it still blocks an unbound evidence row.
+        # its diagnostic projection plus resource blockers, so it may never
+        # close an open record; an unbound evidence row stays visible as a
+        # review item under review-assisted delivery (see project_unresolved).
         open_items = open_obligations(ledger)
         if open_items:
             if mode == "strict":
@@ -3829,6 +4111,8 @@ def _delivery_complete(unresolved: Sequence[dict[str, Any]], *, ledger: Any = No
                     for item in unresolved):
                 # A missing site/coverage proof is not merely an unfinished audit;
                 # it contradicts complete delivery even under review_assisted.
+                # User-disabled rules are explicit exceptions, not a reason to
+                # relax independent coverage proofs of the remaining rules.
                 return False
     if claim_replay_verified is False:
         return False
@@ -3994,10 +4278,24 @@ def _apply_artifact_proof_to_findings(findings: list[dict[str, Any]], replay: di
         try:
             artifact_text = str(actual.by_location(location).text)
             body = _compact(artifact_text)
-            if original is not None:
-                source_text = str(original.by_location(location).text)
         except Exception:  # noqa: BLE001
-            body = ""
+            # R2-F2: a location missing from the artifact (for example after a
+            # repair round rewrote it) must never look like "the quoted old text
+            # is gone".  An empty body would make every residual check below
+            # vacuously succeed and silently resolve a REAL residual finding as
+            # ``claimed_residual_absent``.  Keep the finding pending with an
+            # honest evidence code; review items / strict delivery still see it.
+            finding["proof_kind"] = "SEMANTIC_UNCERTAIN"
+            finding["resolution_evidence"] = "LOCATION_NOT_FOUND"
+            continue
+        if original is not None:
+            try:
+                source_text = str(original.by_location(location).text)
+            except Exception:  # noqa: BLE001
+                # An appended/newer paragraph may legitimately be absent from the
+                # original; an empty before_text only weakens expected-effect
+                # checks, it never invents a resolution.
+                source_text = ""
         residual = bool(quote and quote in body)
         rule = rules_by_id.get(rule_id) or {}
         old_sentences = []
@@ -4049,11 +4347,12 @@ def _apply_artifact_proof_to_findings(findings: list[dict[str, Any]], replay: di
             # evidence. Findings without a quoted old clause, or with any quoted
             # fragment still present, remain blocking.
             claimed = [match.strip() for pattern in (
-                r"“([^”]{8,})”", r"「([^」]{8,})」",
+                r"“([^”]{8,})”", r"「([^」]{8,})」", r"‘([^’]{8,})’",
                 r"'([^']{8,})'", r'"([^"]{8,})"')
                 for match in re.findall(pattern, str(finding.get("reason") or ""))]
-            # The sweep is free to quote the old clause with any of the four quote
-            # styles; a finding that quoted it with ASCII quotes used to fall through
+            # The sweep is free to quote the old clause with any of the five quote
+            # styles (including the Chinese single quotes ‘’); a finding that
+            # quoted it with ASCII quotes used to fall through
             # to SEMANTIC_UNCERTAIN and become an orphan blocker (恒裕 G15 SW002).
             # Contract text is Chinese, so only claims carrying real CJK characters
             # can be residual evidence.
@@ -4253,6 +4552,12 @@ def _report_markdown(report: dict[str, Any]) -> str:
         f"- 指引文档 SHA-256：{(report.get('guide') or {}).get('document_sha256') or '（未提供）'}",
         f"- 交付状态：{report.get('delivery_status')}",
     ]
+    disabled_rules = [item for item in (report.get("disabled_rules") or [])
+                      if isinstance(item, Mapping)]
+    if disabled_rules:
+        lines.append("- 用户关闭规则：" + "；".join(
+            f"{item.get('rule_id')} {item.get('title') or ''}".strip()
+            for item in disabled_rules))
     from .delivery import failure_reason
     for error in (report.get("errors") or []):
         if isinstance(error, Mapping):
@@ -4330,10 +4635,19 @@ def _report_markdown(report: dict[str, Any]) -> str:
         lines.append(f"- {rule_id} {title} {target.get('location')}："
                      f"「{_short_text(target.get('quote'), 160)}」— {_readable_reason(target.get('reason'))}")
 
-    # 3. Business items that need a product decision (never auto-applied).
+    # 3. Rules explicitly switched off by the user are visible exceptions, not
+    # silently missing modifications.
+    lines.extend(["", "## 三、用户关闭的规则（未执行）", ""])
+    if not disabled_rules:
+        lines.append("- （无）")
+    for item in disabled_rules:
+        lines.append(f"- {item.get('rule_id')} {item.get('title') or ''}"
+                     f"（{item.get('section_hint') or '未标注章节'}）：用户在本任务关闭，未执行")
+
+    # 4. Business items that need a product decision (never auto-applied).
     notices = [item for item in (report.get("business_notices") or []) if isinstance(item, Mapping)]
     business_unresolved = [item for item in business_items if item not in notices]
-    lines.extend(["", "## 三、业务待定（不自动修改）", ""])
+    lines.extend(["", "## 四、业务待定（不自动修改）", ""])
     if not notices and not business_unresolved:
         lines.append("- （无）")
     for notice in notices:
@@ -4348,19 +4662,19 @@ def _report_markdown(report: dict[str, Any]) -> str:
         seen_business.add(key)
         lines.append(f"- {_readable_item(item)}")
 
-    # 4. Blockers prevent delivery; review items are delivered but need a human check.
-    lines.extend(["", "## 四、阻断项（未交付原因）", ""])
+    # 5. Blockers prevent delivery; review items are delivered but need a human check.
+    lines.extend(["", "## 五、阻断项（未交付原因）", ""])
     if not blockers:
         lines.append("- （无）")
     for item in blockers:
         lines.append(f"- {_readable_item(item)}")
-    lines.extend(["", "## 五、人工复核清单（已交付，需确认）", ""])
+    lines.extend(["", "## 六、人工复核清单（已交付，需确认）", ""])
     if not review_items:
         lines.append("- （无）")
     for item in review_items:
         lines.append(f"- {_readable_item(item)}")
 
-    lines.extend(["", "## 六、处理概览", ""])
+    lines.extend(["", "## 七、处理概览", ""])
     lines.append(f"- 审计轮次：{len(audit.get('rounds') or [])}；"
                  f"未决问题 {len(audit.get('issues') or [])}")
     lines.append(f"- 查漏：块 {sweep.get('chunks', 0)}，发现 {len(sweep.get('findings') or [])}，"
@@ -4405,7 +4719,8 @@ def _residual_delete_indices(rule_id: str, rule: Mapping[str, Any], facts: Facts
 def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                          guide_document: dict, gateway: Any = None,
                          execution_mode: str = "delivery", checkpoint_dir: str | Path | None = None,
-                         max_business_rounds: int = 3, max_sweep_chunks: int = 40) -> dict[str, Any]:
+                         max_business_rounds: int = 3, max_sweep_chunks: int = 40,
+                         disabled_rule_ids: Sequence[str] | None = None) -> dict[str, Any]:
     """Run the recall-first engine for one contract and return its report.
 
     Raises :class:`RecallPipelineStop` for recoverable model/transport stops so the
@@ -4417,6 +4732,7 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
     model: Any = gateway
     frozen_run = None
     published: list[Path] = []
+    normalized_base_dir: tempfile.TemporaryDirectory[str] | None = None
     report: dict[str, Any] = {
         "schema_version": SCHEMA_VERSION, "engine_id": ENGINE_ID, "engine_version": ENGINE_VERSION,
         "execution_mode": execution_mode, "source_sha256": "",
@@ -4426,6 +4742,7 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
         "qualification": {}, "facts": {}, "scope_mapping": {}, "windows": [], "targets": [],
         "plan": {"count": 0, "sha256": None, "edits": [], "conflicts": [],
                  "boundary_policy": BOUNDARY_POLICY},
+        "base_had_tracked_changes": False,
         "audit": {"rounds": [], "issues": []},
         "survey": [], "rebind": [],
         "sweep": {"chunks": 0, "findings": [], "rounds": [], "gaps": []},
@@ -4454,6 +4771,33 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
             report["guide"]["certification"] = validate_runtime_guide(guide_document)
         except GuideError as exc:
             raise RecallError(exc.code, exc.details) from exc
+        active_guide, disabled_rules = _active_guide_document(guide_document, disabled_rule_ids)
+        if disabled_rules:
+            report["disabled_rules"] = disabled_rules
+            report["guide"]["disabled_rule_ids"] = [item["rule_id"] for item in disabled_rules]
+        # Task input normalization (2026-10-31 product decision): a contract
+        # that still carries another department's tracked changes is processed
+        # from its accepted view.  The original marks are flattened into the
+        # base text up front; every later stage (scope filtering, paragraph
+        # indexing, page mapping, bookmarks, claims and the deliverables) works
+        # on that base, and the engine's own new revisions are the only tracked
+        # changes a delivery ever shows.  Inputs without marks keep their exact
+        # bytes.  The original inventory and hashes stay in the report so the
+        # run remains traceable to the uploaded file.
+        from .docx import normalize_tracked_base
+        tracked_base = normalize_tracked_base(input_path.read_bytes())
+        if tracked_base.had_tracked_changes:
+            normalized_base_dir = tempfile.TemporaryDirectory(prefix="fundlex-base-")
+            base_file = Path(normalized_base_dir.name) / "base.docx"
+            base_file.write_bytes(tracked_base.data)
+            input_path = base_file
+            report["base_had_tracked_changes"] = True
+            report["normalized_base_sha256"] = tracked_base.base_sha256
+            report["source_revisions"] = {
+                "count": len(tracked_base.source_revisions),
+                "authors": sorted({item["author"] for item in tracked_base.source_revisions}),
+                "items": [dict(item) for item in tracked_base.source_revisions],
+            }
         if os.environ.get("FUNDLEX_MODEL_MODE") == "record":
             from .frozen import FrozenRun
             frozen_directory = os.environ.get("FUNDLEX_FROZEN_RUN_DIR")
@@ -4464,7 +4808,9 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
         inspection = inspect_docx(input_path, full=True,
                                   allow_existing_revisions=True)
         output_dir.mkdir(parents=True, exist_ok=True)
-        report["source_sha256"] = inspection.source_sha256
+        report["source_sha256"] = (tracked_base.original_sha256
+                                   if tracked_base.had_tracked_changes
+                                   else inspection.source_sha256)
         if inspection.revisions:
             # Existing tracked changes from another department: keep them visible
             # and separate from FundLex revisions in the report/UI.
@@ -4473,9 +4819,9 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                 "authors": sorted({item["author"] for item in inspection.revisions}),
                 "items": list(inspection.revisions),
             }
-        rules = _guide_rules(guide_document)
+        rules = _guide_rules(active_guide)
         if not rules:
-            raise RecallError("RECALL_GUIDE_EMPTY", {})
+            raise RecallError("GUIDE_RULES_ALL_DISABLED", {})
         for rule in rules:
             if not isinstance(rule.get("title"), str):
                 raise RecallError("RECALL_GUIDE_RULE_INVALID",
@@ -4486,7 +4832,7 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                               {"rules": len(rules), "unique": len(rules_by_id)})
         from .obligations import (apply_facts, compile_obligations, open_obligations,
                                   project, project_unresolved)
-        obligation_ledger = compile_obligations(guide_document)
+        obligation_ledger = compile_obligations(active_guide)
         report["obligations"] = obligation_ledger.as_dict()
         model = gateway or _default_gateway()
         if checkpoint_dir is not None and hasattr(model, "bind_checkpoints"):
@@ -4615,10 +4961,15 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                 "1", "true", "on", "yes"}:
             # Page through residual delete candidates so a long contract cannot
             # lose its tail to the per-call safety limit (FL-D441).
+            # The paging input must stay frozen for the whole walk: the newly
+            # created clones expand the ``covered`` set on each call, which
+            # rewrites the candidate list the cursor indexes into and silently
+            # skips pages (A7-02).
             cursor = 0
+            paging_base = list(targets)
             for _page in range(10):
                 info: dict[str, Any] = {}
-                page = ensure_delete_targets(targets, rules_by_id, inspection,
+                page = ensure_delete_targets(paging_base, rules_by_id, inspection,
                                              scopes=scopes, cursor=cursor,
                                              page_info=info)
                 for target in page:
@@ -4632,28 +4983,44 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                 coverage_gaps.append({"pass": "delete_targets",
                                       "limit_reached": "delete_targets_pages",
                                       "cursor": cursor})
-        g22_targets = ensure_g22_ordered_list_targets(
-            targets, rules_by_id, inspection, facts)
-        for target in g22_targets:
+        # FL-D587: the class-qualified G08 legacy sentence IS an edit site
+        # (frozen labels).  Create its residual target before the no-site
+        # closure below so NO_GUIDE_SITE cannot falsely certify it away.
+        from .recall import ensure_g08_variant_targets
+        for target in ensure_g08_variant_targets(targets, rules_by_id, inspection,
+                                                 facts=facts, scopes=scopes):
             synthetic.append(target)
             targets.append(target)
-            origins[target.target_id] = "g22_ordered_list_variant"
-        if g22_targets:
-            current = scopes.get("G22")
-            if current is None or not getattr(current, "locations", ()):
-                from .rule_scope import RuleScope
-                scopes["G22"] = RuleScope(
-                    rule_id="G22", leaf_ids=frozenset(),
-                    locations=frozenset(str(target.location) for target in g22_targets),
-                    zone="body", include_summary_copies=False,
-                    copy_keys=frozenset(), resolution="g22_ordered_list",
-                    evidence=("g22_ordered_list_source_proven",))
-        g08_targets = ensure_g08_actual_rate_targets(
-            targets, rules_by_id, inspection, scopes)
-        for target in g08_targets:
+            origins[target.target_id] = "g08_legacy_variant"
+        # FL-D655 mechanism B: the same certified-variant channel generalised
+        # to every rule without its own stricter predicate.  An anchored but
+        # uncertified (anomalous) wording stays honest review evidence and can
+        # never authorise an edit.
+        from .recall import ensure_certified_variant_targets
+        from .variants import review_candidate_rows
+        for target in ensure_certified_variant_targets(targets, rules_by_id,
+                                                       inspection, facts=facts,
+                                                       scopes=scopes):
             synthetic.append(target)
             targets.append(target)
-            origins[target.target_id] = "g08_actual_rate_variant"
+            origins[target.target_id] = "certified_variant"
+        # Anomalous candidates stay ambient review evidence on the report.
+        # Routing them through coverage_gaps/unresolved would poison the
+        # Ledger: project() consumes those rows as blocking evidence and flips
+        # healthy obligations to OPEN (happy-path regression).
+        for rule_id, rule in (rules_by_id or {}).items():
+            report.setdefault("variant_candidates", []).extend(
+                review_candidate_rows(rule, inspection, scopes=scopes))
+        # FL-D601/FL-D602: the ordered-list (G22) and actual-rate (G08) variant
+        # wordings are applicability evidence, never edit sites.  A contract
+        # whose G22/G08 obligation is fact-applicable but has neither the
+        # guide's canonical sentence nor a live target is closed as
+        # applicability=FALSE («replacement has no site», frozen labels).
+        # FL-D607: a G01 append whose 释义 scope holds the class definition only
+        # inside a table has no body anchor; the frozen labels classify that
+        # contract not_applicable (B15 tbl0/r55/c1).
+        _apply_deterministic_site_closures(targets, rules_by_id, inspection, facts,
+                                           scopes, obligation_ledger)
         class_noops = ensure_class_group_noop_targets(
             targets, rules_by_id, inspection, facts, scopes)
         for target in class_noops:
@@ -4667,7 +5034,8 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
             semantic_rules = [item.strip() for item in os.environ.get(
                 "FUNDLEX_SEMANTIC_V2_RULES", "G09").split(",") if item.strip()]
             semantic_targets, semantic_rejected = discover_for_rules(
-                model, inspection, rules_by_id, scopes, semantic_rules)
+                model, inspection, rules_by_id, scopes, semantic_rules,
+                facts=facts)
             for target in semantic_targets:
                 adopted = False
                 for old in targets:
@@ -4755,6 +5123,14 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
             origins[target.target_id] = "duplicate_copy"
             report["target_attribution"].extend(assign_target_operations(
                 [target], rules_by_id, inspection, facts, obligation_ledger))
+        # FL-D695: an inventory "absent" verdict contradicted by deterministic
+        # variant evidence at the same paragraph is overturned before the
+        # open-rule locator burns model calls on a site that code already found.
+        from .recall import refute_absent_by_variant_evidence
+        absent_refutations = refute_absent_by_variant_evidence(
+            targets, rules_by_id, inspection, scopes, facts=facts)
+        if absent_refutations:
+            report["absent_refutations"] = absent_refutations
         from .targeting import (locate_unresolved_targets, summary_copy_targets,
                                 targets_for_open_rules)
         report["candidate_recovery_coverage"] = {}
@@ -4797,14 +5173,17 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
         absent_sites = resolve_absent_site_targets(targets, rules_by_id, inspection, facts)
         if absent_sites:
             report["absent_site_targets"] = absent_sites
-            # resolve_absent_site_targets appends an operation-specific clone to
-            # ``targets``.  Keep that clone in the synthetic source list as well;
-            # the next operation-aware _collect_targets call rebuilds its result
-            # from window targets + synthetic targets (D06 G05:2).
-            for target in targets:
-                if id(target) not in absent_target_ids and target not in synthetic:
-                    synthetic.append(target)
-                    origins[target.target_id] = "absent_site_clone"
+        # resolve_absent_site_targets and resolve_absent_operations append
+        # operation-specific clones to ``targets``.  Keep those clones in the
+        # synthetic source list as well; the next operation-aware
+        # _collect_targets call rebuilds its result from window targets +
+        # synthetic targets (D06 G05:2).  The bookkeeping must run even when
+        # the site pass found nothing, otherwise open-obligation clones are
+        # silently dropped on rebuild (A7-04).
+        for target in targets:
+            if id(target) not in absent_target_ids and target not in synthetic:
+                synthetic.append(target)
+                origins[target.target_id] = "absent_site_clone"
         # The absent-site pass can add an operation-specific G05:2 proof and the open
         # pass can add a G16 target.  Rebind those late targets before cloning so every
         # clone inherits its own physical clause identity.
@@ -4892,6 +5271,21 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                 max_compose_calls=compose_calls, obligations=obligation_ledger,
                     frozen_run=frozen_run, scopes=scopes, scope_audit=scope_audit)
             report["plan"] = _plan_ledger(planned, plan)
+            # FL-D607-family follow-up: targets the plan stage deterministically
+            # rejected (TARGET_SOURCE_MISMATCH) were still alive when the pre-plan
+            # NO_GUIDE_SITE closures ran.  Re-run the closures treating those
+            # targets as dead so a fact-applicable rule with no legitimate site
+            # closes as applicability=FALSE instead of surviving as an OPEN
+            # obligation the audit then chases without a site (B15 G08 p161).
+            plan_rejected = {str(entry.get("target_id") or "")
+                             for entry in (planned.get("ledger") or [])
+                             if str(entry.get("reason") or "") == "TARGET_SOURCE_MISMATCH"}
+            if plan_rejected:
+                post_plan_targets = [target for target in targets
+                                     if str(target.target_id) not in plan_rejected]
+                _apply_deterministic_site_closures(
+                    post_plan_targets, rules_by_id, inspection, facts,
+                    scopes, obligation_ledger)
             report["targets"] = _target_ledger(targets, planned, {}, origins)
             mark_stage("planning_generation")
 
@@ -4928,7 +5322,8 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                 round_ledger.update(round=round_number, scope=scope)
                 audit_rounds.append(round_ledger)
                 _merge_audit_state(audit_state, round_ledger, targets)
-                issues = _audit_issues(audit_state, targets, rules_by_id, facts)
+                issues = _audit_issues(audit_state, targets, rules_by_id, facts,
+                                        planned=planned)
                 reopened = _reopen_audit_disagreed_targets(
                     issues, targets, rules_by_id, facts)
                 if reopened:
@@ -5102,6 +5497,20 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                                 mapping=mapping, scopes=scopes)
                 if needs_discovery:
                     targets = _collect_targets(entries, synthetic, rules_by_id, inspection)
+                    # FL-D695 (residual): a business-round re-inventory replaces
+                    # ``entry.targets`` wholesale, so a fresh model round can mint
+                    # a new ``absent`` verdict at a site whose executed/verified
+                    # target the rebuild just dropped (B15 G09 p159: round 1
+                    # flipped + audited, round 2 re-judged absent as #1:T011 and
+                    # the executed ~b:T002 was wiped).  Re-apply the variant
+                    # refutation gate after every rebuild, before rebind/locator
+                    # burn model calls on the contradicted site.
+                    from .recall import refute_absent_by_variant_evidence
+                    rerun_refutations = refute_absent_by_variant_evidence(
+                        targets, rules_by_id, inspection, scopes, facts=facts)
+                    if rerun_refutations:
+                        report.setdefault("absent_refutations", []).extend(
+                            rerun_refutations)
                 report["rebind"] = _rebind_unresolved_targets(
                     targets, origins, inspection, rules_by_id=rules_by_id, facts=facts)
                 report.setdefault("target_attribution", []).extend(
@@ -5182,7 +5591,8 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                                   and not target.out_of_scope
                                   and plan_by_target.get(target.target_id, {}).get("status")
                                   not in {"planned", "satisfied", "not_applicable"}]
-            audit_issues = _audit_issues(audit_state, targets, rules_by_id, facts)
+            audit_issues = _audit_issues(audit_state, targets, rules_by_id, facts,
+                                        planned=planned)
             pending_findings = [finding for finding in findings
                                 if finding["status"] in {"pending", "unresolved"}]
             unresolved: list[dict[str, Any]] = []
@@ -5275,8 +5685,7 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                         components_by_rule=components_by_rule,
                         required_terms_by_rule=required_terms_by_rule,
                         target_rules=target_rules,
-                        targets_by_id={target.target_id: target.as_dict()
-                                       for target in targets},
+                        targets_by_id=_replay_targets_by_id(targets, plan),
                         obligations=obligation_ledger,
                         scopes=scopes,
                         approvals=approval_book,
@@ -5383,7 +5792,8 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                                     break
                     if code == "RESIDUAL_OLD_TEXT" and failure.get("quote") \
                             and failure.get("location"):
-                        from .recall import resolve_quote
+                        from .recall import (g15_residual_clause_span,
+                                             resolve_quote)
                         location = str(failure.get("location"))
                         quote = str(failure.get("quote") or "")
                         try:
@@ -5412,6 +5822,20 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                         if located is not None and delete_indices and \
                                 ((rule_id, selected_key, location) not in existing
                                  or not location_planned):
+                            # FL-D690: the detector quotes only the anchor
+                            # sentence of the surviving old effect.  A
+                            # fragment-span repair target cannot be attributed
+                            # to the delete operation (operation_span_mismatch)
+                            # and, even if planned, would shred the rest of the
+                            # payment clause.  Expand the span to the complete
+                            # source-proven clause; later-appended policy in
+                            # the same paragraph stays outside it.
+                            operation = (rule.get("operations") or [])[delete_indices[0]]
+                            if str(rule_id) == "G15":
+                                expanded = g15_residual_clause_span(
+                                    str(span.text), located[0], located[1])
+                                if expanded is not None:
+                                    quote, located = expanded
                             for old_target in targets:
                                 if old_target.rule_id == rule_id and \
                                         old_target.location == location and \
@@ -5618,7 +6042,7 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                         audit_rounds.append(recovery_audit)
                         _merge_audit_state(audit_state, recovery_audit, targets)
                         report["audit"] = {"rounds": audit_rounds,
-                                           "issues": _audit_issues(audit_state, targets)}
+                                           "issues": _audit_issues(audit_state, targets, planned=planned)}
                         report["targets"] = _target_ledger(targets, planned, audit_state,
                                                            origins)
                     except (RecallError, ModelError) as exc:
@@ -5657,7 +6081,7 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                     unresolved[:] = [item for item in unresolved
                                      if item.get("kind") not in {"audit", "sweep",
                                                                  "claim_replay"}]
-                    for issue in _audit_issues(audit_state, targets):
+                    for issue in _audit_issues(audit_state, targets, planned=planned):
                         unresolved.append({"kind": "audit", **issue})
                     for finding in findings:
                         if finding.get("status") in {"pending", "unresolved"}:
@@ -5667,7 +6091,7 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                                                    "issue", "status", "reason",
                                                    "failure_class")}})
                     report["audit"] = {"rounds": audit_rounds,
-                                       "issues": _audit_issues(audit_state, targets)}
+                                       "issues": _audit_issues(audit_state, targets, planned=planned)}
                     report["targets"] = _target_ledger(targets, planned, audit_state,
                                                        origins)
                     if recovery_sweep_unverified:
@@ -5685,7 +6109,7 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                     and not target.out_of_scope
                     and plan_by_target.get(target.target_id, {}).get("status")
                     not in {"planned", "satisfied", "not_applicable"}]
-                audit_issues = _audit_issues(audit_state, targets)
+                audit_issues = _audit_issues(audit_state, targets, planned=planned)
                 _apply_artifact_proof_to_findings(findings, replay, actual,
                                                   obligation_ledger, rules_by_id,
                                                   facts=facts, edits=planned.get("edits") or [], original=inspection)
@@ -5904,7 +6328,7 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                     round_ledger.update(round=round_number, scope="sweep_repair")
                     audit_rounds.append(round_ledger)
                     _merge_audit_state(audit_state, round_ledger, targets)
-                    round_ledger["issues"] = [issue for issue in _audit_issues(audit_state, targets)
+                    round_ledger["issues"] = [issue for issue in _audit_issues(audit_state, targets, planned=planned)
                                               if issue.get("rule_id") in reaudit]
                 changed = [chunk for chunk in _sweep_chunks(actual, sections, max_chars=chunk_chars)
                            if chunk.text not in swept_texts]
@@ -5963,7 +6387,7 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                     unresolved.append({"kind": "target", "rule_id": target.rule_id,
                                        "target_id": target.target_id, "location": target.location,
                                        "reason": entry.get("reason") or "RECALL_TARGET_UNRESOLVED"})
-            audit_issues = _audit_issues(audit_state, targets)
+            audit_issues = _audit_issues(audit_state, targets, planned=planned)
             unresolved.extend({"kind": "audit", **issue} for issue in audit_issues)
             unresolved.extend({"kind": "sweep", **finding} for finding in findings
                               if finding.get("status") in {"pending", "unresolved"})
@@ -5973,6 +6397,11 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
             if qualification_gap:
                 unresolved.append({
                     "kind": "qualification", "code": "FUND_TYPE_UNVERIFIED",
+                    # R2-F1: code and reason carry the same blocker identity so
+                    # every layer of the delivery classification (code-based,
+                    # reason-based, ledger-based) sees the same typed gap instead
+                    # of the item slipping through field口径 gaps (LOW-5).
+                    "reason": "FUND_TYPE_UNVERIFIED",
                     "fund_type": facts.fund_type,
                     "message": "fund_type is an excluded type but its quote could not be verified; "
                                "the run continues but delivery must not be complete"})
@@ -6068,12 +6497,19 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                 final_seen.add(key)
                 final_unique.append(item)
             unresolved[:] = final_unique
+            # FL-D653: reconcile plan/edit/replay/Ledger per obligation.  Every
+            # open obligation row gains its bilingual miss classification, and a
+            # replay proof the Ledger never adopted becomes an explicit blocking
+            # row instead of a silent cross-layer overwrite.
+            from .reconciliation import apply_reconciliation
+            apply_reconciliation(report, obligation_ledger, unresolved)
             report["unresolved"] = unresolved
             report["delivery_gate"] = {
                 "basis": "obligation_ledger",
                 "counts": obligation_ledger.counts,
                 "open_obligations": len(open_obligations(obligation_ledger)),
                 "blocking_unresolved": len(unresolved),
+                "disabled_rules": len(disabled_rules),
             }
             class_counts: dict[str, int] = {}
             for item in unresolved:
@@ -6121,7 +6557,8 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                     "kind": "recall_validated_edits" if edits else "recall_validated_unchanged",
                     "checks": checks, **hashes}
                 report["artifacts"] = {"final": "final.docx", "redline": "redline.docx"}
-                report["delivery_status"] = "complete"
+                report["delivery_status"] = (
+                    "complete_with_exceptions" if disabled_rules else "complete")
             elif edits:
                 # A valid produced pair exists but the gate is not met: keep it as a
                 # working pair, never under the final names.
@@ -6138,6 +6575,10 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                 report["artifacts"] = {}
                 report["delivery_status"] = "not_generated"
             mark_stage("delivery")
+            # FL-D654: the user-facing delivery gate has exactly two states —
+            # 完整完成 or 诚实扣件 with user-readable holds.
+            from .delivery import delivery_outcome
+            report["delivery"] = delivery_outcome(report)
             events = []
             try:
                 events = list(getattr(model, "events", ()) or ())
@@ -6245,3 +6686,7 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                                      "message": type(exc).__name__})
             if published:
                 _finalize_failure(report, published)
+        if normalized_base_dir is not None:
+            # The flattened task-input base is only needed while the run reads
+            # the contract; artifacts and the report are already persisted.
+            normalized_base_dir.cleanup()

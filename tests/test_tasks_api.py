@@ -97,7 +97,9 @@ def test_per_file_rejection_retry_and_manifest_total_preserved(client):
     sealed = client.post(f"/api/tasks/{task}/seal", headers=ALICE).json()
     assert sealed["total"] == 3 and sealed["upload_status"] == "sealed_incomplete"
     summary = client.get(f"/api/tasks/{task}/report", headers=ALICE).text
-    assert "尚未上传：1" in summary and "接收失败：1" in summary and "INVALID_DOCX_PACKAGE" in summary
+    assert "尚未上传：1" in summary and "接收失败：1" in summary and "INVALID_DOCX_PACKAGE" not in summary
+    # 接收失败的文件在总览里是人读句，不是错误码。
+    assert "未通过接收校验，未进入处理" in summary
     assert upload(client, task, files[:1], good).json()["receipts"][0]["status"] == "accepted"
     changed = package("different")
     receipt = upload(client, task, files[:1], changed).json()["receipts"][0]
@@ -167,8 +169,13 @@ def test_results_four_dimensions_filtering_paging_and_summary(client):
     assert state["total"] == 5 and state["completed"] == 4 and state["failed"] == 1 and state["status"] == "uploading"
     assert state["delivery_counts"]["incomplete"] == 2
     assert state["phase"] == "范围映射" and state["downloadable_count"] == 0
+    # The overview is a reader-facing deliverable: reason codes and engine
+    # counters stay on the per-document API, never in 结果总览.md.
     report = client.get(f"/api/tasks/{task}/report", headers=ALICE).text
-    assert "RELEASE_GATE_CLOSED" in report and "'failed': 4" in report
+    assert "RELEASE_GATE_CLOSED" not in report and "TARGET_SCOPE_UNRESOLVED" not in report
+    assert "部分修改 2 份" in report and "类型排除 1 份" in report and "失败 1 份" in report
+    assert "需要重新提交或人工处理的合同" in report
+    assert "report_json" not in report and "engine" not in report.lower()
 
 
 def test_corrupt_report_json_is_a_stable_document_error_and_does_not_block_siblings(client):
@@ -197,8 +204,10 @@ def test_corrupt_report_json_is_a_stable_document_error_and_does_not_block_sibli
     report = client.get(f"/api/tasks/{task}/documents/{corrupt['document_id']}/report", headers=ALICE)
     assert report.status_code == 409 and report.json()["detail"] == "REPORT_JSON_INVALID"
     assert "malformed" not in report.text and "secret" not in report.text
+    # 结果总览是用户阅读件：技术错误码保留在分文档接口，不进总览。
     overview = client.get(f"/api/tasks/{task}/report", headers=ALICE)
-    assert overview.status_code == 200 and "REPORT_JSON_INVALID" in overview.text
+    assert overview.status_code == 200 and "REPORT_JSON_INVALID" not in overview.text
+    assert "malformed" not in overview.text and "secret" not in overview.text
 
     batch = client.get(f"/api/batches/{corrupt['batch_id']}", headers=ALICE)
     assert batch.status_code == 200
@@ -365,8 +374,14 @@ def test_invalid_manifest_rejected(client, changes):
 
 
 def test_task_archive_authorization_names_and_integrity(client, tmp_path):
+    from docx import Document
+
     from fundlex.jobs import Worker
-    data = package()
+    stream = io.BytesIO()
+    doc = Document()
+    doc.add_paragraph("合同正文示例")
+    doc.save(stream)
+    data = stream.getvalue()
     files = manifest(3, data)
     files[1]["name"] = files[0]["name"]  # repeated filenames must not overwrite ZIP entries
     task = create(client, files).json()["id"]
@@ -375,17 +390,51 @@ def test_task_archive_authorization_names_and_integrity(client, tmp_path):
     assert client.get(url, headers=ALICE).status_code == 409
     upload(client, task, files[:2], data)
     store = client.app.state.store
-    worker = Worker(store, lambda *_: {"qualification_status": "excluded_by_fund_type",
-                                      "delivery_status": "not_generated"})
+    # The first job produces a real recall working pair (gate-verified DOCX
+    # artifacts the ZIP can ship and later re-verify); the second ends
+    # excluded_by_fund_type with nothing to deliver.
+    calls = {"count": 0}
+
+    def processor(source, output, ruleset):
+        calls["count"] += 1
+        if calls["count"] > 1:
+            return {"qualification_status": "excluded_by_fund_type",
+                    "delivery_status": "not_generated"}
+        from fundlex.docx import generate_unchanged_artifacts, validate_edit_plan
+        plan = validate_edit_plan(source, [], {})
+        validation = generate_unchanged_artifacts(source, plan, output / "working_redline.docx",
+                                                  output / "working_final.docx")
+        return {"engine_id": "recall_first", "schema_version": "3", "execution_mode": "delivery",
+                "qualification_status": "eligible", "delivery_status": "incomplete",
+                "unresolved": [{"kind": "target", "rule_id": "G01",
+                                "reason": "RECALL_TARGET_UNRESOLVED"}],
+                "output_validation": {"kind": "recall_working_edits",
+                                      "checks": [*validation.checks, "actual_content_verification"],
+                                      "final_sha256": validation.final_sha256,
+                                      "redline_sha256": validation.redline_sha256},
+                "artifacts": {"working_final": "working_final.docx",
+                              "working_redline": "working_redline.docx"}}
+
+    worker = Worker(store, processor)
     assert worker.run_until_idle() == 2
+    documents = client.get(f"/api/tasks/{task}/documents", headers=ALICE).json()["items"]
+    doc = documents[0]
     response = client.get(url, headers=ALICE)
     assert response.status_code == 200
     assert response.headers["content-type"] == "application/zip"
     with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
-        assert len(archive.namelist()) == len(set(archive.namelist()))
-        assert len([n for n in archive.namelist() if n.endswith("report_json.json")]) == 2
-        assert "not_started" in archive.read("结果清单.csv").decode("utf-8-sig")
-        assert "结果总览.md" in archive.namelist()
+        names = archive.namelist()
+        assert len(names) == len(set(names))
+        # 用户视角导出包：报告 JSON/MD 等内部技术件一律不入包。
+        assert not any("report_json" in n or "report_md" in n for n in names)
+        stem = Path(doc["name"]).stem
+        assert f"工作文件（未完成）/{stem}/{stem}（工作文件修订痕迹）.docx" in names
+        csv_text = archive.read("结果清单.csv").decode("utf-8-sig")
+        header = csv_text.splitlines()[0]
+        assert header == "序号,合同文件,处理结果,修改处数,修改内容摘要,备注"
+        assert "未生成产物" in csv_text and "类型排除" not in csv_text  # 处理结果列是人读值
+        assert "job_status" not in csv_text and "report_json" not in csv_text
+        assert "结果总览.md" in names
         overview = archive.read("结果总览.md").decode("utf-8")
         assert "每份合同的修改情况" in overview
         # The version column states where the delivered final comes from, and the
@@ -393,9 +442,11 @@ def test_task_archive_authorization_names_and_integrity(client, tmp_path):
         assert "| 合同文件 | 交付完整性 | 版本 | 修改处数 | 涉及条款 |" in overview
         assert "引擎全量" in overview
         assert "（全量痕迹版）" in overview and "（选择修订版）" in overview
-    documents = client.get(f"/api/tasks/{task}/documents", headers=ALICE).json()["items"]
-    doc = documents[0]
-    path, _ = store.get_artifact("alice", doc["batch_id"], doc["document_id"], "report_json")
+        # 技术残留在总览中不得出现：错误码/引擎/哈希字样。
+        assert "excluded_by_fund_type" not in overview and "engine" not in overview.lower()
+        assert "sha256" not in overview.lower()
+        assert "类型排除 1 份" in overview and "部分修改 1 份" in overview
+    path, _ = store.get_artifact("alice", doc["batch_id"], doc["document_id"], "working_redline")
     path.write_bytes(b"tampered")
     assert client.get(url, headers=ALICE).status_code == 409
 

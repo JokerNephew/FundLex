@@ -150,10 +150,47 @@ class Presentation:
         return tuple(fmt.items()), merge(self.defaults["rPr"], self.style(style_id, "rPr"))
 
     def runs(self, paragraph, base):
+        """Styled run segments plus the paragraph visible text in one pass.
+
+        The original implementation walked the run subtree once per run and
+        then walked the whole paragraph subtree again for the integrity check.
+        A single document-order pass collects the same evidence; visible text
+        appearing outside any ``w:r`` (or missing from the runs) still voids
+        the projection.
+        """
+        segments: list[list] = []  # [run element, [text parts]]
+        total: list[str] = []
+        current: list | None = None
+        # Property definitions (w:pPr/w:tabs tab stops etc.) are not visible
+        # text; skip the whole pPr subtree so tab-stop definitions do not
+        # leak into the paragraph projection (FL-D595).
+        ppr = paragraph.find(Q("pPr"))
+        skip = set(ppr.iter()) if ppr is not None else set()
+        for node in paragraph.iter():
+            if node is paragraph or node in skip:
+                continue
+            if node.tag == Q("r"):
+                current = [node, []]
+                segments.append(current)
+                continue
+            if node.tag in {Q("t"), Q("delText")}:
+                text = node.text or ""
+            elif node.tag in {Q("br"), Q("cr")}:
+                text = "\n"
+            elif node.tag == Q("tab"):
+                text = "\t"
+            elif node.tag == Q("noBreakHyphen"):
+                text = "\u2011"
+            else:
+                continue
+            total.append(text)
+            if current is not None:
+                current[1].append(text)
+        full_text = "".join(total)
         result = []
         offset = 0
-        for run in paragraph.iter(Q("r")):
-            text = text_of(run)
+        for run, parts in segments:
+            text = "".join(parts)
             if not text:
                 continue
             direct = run.find(Q("rPr"))
@@ -174,7 +211,8 @@ class Presentation:
                 {"superscript": "super", "subscript": "sub"}.get(attr("vertAlign"), ""),
             ))
             offset += len(text)
-        return tuple(result) if text_of(paragraph) == "".join(run.text for run in result) else ()
+        runs = tuple(result) if full_text == "".join(run.text for run in result) else ()
+        return runs, full_text
 
     def label(self, num_id, raw_level):
         num = self.nums.get(num_id)

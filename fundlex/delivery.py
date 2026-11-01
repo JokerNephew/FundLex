@@ -35,7 +35,12 @@ _BUSINESS_REASONS = (
 # order is specific-first: a code such as RECALL_TARGET_STRUCTURE must win over
 # the generic TARGET marker.
 _FAILURE_REASONS = (
+    ("RECONCILIATION_LAYER_MISMATCH", "复核证明与义务台账结论不一致，已按未闭合阻断并留待人工复核"),
     ("EXISTING_REVISION_UNSUPPORTED", "文件包含未接受的修订痕迹，请先接受所有修订或上传清理版"),
+    ("REVISION_PARAGRAPH_MERGE_UNSUPPORTED", "文件修订痕迹含跨段落合并删除，暂无法自动固化，请先在 Word 中接受或拒绝全部修订后重新上传"),
+    ("REVISION_CELL_MERGE_UNSUPPORTED", "文件修订痕迹含不支持的表格单元格合并变更，请先在 Word 中接受或拒绝全部修订后重新上传"),
+    ("REVISION_NORMALIZATION_MISMATCH", "修订痕迹固化结果未能通过一致性校验，任务已安全失败，请重新上传或在 Word 中清理修订后重试"),
+    ("REVISION_STRUCTURE_INVALID", "文件修订痕迹结构不完整，无法自动处理，请在 Word 中另存后重新上传"),
     ("DOCUMENT_PROTECTED", "文件受文档保护，无法写入修改"),
     ("INPUT_INTEGRITY_FAILED", "上传文件损坏或格式不受支持"),
     ("RECALL_TARGET_STRUCTURE", "目标段落含不可编辑结构（域、文本框或内容控件），无法写入修订"),
@@ -102,6 +107,9 @@ _COVERAGE_SUCCESS_STATES = {
 # New engine codes must never fall through to "complete with review items" merely
 # because an older classifier did not know them.
 _ALWAYS_BLOCKING_CODES = frozenset({
+    # FL-D653: a replay proof the Ledger never adopted.  The reconciliation
+    # layer upgrades it to an explicit row; it must block under every policy.
+    "RECONCILIATION_LAYER_MISMATCH",
     "EFFECT_SITE_UNPROVEN",
     "CLAIM_OPERATION_UNPROVEN",
     "CLAIM_OPERATION_NOT_PLANNED",
@@ -121,6 +129,13 @@ _ALWAYS_BLOCKING_CODES = frozenset({
     "FINAL_REVISION_MISMATCH",
     "FINAL_TEXT_MISMATCH",
     "FINAL_ROOT",
+    # FL-D114 / R2-F1: an excluded fund type whose quote could not be verified is
+    # a whole-contract qualification gap.  It must block delivery under every
+    # policy; under review_assisted it used to slip through three independent
+    # layers (the "FUND_TYPE" known-item prefix, the reason-field business
+    # markers this item never carried, and the ledger-only hard gate) and be
+    # published as ``complete``.
+    "FUND_TYPE_UNVERIFIED",
     # Audit/sweep engineering failures are proof failures, not review opinions.
     # Only an unfinished review (AUDIT_NOT_COMPLETED / SWEEP_CHUNK_LIMIT) stays in
     # the review bucket under review_assisted.
@@ -152,6 +167,9 @@ _KNOWN_ITEM_PREFIXES = (
     "COMPOSE", "OVERLAP", "VALIDATION", "LEDGER_EVIDENCE_UNBOUND",
     "FINAL_MODEL_SWEEP_FINDING", "FINAL_COVERAGE_UNRESOLVED", "VERIFICATION_",
     "QUALIFICATION_", "RECALL_QUOTE_UNRESOLVED", "RECALL_TARGET_",
+    # FL-D655: an anchored but uncertified variant wording is honest review
+    # evidence (a human confirms the skip), never a delivery blocker.
+    "VARIANT_",
 )
 
 
@@ -184,6 +202,15 @@ def requires_blocker(item: Any) -> bool:
     the failure mode R13/R14 close here.  Generic kind-only rows keep the existing
     pipeline bucket, except Claim Replay rows.  The worker gate and the user summary
     call this one function so both cannot disagree on the same typed item.
+
+    Policy behavior (the same under ``strict`` and ``review_assisted``): codes in
+    ``_ALWAYS_BLOCKING_CODES``/``_ALWAYS_BLOCKING_PREFIXES`` — including
+    ``FUND_TYPE_UNVERIFIED`` (FL-D114: excluded-type qualification gap with an
+    unverifiable quote, R2-F1) and unknown codes — block delivery.  Known review
+    taxonomy codes (orphan sweep evidence, unfinished audit/coverage rows and the
+    like) do not block here; under ``review_assisted`` they are review items,
+    under ``strict`` they still block via the "every unresolved item blocks" rule
+    in ``_delivery_complete``.
     """
     if not isinstance(item, Mapping):
         return False
@@ -373,6 +400,26 @@ def _issues(report: Mapping[str, Any]) -> list[dict[str, Any]]:
         if key in seen:
             continue
         seen.add(key)
+        if (str(item.get("code") or "") == "FUND_TYPE_UNVERIFIED"
+                or str(item.get("kind") or "") == "qualification"):
+            # R2-F1 / LOW-1: this is a whole-contract eligibility doubt, not a
+            # failed clause edit.  Rendering it as "未能自动修改的条款" with a
+            # per-clause review note misdirects the human reviewer.
+            issues.append({
+                "rule_id": "",
+                "code": "FUND_TYPE_UNVERIFIED",
+                "title": "产品类型资格未核验（整份合同）",
+                "section": "",
+                "location": "",
+                "obligation_id": "",
+                "business_reason": business_reason(item),
+                "requirement": "",
+                "quote": "",
+                "quote_exact_site": False,
+                "review_note": ("合同基金类型的引用原文未能核验，整份合同的处理资格存疑；"
+                                "本次不以此身份发布最终修订文件，请人工确认产品类型后再处理。"),
+            })
+            continue
         group = groups.get(rule_id) or {}
         title = str(group.get("title") or "").strip()
         section = str(group.get("section_hint") or "").strip()
@@ -399,7 +446,84 @@ def _issues(report: Mapping[str, Any]) -> list[dict[str, Any]]:
             "quote_exact_site": exact_site,
             "review_note": review_note,
         })
+    for item in report.get("disabled_rules") or []:
+        if not isinstance(item, Mapping):
+            continue
+        rule_id = str(item.get("rule_id") or "")
+        key = (rule_id, "", "用户在本任务关闭了该规则，未执行")
+        if key in seen:
+            continue
+        seen.add(key)
+        issues.append({
+            "rule_id": rule_id,
+            "code": "RULE_DISABLED_BY_USER",
+            "title": str(item.get("title") or "用户关闭的规则"),
+            "section": str(item.get("section_hint") or ""),
+            "location": "",
+            "obligation_id": "",
+            "business_reason": "用户在本任务关闭了该规则，未执行",
+            "requirement": "",
+            "quote": "",
+            "quote_exact_site": False,
+            "review_note": "如需该规则生效，请在“我的指引 → 规则组启停”中重新启用后新建任务。",
+        })
     return issues
+
+
+DELIVERY_OUTCOME_SCHEMA = "fundlex-delivery-outcome-v1"
+
+#: The user-facing delivery gate has exactly two states (FL-D654): a run either
+#: publishes a fully proven pair or it delivers an honest hold with every
+#: remnant explained in user-readable text.  Engine-internal statuses stay for
+#: wire compatibility and are exposed under ``engine_status``.
+_DELIVERY_COMPLETE_STATUSES = frozenset({"complete", "complete_with_exceptions"})
+
+
+def delivery_outcome(report: Mapping[str, Any]) -> dict[str, Any]:
+    """Two-state delivery presentation: 完整完成 or 诚实扣件.
+
+    ``complete``: the DOCX pair is published with every applicable obligation
+    closed.  ``honest_hold``: at least one remnant stayed open; each remnant is
+    rendered as Chinese user guidance (never as a bare engine key) in
+    ``holds``.  The projection is deterministic and never closes an open item.
+    """
+    status = str(report.get("delivery_status") or "")
+    complete = status in _DELIVERY_COMPLETE_STATUSES
+    holds: list[dict[str, Any]] = []
+    if not complete:
+        holds = _issues(report)
+        if not holds:
+            holds = [{
+                "rule_id": "", "code": "", "title": "任务未完成",
+                "section": "", "location": "", "obligation_id": "",
+                "business_reason": "处理未完成，未生成可交付的修订文件",
+                "requirement": "", "quote": "", "quote_exact_site": False,
+                "review_note": "",
+            }]
+        # Attach the bilingual Ledger miss classification (FL-D653) so a hold
+        # explains *why* the remnant could not close in user-readable text
+        # instead of an engine key.
+        misses = {
+            str(entry.get("obligation_id") or ""): entry
+            for entry in ((report.get("miss_classification") or {})
+                          .get("entries") or [])
+            if str(entry.get("miss_class") or "").startswith("MISS_")
+        }
+        for hold in holds:
+            entry = misses.get(str(hold.get("obligation_id") or ""))
+            if entry is not None:
+                hold["miss_class"] = str(entry.get("miss_class") or "")
+                hold["miss_reason_zh"] = str(entry.get("message_zh") or "")
+                hold["miss_reason_en"] = str(entry.get("en") or "")
+    return {
+        "schema": DELIVERY_OUTCOME_SCHEMA,
+        "state": "complete" if complete else "honest_hold",
+        "zh": "完整完成" if complete else "诚实扣件",
+        "engine_status": status,
+        "hold_count": len(holds),
+        "holds": holds,
+        "notices": list(report.get("business_notices") or []),
+    }
 
 
 def build_user_summary(report: Mapping[str, Any]) -> dict[str, Any]:
@@ -447,7 +571,15 @@ def build_user_summary(report: Mapping[str, Any]) -> dict[str, Any]:
         return {"status": VERIFICATION_BLOCKED, "headline": "验证暂未完成，等待恢复处理",
                 "issues": issues, "notices": notices,
                 "verification_blockers": list(report.get("verification_blockers") or [])}
-    if status == "complete" and not blockers:
+    disabled_rules = [item for item in (report.get("disabled_rules") or [])
+                      if isinstance(item, Mapping)]
+    if status in {"complete", "complete_with_exceptions"} and not blockers:
+        if disabled_rules:
+            return {"status": COMPLETE_WITH_NOTICES,
+                    "headline": f"修改完成；{len(disabled_rules)} 条规则由用户关闭",
+                    "issues": issues, "notices": notices,
+                    "review_items": review_items, "business_pending": business_items,
+                    "disabled_rules": disabled_rules}
         if review_items or business_items:
             parts = []
             if review_items:
@@ -463,7 +595,7 @@ def build_user_summary(report: Mapping[str, Any]) -> dict[str, Any]:
                     "headline": "修改完成，但有业务提示",
                     "issues": [], "notices": notices}
         return {"status": COMPLETE, "headline": "修改完成", "issues": [], "notices": []}
-    if status == "complete" and blockers and not issues:
+    if status in {"complete", "complete_with_exceptions"} and blockers and not issues:
         first_blocker = next((item for item in blockers
                               if isinstance(item, Mapping)), None)
         if first_blocker is None:

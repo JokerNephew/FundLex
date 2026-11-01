@@ -20,8 +20,11 @@ def test_v1_entry_and_bookmarks(tmp_path, monkeypatch):
     assert "独立合同对比工作台" not in response.text
     assert "no-store" in response.headers["cache-control"]
     assets = re.findall(r'(?:src|href)="(/static/[^"?]+\.(?:js|css)\?v=[a-f0-9]+)"', response.text)
-    assert len(assets) == 5
+    # Every script/style the shell references must be content-versioned so a
+    # release cannot strand clients on stale code (A9-F01).
+    assert len(assets) == 7
     assert any(asset.startswith('/static/workspace.js?v=') for asset in assets)
+    assert any(asset.startswith('/static/guide_generation.js?v=') for asset in assets)
     for asset in assets:
         assert client.get(asset).status_code == 200
     for path, view in (("/compare", "compare"), ("/tasks", "overview"),

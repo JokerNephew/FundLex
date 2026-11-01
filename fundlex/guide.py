@@ -252,6 +252,56 @@ def _heading_only(text: str) -> bool:
     return len(stripped) <= 64 and bool(_HEADING_PREFIX.match(stripped))
 
 
+# Generic enumerated-heading shapes, used only when the guide carries no
+# recognised domain heading at all.  Segmentation drives the owner-facing
+# parse report; it is never a pass/fail input (the builtin guide legitimately
+# splits and overlaps inside these blocks, FL-D648).
+_GENERIC_HEADING = re.compile(
+    r"^(?:第[一二三四五六七八九十百0-9]+[条章节部分]|[一二三四五六七八九十]+\s*[、．.]|"
+    r"[（(]\s*[一二三四五六七八九十]+\s*[）)]|\d+\s*[、．.)])")
+
+
+@dataclass(frozen=True)
+class GuideBlock:
+    index: int
+    start: int      # first paragraph index (inclusive)
+    end: int        # one past the last paragraph index (exclusive)
+    label: str      # first paragraph text, clipped for display
+
+
+def segment_guide_blocks(source: GuideSource) -> list[GuideBlock]:
+    """Deterministic segmentation into topic-level instruction blocks.
+
+    A block starts at every emphasised (bold/red) domain heading — the same
+    heading shapes the validator already recognises.  Guides without any
+    domain heading fall back to emphasised enumerated headings; without any
+    structure one block covers the whole guide.  Topic-level granularity keeps
+    legitimate in-block splits (branch variants) out of the "merged" verdict.
+    """
+    paragraphs = [paragraph for paragraph in source.paragraphs if paragraph.text.strip()]
+    if not paragraphs:
+        return []
+    generic = not any(_HEADING_PREFIX.match(p.text.strip()) for p in paragraphs)
+
+    def _is_heading(paragraph: GuideParagraph) -> bool:
+        text = paragraph.text.strip()
+        if paragraph.emphasis not in {"bold", "red"}:
+            return False
+        if _HEADING_PREFIX.match(text):
+            return True
+        return generic and len(text) <= 64 and bool(_GENERIC_HEADING.match(text))
+
+    boundaries = [paragraphs[0].index]
+    boundaries.extend(paragraph.index for paragraph in paragraphs[1:] if _is_heading(paragraph))
+    boundaries.append(paragraphs[-1].index + 1)
+    blocks: list[GuideBlock] = []
+    for position, (start, end) in enumerate(zip(boundaries, boundaries[1:])):
+        label = _clip((source.paragraphs[start].text or "").strip(), 40) \
+            if start < len(source.paragraphs) else ""
+        blocks.append(GuideBlock(index=position, start=start, end=end, label=label))
+    return blocks
+
+
 # ---------------------------------------------------------------------------
 # Deterministic validation
 # ---------------------------------------------------------------------------

@@ -14,6 +14,7 @@ import shutil
 import tempfile
 import json
 import os
+import time
 import zipfile
 from collections import Counter
 from datetime import datetime, timezone
@@ -37,7 +38,8 @@ from fastapi.staticfiles import StaticFiles
 
 from . import __version__, guide_store
 from .docx import DocxError
-from .edit_summary import archive_entry, archive_kinds
+from .edit_summary import (EDIT_DETAIL_HEADER, RESULT_LIST_HEADER, archive_entry,
+                           archive_kinds, edit_detail_rows, result_list_row)
 from .html_view import project_docx
 from .selective import (accept_all as selective_accept_all, generate_selected_artifact,
                         generate_selected_redline, manifest_fingerprint,
@@ -47,6 +49,7 @@ from .store import (Conflict, NotFound, ReportJsonError, RunStore, StoreError,
 from .config import auth_db_target, local_data_dir
 from .tasks import TaskStore
 from .application import TaskApplicationService
+from . import model_settings
 from .upload_validation import (
     MAX_BATCH_BYTES, MAX_COMPRESSION_RATIO,
     MAX_PART_BYTES, MAX_UNCOMPRESSED_BYTES, MAX_UPLOAD_BYTES,
@@ -68,6 +71,34 @@ from .api_errors import (
     reset_correlation_id, set_correlation_id,
 )
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+
+# Revision-review projection cache (FL-D557 F3④): ``project_docx`` re-reads and
+# re-projects the redline DOCX on every page open. The projection is a pure
+# function of the artifact bytes and the persisted report, so key on
+# (path, size, mtime_ns, report digest): any republished artifact or changed
+# report invalidates naturally. Insertion-ordered LRU, mirroring
+# ``recall_pipeline._DOCUMENT_COMPACT_CACHE``.
+_REVISION_VIEW_CACHE: dict[tuple[str, int, int, str], dict[str, Any]] = {}
+_REVISION_VIEW_CACHE_MAX = 4
+
+
+def _project_revision_view(path: Path, report: dict[str, Any]) -> dict[str, Any]:
+    stat = path.stat()
+    report_digest = hashlib.sha256(
+        json.dumps(report, ensure_ascii=False, sort_keys=True, default=str).encode()).hexdigest()
+    key = (str(path), stat.st_size, stat.st_mtime_ns, report_digest)
+    cached = _REVISION_VIEW_CACHE.get(key)
+    if cached is not None:
+        # Refresh recency so alternating documents reuse both entries (LRU).
+        _REVISION_VIEW_CACHE[key] = _REVISION_VIEW_CACHE.pop(key)
+        return cached
+    view = project_docx(str(path), report=report)
+    entry = {"html": view["html"], "revisions": view["revisions"], "meta": view["meta"]}
+    if len(_REVISION_VIEW_CACHE) >= _REVISION_VIEW_CACHE_MAX:
+        _REVISION_VIEW_CACHE.pop(next(iter(_REVISION_VIEW_CACHE)))
+    _REVISION_VIEW_CACHE[key] = entry
+    return entry
 
 
 class FrontendBasePathMiddleware:
@@ -168,6 +199,36 @@ class GuideSettingRequest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
     version_id: str | None = Field(default=None, max_length=128)
+
+
+class GuideRuleSettingsRequest(BaseModel):
+    """Per-owner rule switches for one guide version."""
+
+    model_config = ConfigDict(extra="forbid")
+    disabled_rule_ids: list[str] = Field(default_factory=list, max_length=500)
+
+    @field_validator("disabled_rule_ids")
+    @classmethod
+    def valid_rule_ids(cls, values):
+        cleaned = []
+        for value in values:
+            item = str(value or "").strip()
+            if not item or len(item) > 128 or any(ord(c) < 32 for c in item):
+                raise ValueError("invalid rule id")
+            cleaned.append(item)
+        if len(set(cleaned)) != len(cleaned):
+            raise ValueError("duplicate rule id")
+        return cleaned
+
+
+ModelSettingsRequest = model_settings.Preferences
+
+
+class FeishuAppCredentialsRequest(BaseModel):
+    """Own-tenant app credentials; the secret is encrypted and never echoed."""
+    model_config = ConfigDict(extra="forbid")
+    app_id: str = Field(min_length=4, max_length=80)
+    app_secret: str = Field(min_length=8, max_length=256)
 
 
 class FeishuBindingCodeRequest(BaseModel):
@@ -416,6 +477,15 @@ def _recall_metrics(store: RunStore, documents: list[dict], key: str) -> dict[st
     return metrics
 
 
+def _guide_enable_block_reason(version: dict) -> str | None:
+    """Machine-readable reason a version cannot be enabled (``None`` = enableable)."""
+    if version["status"] not in guide_store.ENABLEABLE_STATUSES:
+        return "GUIDE_NOT_PARSED"
+    if version["qualification_status"] not in guide_store.ENABLEABLE_QUALIFICATIONS:
+        return "GUIDE_NOT_CERTIFIED"
+    return None
+
+
 def _guide_public(version: dict, *, current: bool) -> dict:
     """Owner-facing guide metadata; server paths never appear here."""
     issues = version.get("issues")
@@ -423,10 +493,14 @@ def _guide_public(version: dict, *, current: bool) -> dict:
     if isinstance(issues, dict):
         issue_count = sum(len(issues[key]) for key in ("errors", "warnings", "coverage_gaps")
                           if isinstance(issues.get(key), list))
+    review = version.get("review")
     return {"id": version["id"], "built_in": bool(version["built_in"]),
             "parent_version_id": version.get("parent_version_id", ""),
             "filename": version["filename"],
             "status": version["status"], "qualification_status": version["qualification_status"],
+            "certified": version["qualification_status"] in guide_store.ENABLEABLE_QUALIFICATIONS,
+            "enable_block_reason": _guide_enable_block_reason(version),
+            "review": review if isinstance(review, dict) else None,
             "document_sha256": version["document_sha256"], "rules_sha256": version["rules_sha256"],
             "groups": int(version.get("rules_count") or 0), "issues": issue_count,
             "current": bool(current), "created_at": version["created_at"], "updated_at": version["updated_at"]}
@@ -477,6 +551,19 @@ def _public_batch(batch: dict, *, detail: bool, metrics: dict[str, dict] | None 
     return base
 
 
+# R2-F04: spreadsheet formula-injection defence for exported CSV cells.
+# A contract filename is attacker-controlled and lands in 结果清单.csv; a
+# leading = + - @ TAB CR makes Excel/Sheets evaluate the cell as a formula.
+_CSV_FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
+
+
+def csv_safe_cell(value):
+    """Prefix ``'`` when a text cell would otherwise parse as a formula."""
+    if isinstance(value, str) and value.startswith(_CSV_FORMULA_PREFIXES):
+        return "'" + value
+    return value
+
+
 def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
     application = FastAPI(title="FundLex", version="0.1.0")
     add_upload_guard(application, max_upload_bytes=MAX_UPLOAD_BYTES,
@@ -495,7 +582,12 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
     async def stable_http_error(request: Request, exc: StarletteHTTPException):
         code = code_from_detail(exc.detail, exc.status_code)
         log_handled_error(exc, code, request_id=getattr(request.state, "correlation_id", None))
-        return api_error_response(request, exc.status_code, code)
+        response = api_error_response(request, exc.status_code, code)
+        # Headers set on the original exception (Retry-After on 429, the auth
+        # challenge on 401) must survive the stable-envelope conversion.
+        for name, value in (exc.headers or {}).items():
+            response.headers.setdefault(name, value)
+        return response
 
     @application.exception_handler(RequestValidationError)
     async def stable_validation_error(request: Request, exc: RequestValidationError):
@@ -509,6 +601,12 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
         log_handled_error(exc, code, request_id=getattr(request.state, "correlation_id", None))
         return api_error_response(request, 500, code)
 
+    frontend_base = os.environ.get("FUNDLEX_FRONTEND_BASE_PATH", "").rstrip("/")
+    if frontend_base and not frontend_base.startswith("/"):
+        frontend_base = f"/{frontend_base}"
+    if frontend_base == "/":
+        frontend_base = ""
+
     @application.middleware("http")
     async def correlation_context(request: Request, call_next):
         cid = new_correlation_id()
@@ -518,6 +616,20 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
             response = await call_next(request)
         finally:
             reset_correlation_id(token)
+        # Baseline security headers (A1-4).  A strict CSP is deferred until the
+        # remaining inline <script> shells are eliminated (tracked in FL-D list).
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
+        response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+        response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+        # Versioned static assets are content-hashed (``?v=``) and safe to
+        # cache long-term; anything else under /static must revalidate so a
+        # release cannot strand clients on stale code (A9-F01).
+        if request.url.path.startswith((f"{frontend_base}/static/", "/static/")):
+            if request.query_params.get("v"):
+                response.headers.setdefault("Cache-Control", "public, max-age=86400, immutable")
+            else:
+                response.headers.setdefault("Cache-Control", "no-cache")
         response.headers[CORRELATION_ID_HEADER] = cid
         return response
 
@@ -538,6 +650,8 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
     application.state.task_service = task_service
     integrations = IntegrationStore(store)
     application.state.integrations = integrations
+    from .integrations.feishu.onboarding import FeishuAppOnboarding
+    application.state.feishu_onboarding = FeishuAppOnboarding(store)
     compare_store = CompareStore(store)
     application.state.compare_store = compare_store
     guide_generation_store = GuideGenerationStore(store)
@@ -550,7 +664,7 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
     # the bootstrap secret is never logged or written to disk.
     try:
         from .db import Database
-        from .auth import SessionStore, UserStore, bootstrap_admin
+        from .auth import SessionStore, ThrottleStore, UserStore, bootstrap_admin
     except ImportError as exc:
         # fundlex.db is delivered by a parallel change; dev mode stays usable
         # while it is absent, but a broken import inside an existing module is
@@ -567,6 +681,7 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
         application.state.auth_db = database
         application.state.users = users
         application.state.sessions = sessions
+        application.state.throttle = ThrottleStore(database)
         bootstrap_admin(database, users=users)
 
     def task_call(fn, *args, **kwargs):
@@ -598,7 +713,7 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
         path, report = _redline_for(owner, batch_id, document_id)
         document = store.get_document(owner, batch_id, document_id)
         manifests = _manifests_from_report(report)
-        view = project_docx(str(path), report=report)
+        view = _project_revision_view(path, report)
         return {
             "document_id": document_id,
             "html": view["html"],
@@ -719,18 +834,42 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
                                   "max_request_bytes": MAX_BATCH_BYTES},
                 "engine": engine}
 
+    # Credential-endpoint throttling lives in the auth database so every
+    # uvicorn worker shares one budget and restarts do not reset it (R2-F01).
+    # The X-Forwarded-For-aware client key only trusts the header when the
+    # operator configured FUNDLEX_TRUSTED_PROXY_HOSTS (R2-F01/F02); without
+    # it all reverse-proxied traffic shares one bucket, so deployments that
+    # proxy must set both the env list and the proxy header.
+    _LOGIN_BUCKET = "login"
+    _REGISTER_BUCKET = "register"
+
+    def _client_host(request: Request) -> str:
+        from .proxy_headers import client_host
+        return client_host(request.headers,
+                           request.client.host if request.client else None)
+
     @application.post("/api/auth/login")
     def auth_login(payload: LoginRequest, request: Request):
         if _auth_mode() != "password":
             raise HTTPException(404, "not found")
         from .auth import AccountDisabled, InvalidCredentials
         users, sessions = request.app.state.users, request.app.state.sessions
+        throttle = request.app.state.throttle
+        client = _client_host(request)
         try:
             record = users.authenticate(payload.username, payload.password)
         except AccountDisabled as exc:
             raise HTTPException(403, "account is disabled") from exc
         except InvalidCredentials as exc:
+            # The throttle key must be normalized exactly like authentication
+            # normalizes the username; otherwise whitespace/case variants of the
+            # same account get unlimited fresh keys and bypass the limit (A1-2).
+            key = f"{client}|{payload.username.strip().casefold()}"
+            if throttle.hit(_LOGIN_BUCKET, key, limit=10, window_s=300):
+                raise HTTPException(429, "too many failed logins; retry later",
+                                    headers={"Retry-After": "300"}) from None
             raise HTTPException(401, "invalid username or password") from exc
+        throttle.clear(_LOGIN_BUCKET, f"{client}|{payload.username.strip().casefold()}")
         return {"token": sessions.login(record["id"]), "user": _public_user(record)}
 
     @application.post("/api/auth/register", status_code=201)
@@ -740,6 +879,10 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
             raise HTTPException(404, "not found")
         if not _registration_open():
             raise HTTPException(403, "registration is disabled")
+        client = _client_host(request)
+        if request.app.state.throttle.hit(_REGISTER_BUCKET, client, limit=10, window_s=3600):
+            raise HTTPException(429, "too many registrations from this network; retry later",
+                                headers={"Retry-After": "3600"})
         from .auth import UserExists
         from .auth import ValidationError as AuthValidationError
         users, sessions = request.app.state.users, request.app.state.sessions
@@ -800,6 +943,65 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
     def revoke_feishu_binding(user: str = Depends(_user)):
         integrations.revoke_user_binding("feishu", user)
         return {"provider": "feishu", "bound": False}
+
+    # -- own-tenant app onboarding -------------------------------------
+    def _app_status(owner: str, request: Request) -> dict:
+        status = request.app.state.feishu_onboarding.status(owner)
+        binding = integrations.binding_for_user("feishu", owner)
+        status["binding"] = {
+            "bound": bool(binding),
+            "tenant_key": binding["tenant_key"] if binding else "",
+            "updated_at": binding["updated_at"] if binding else None,
+        }
+        return status
+
+    def _app_error(exc) -> JSONResponse:
+        """Onboarding failures keep the stable envelope plus an actionable hint.
+
+        The global handler flattens ``HTTPException.detail`` to a bare code, so
+        these routes answer directly: the same ``error_code``/``message``/
+        ``detail``/``correlation_id`` keys, with a human sentence, a concrete
+        next step and (when known) the Feishu page that fixes it.
+        """
+        cid = correlation_id()
+        log_handled_error(exc, exc.code, request_id=cid)
+        return JSONResponse(
+            status_code=exc.http_status,
+            content={"error_code": exc.code, "message": exc.message,
+                     "detail": exc.detail or "", "link": exc.link or "",
+                     "correlation_id": cid},
+            headers={CORRELATION_ID_HEADER: cid, "Cache-Control": "private, no-store"},
+        )
+
+    @application.get("/api/integrations/feishu/app")
+    def get_feishu_app(request: Request, user: str = Depends(_user)):
+        """Onboarding state for a user's own-tenant Feishu app."""
+        return _app_status(user, request)
+
+    @application.post("/api/integrations/feishu/app/credentials")
+    def save_feishu_app_credentials(payload: FeishuAppCredentialsRequest, request: Request,
+                                    user: str = Depends(_user)):
+        from .integrations.feishu.onboarding import AppOnboardingError
+        try:
+            result = request.app.state.feishu_onboarding.save(
+                user, payload.app_id, payload.app_secret)
+        except AppOnboardingError as exc:
+            return _app_error(exc)
+        return {**_app_status(user, request), "verification": result}
+
+    @application.post("/api/integrations/feishu/app/verify")
+    def verify_feishu_app(request: Request, user: str = Depends(_user)):
+        from .integrations.feishu.onboarding import AppOnboardingError
+        try:
+            result = request.app.state.feishu_onboarding.revalidate(user)
+        except AppOnboardingError as exc:
+            return _app_error(exc)
+        return {**_app_status(user, request), "verification": result}
+
+    @application.delete("/api/integrations/feishu/app")
+    def remove_feishu_app(request: Request, user: str = Depends(_user)):
+        request.app.state.feishu_onboarding.remove(user)
+        return _app_status(user, request)
 
     @application.post("/api/integrations/feishu/oauth/start")
     def start_feishu_oauth(user: str = Depends(_user)):
@@ -915,6 +1117,16 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
             await file.close()
         return {"version": _guide_public(version, current=False)}
 
+    @application.get("/api/guides/upload-spec")
+    def guide_upload_spec(user: str = Depends(_user)):
+        """Upload-entry specification for the guide channel (static content).
+
+        The frontend renders this verbatim near the upload control; keeping it
+        server-side means the copy ships with the quality channel it describes.
+        """
+        from fundlex.api_content import GUIDE_UPLOAD_SPEC
+        return GUIDE_UPLOAD_SPEC
+
     @application.get("/api/guides/{version_id}")
     def get_guide(version_id: str, user: str = Depends(_user)):
         version = visible_guide(user, version_id)
@@ -960,6 +1172,36 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
                             filename=Path(version["filename"] or f"{version_id}.docx").name,
                             headers={"Cache-Control": "private, no-store"})
 
+    @application.get("/api/guides/{version_id}/diff")
+    def guide_version_diff(version_id: str, against: str = "", user: str = Depends(_user)):
+        """Deterministic rule-level diff of two visible versions (no model)."""
+        try:
+            diff = guide_store.diff_versions(store, user, version_id, against)
+        except KeyError as exc:
+            raise_api_error(404, exc, fallback="GUIDE_DIFF_UNAVAILABLE")
+        except ValueError as exc:
+            raise_api_error(422, exc, fallback="INVALID_REQUEST")
+        return {"version_id": version_id, "against": against.strip(), "diff": diff}
+
+    @application.get("/api/guides/{version_id}/text-diff")
+    def guide_version_text_diff(version_id: str, against: str = "", user: str = Depends(_user)):
+        """指引原文比对：与合同比对页同套算法链的确定性文本差异（不使用模型）。
+
+        内置指引没有用户上传的原文 DOCX，任一侧为内置版时按「源不可用」拒绝；
+        解析出的规则差异请用 ``GET /api/guides/{id}/diff``。
+        """
+        from . import guide_text_diff
+        try:
+            result = guide_text_diff.guide_text_diff(store, user, version_id, against)
+        except KeyError as exc:
+            raise_api_error(404, exc, fallback="GUIDE_DIFF_UNAVAILABLE")
+        except ValueError as exc:
+            raise_api_error(422, exc, fallback="INVALID_REQUEST")
+        except guide_text_diff.TextDiffUnavailable as exc:
+            raise HTTPException(404, str(exc)) from exc
+        return {"version_id": version_id, "against": against.strip(),
+                "text_diff": result}
+
     @application.get("/api/guides/{version_id}/rules")
     def guide_rules(version_id: str, user: str = Depends(_user)):
         version = visible_guide(user, version_id)
@@ -986,6 +1228,59 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
         except ValueError as exc:
             raise_api_error(409, exc, fallback="CONFLICT")
         return guide_settings(user)
+
+    @application.get("/api/guides/{version_id}/rule-settings")
+    def get_guide_rule_settings(version_id: str, user: str = Depends(_user)):
+        try:
+            return guide_store.rule_settings(store, user, version_id)
+        except KeyError as exc:
+            raise_api_error(404, exc, fallback="GUIDE_NOT_FOUND")
+        except ValueError as exc:
+            raise_api_error(409, exc, fallback="GUIDE_NOT_READY")
+
+    @application.put("/api/guides/{version_id}/rule-settings")
+    def update_guide_rule_settings(version_id: str, payload: GuideRuleSettingsRequest,
+                                   user: str = Depends(_user)):
+        try:
+            return guide_store.set_rule_settings(store, user, version_id,
+                                                 payload.disabled_rule_ids)
+        except KeyError as exc:
+            raise_api_error(404, exc, fallback="GUIDE_NOT_FOUND")
+        except ValueError as exc:
+            message = str(exc)
+            if message.startswith("GUIDE_RULE_UNKNOWN") or message == "GUIDE_RULES_ALL_DISABLED":
+                raise_api_error(422, exc, fallback="GUIDE_RULE_INVALID")
+            raise_api_error(409, exc, fallback="GUIDE_NOT_READY")
+
+    @application.get("/api/settings/model")
+    def get_model_settings(user: str = Depends(_user)):
+        return model_settings.public_settings(store, user)
+
+    @application.put("/api/settings/model")
+    def update_model_settings(payload: dict,
+                              user: str = Depends(_user)):
+        try:
+            return model_settings.save_settings(store, user, payload)
+        except model_settings.ModelSettingsError as exc:
+            if exc.code == "MODEL_SETTINGS_LOCKED":
+                raise_api_error(409, exc, fallback="MODEL_SETTINGS_LOCKED")
+            raise_api_error(422, exc, fallback=exc.code or "MODEL_SETTINGS_INVALID")
+        except ValueError:
+            raise HTTPException(422, "模型配置无法保存，请检查供应商、模型和访问密钥。") from None
+
+    @application.post("/api/settings/model/test")
+    def test_user_model(payload: dict, user: str = Depends(_user)):
+        from . import user_model_connections
+        try:
+            return user_model_connections.test_connection(store, user, payload)
+        except user_model_connections.ConnectionError:
+            raise HTTPException(422, "请先填写有效的供应商、模型和访问密钥；服务地址须为公网 HTTPS 地址。") from None
+        except ValueError:
+            raise HTTPException(422, "请先填写有效的供应商、模型和访问密钥；服务地址须为公网 HTTPS 地址。") from None
+
+    @application.delete("/api/settings/model")
+    def reset_model_settings(user: str = Depends(_user)):
+        return model_settings.reset_settings(store, user)
 
     @application.post("/api/tasks", status_code=201)
     def create_task(payload: TaskSubmission,
@@ -1171,11 +1466,12 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
         output = tempfile.SpooledTemporaryFile(max_size=8 * 1024 * 1024, mode="w+b")
         try:
             count = 0
-            rows = [["合同", "处理状态", "交付状态", "已打包文件"]]
+            # 用户视角的结果清单（行构造单一事实源在 fundlex.edit_summary）：
+            # 去掉了 job_status/artifact 种类等技术列。
+            rows = [list(RESULT_LIST_HEADER)]
             # The accepted-revision contracts go into their own folder so the deliverable
             # is the same shape as the offline package: 结果总览.md + 结果清单.csv +
             # 最终版（接受修订后）/<合同>.docx + 逐份修改说明/<合同>/.
-            final_dir = "最终版（接受修订后）"
             notes_dir = "逐份修改说明"
             used_names: set[str] = set()
 
@@ -1195,21 +1491,43 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
                     name = Path(doc["name"].replace("\\", "/")).stem
                     name = "".join(c for c in name if c.isalnum() or c in " _-（）()")[:100] or "合同"
                     name = unique(name)
-                    included = []
+                    report: dict = {}
+                    if doc.get("document_id"):
+                        try:
+                            report = store.get_report(user, doc["batch_id"], doc["document_id"])
+                        except (NotFound, ReportJsonError):
+                            report = {}
+                    # Reuse digests verified earlier in this request for the
+                    # pair checks of sibling kinds of the same document.
+                    verified: dict[str, str] = {}
                     for kind in archive_kinds(doc.get("downloads")):
-                        data, digest = store.read_artifact(user, doc["batch_id"], doc["document_id"], kind)
-                        suffix = ".docx" if kind.endswith(("final", "redline")) else \
-                            ".json" if kind == "report_json" else ".md"
+                        # report_json（内部技术件）与 report_md（引擎/哈希/模型计数等
+                        # 技术追溯信息，与修改说明重复）都不进用户导出包；
+                        # 工作台单独下载两个报告不受影响。
+                        if kind in {"report_json", "report_md"}:
+                            continue
+                        data, digest = store.read_artifact(user, doc["batch_id"], doc["document_id"], kind,
+                                                           verified_hashes=verified)
+                        verified[kind] = digest
+                        suffix = ".docx" if kind.endswith(("final", "redline")) else ".md"
                         _, arcname = archive_entry(kind, name, suffix,
                                                   delivery_status=doc["delivery_status"])
                         archive.writestr(arcname, data)
-                        included.append(kind)
                         count += 1
-                    rows.append([doc["name"], doc["job_status"], doc["delivery_status"], "; ".join(included)])
-                if not count:
+                    detail_rows = edit_detail_rows(report)
+                    if detail_rows:
+                        detail = io.StringIO()
+                        csv.writer(detail).writerows(
+                            [csv_safe_cell(cell) for cell in row]
+                            for row in [list(EDIT_DETAIL_HEADER), *detail_rows])
+                        archive.writestr(f"{notes_dir}/{name}/{name}（修改说明）.csv",
+                                         detail.getvalue().encode("utf-8-sig"))
+                        count += 1
+                    rows.append(result_list_row(index, doc["name"], report, doc))
+                if not any(doc.get("document_id") for doc in docs):
                     raise Conflict("暂无可下载结果，请等待合同处理完成")
                 summary = io.StringIO()
-                csv.writer(summary).writerows(rows)
+                csv.writer(summary).writerows([csv_safe_cell(cell) for cell in row] for row in rows)
                 archive.writestr("结果清单.csv", summary.getvalue().encode("utf-8-sig"))
                 archive.writestr("结果总览.md", task_call(tasks.report, user, task_id))
             output.seek(0)
@@ -1399,11 +1717,6 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
     # V1 is the default workbench again. Keep the Vite source/build available
     # for explicit V2 regression runs without letting a build switch the UI.
     frontend_v2 = os.environ.get("FUNDLEX_FRONTEND_VERSION", "v1") == "v2"
-    frontend_base = os.environ.get("FUNDLEX_FRONTEND_BASE_PATH", "").rstrip("/")
-    if frontend_base and not frontend_base.startswith("/"):
-        frontend_base = f"/{frontend_base}"
-    if frontend_base == "/":
-        frontend_base = ""
     if frontend_base:
         application.add_middleware(FrontendBasePathMiddleware, base_path=frontend_base)
     if frontend.is_dir():
@@ -1428,8 +1741,10 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
             entry = ((dist / "index.html" if (dist / "index.html").is_file() else frontend / "index.html")
                      if frontend_v2 else frontend / "compare.html")
             html = entry.read_text(encoding="utf-8")
-            version = _asset_version("dist/index.html", "app.css", "app.js", "compare.css", "compare.js", "workspace.js")
-            for name in ("app.css", "app.js", "compare.css", "compare.js", "workspace.js"):
+            _versioned_assets = ("app.css", "app.js", "compare.css", "compare.js",
+                                 "workspace.js", "guide_generation.css", "guide_generation.js")
+            version = _asset_version("dist/index.html", *_versioned_assets)
+            for name in _versioned_assets:
                 html = html.replace(f'/static/{name}"', f'/static/{name}?v={version}"')
             if frontend_base:
                 html = html.replace('="/static/', f'="{frontend_base}/static/')
@@ -1508,8 +1823,11 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
             response = await call_next(request)
             path = request.url.path
             if path.startswith("/static/") or path.startswith("/assets/"):
-                # 静态资源 URL 带内容哈希，可长期缓存；入口 HTML 必须每次校验。
-                response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+                # 静态资源 URL 带内容哈希时可长期缓存；入口 HTML 必须每次校验。
+                # 无 ?v= 的旧 /static URL 不续一年缓存，与新安全头中间件同策
+                # （A9-F01；此中间件注册更晚=更外层，覆写前必须尊重已设值）。
+                if "Cache-Control" not in response.headers:
+                    response.headers["Cache-Control"] = "public, max-age=86400, immutable"
             elif path in ("/", "/index.html"):
                 response.headers["Cache-Control"] = "no-store, must-revalidate"
             return response

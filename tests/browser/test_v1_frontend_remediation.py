@@ -413,7 +413,8 @@ def test_compare_word_style_reader_renders_merged_redline_and_display_modes(brow
         page.locator("#compare-close-viewer").click()
         assert page.locator("#compare-viewer").is_hidden()
         assert page.evaluate("document.body.classList.contains('compare-fullscreen-open')") is False
-        page.locator("details.compare-groups-disclosure summary").click()
+        # FL-D813：compare-pair-list 常显（details 已删）无需展开
+        page.wait_for_selector('#compare-pair-list > *', state='attached')
         page.locator('[data-compare-pair="0"]').click()
         page.locator("#compare-viewer").wait_for(state="visible")
 
@@ -887,7 +888,7 @@ def test_guide_badges_use_warning_not_green_pass_and_download_names(browser, liv
     try:
         open_dev(page, base, "#generation?mode=detail&id=A")
         page.locator("#gg-detail-head").filter(has_text="Regulation A").wait_for()
-        badge = page.locator(".gg-badge").filter(has_text="生成结束 · 仍有问题").first
+        badge = page.locator(".gg-badge").filter(has_text="已完成 · 仍有问题").first
         badge.wait_for()
         assert "gg-warning" in (badge.get_attribute("class") or "")
         colour = badge.evaluate("node => getComputedStyle(node).color")
@@ -1001,6 +1002,44 @@ def test_v1_password_late_401_from_previous_account_does_not_logout_new_session(
         assert page.evaluate("() => sessionStorage.getItem('fundlex-auth-token')") == token_b
         assert page.locator("#login-view").is_hidden()
         assert page.locator("#topbar-user").is_visible()
+    finally:
+        context.close()
+
+
+def test_compare_failed_pair_shows_structured_failure_diagnostics(browser, live_dev):
+    """FL-D546: terminal pair failures surface stage/type/retryability from the
+    worker diagnostics field; paused pairs keep the same status label source."""
+    _app, base = live_dev
+    context = browser.new_context(viewport={"width": 1440, "height": 1000})
+    context.add_init_script("localStorage.setItem('fundlex-dev-user','compare-diagnostics')")
+    page = context.new_page()
+    pairs = [
+        {"id": "PF", "label": "失败组", "status": "failed", "error_code": "COMPARE_PROCESSING_FAILED",
+         "left": {"name": "a.docx"}, "right": {"name": "b.docx"},
+         "diagnostics": {"failure": {"error_code": "COMPARE_PROCESSING_FAILED", "stage": "compare",
+                                      "error_type": "RuntimeError", "retryable": False}}},
+        {"id": "PP", "label": "暂停组", "status": "paused",
+         "left": {"name": "c.docx"}, "right": {"name": "d.docx"}},
+    ]
+
+    def scenario(path, query, route):
+        if path == "/api/compare/tasks":
+            return respond(route, {"items": [{"id": "T", "name": "diag", "status": "completed", "total": 2,
+                                              "pairs": pairs}]})
+        if path == "/api/compare/tasks/T":
+            return respond(route, {"id": "T", "name": "diag", "status": "completed", "total": 2,
+                                   "pairs": pairs})
+        return respond(route, {})
+
+    install_api(page, base_api(scenario))
+    try:
+        open_dev(page, base, "#compare?mode=detail&id=T")
+        error = page.locator(".compare-pair-status.is-failed .compare-pair-error")
+        error.wait_for()
+        assert error.inner_text() == "处理失败：文本比对环节出错，请重新创建合同组"
+        paused = page.locator(".compare-pair-status", has_text="暂停组")
+        assert paused.locator(".compare-pair-state").inner_text().startswith("已暂停")
+        assert page.locator(".compare-pair-status.is-failed .compare-pair-state").inner_text() == "失败"
     finally:
         context.close()
 

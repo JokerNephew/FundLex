@@ -11,10 +11,12 @@ retry) instead of exporting an empty candidate.
 from __future__ import annotations
 
 import os
+import sqlite3
 import threading
 import time
 from typing import Any
 
+from ..db import DatabaseError
 from ..model import ModelError
 from ..store import Conflict, RunStore
 from .model_router import GuideModelRouter
@@ -160,16 +162,21 @@ class GuideGenerationWorker:
         except ModelError as exc:
             code = getattr(exc, "code", "MODEL_ERROR")
             try:
-                if engine_only:
-                    self.gg_store.update_run(
-                        run_id, engine_status="failed",
-                        payload={**self.gg_store.get_run(run_id).get("payload", {}),
-                                 "engine_status": "failed", "engine_requested": False,
-                                 "engine_error_code": code,
-                                 "engine_failed_at": time.time()})
-                    self.gg_store.finish_job(job_id, token, status="failed", error_code=code)
-                else:
-                    self._pause_or_retry(run_id, job, code)
+                # The fencing ContextVar unwound with the pipeline block, so a
+                # plain update_run here would bypass the lease guard (A2-F1).
+                # Re-bind the fence: when a newer epoch owns the job the entry
+                # check raises Conflict and no stale pause/retry state lands.
+                with self.gg_store.fencing(job_id, token, run_id):
+                    if engine_only:
+                        self.gg_store.update_run(
+                            run_id, engine_status="failed",
+                            payload={**self.gg_store.get_run(run_id).get("payload", {}),
+                                     "engine_status": "failed", "engine_requested": False,
+                                     "engine_error_code": code,
+                                     "engine_failed_at": time.time()})
+                        self.gg_store.finish_job(job_id, token, status="failed", error_code=code)
+                    else:
+                        self._pause_or_retry(run_id, job, code)
             except Conflict:
                 return True
         except Conflict:
@@ -178,19 +185,22 @@ class GuideGenerationWorker:
         except Exception as exc:  # noqa: BLE001 - persist the terminal stage failure
             code = getattr(exc, "code", None) or str(exc)[:160] or type(exc).__name__
             try:
-                if engine_only:
-                    self.gg_store.update_run(
-                        run_id,
-                        payload={**self.gg_store.get_run(run_id).get("payload", {}),
-                                 "engine_status": "failed", "engine_requested": False,
-                                 "engine_error_code": code,
-                                 "engine_error": str(exc)[:500],
-                                 "engine_failed_at": time.time()})
-                    self.gg_store.finish_job(job_id, token, status="failed", error_code=code)
-                else:
-                    self.gg_store.update_run(run_id, status="failed", stage="FAILED", error_code=code,
-                                             payload={"worker_error": type(exc).__name__})
-                    self.gg_store.finish_job(job_id, token, status="failed", error_code=code)
+                # Same re-bind as the model-error branch (A2-F1): terminal
+                # failure state is only written by the live lease holder.
+                with self.gg_store.fencing(job_id, token, run_id):
+                    if engine_only:
+                        self.gg_store.update_run(
+                            run_id,
+                            payload={**self.gg_store.get_run(run_id).get("payload", {}),
+                                     "engine_status": "failed", "engine_requested": False,
+                                     "engine_error_code": code,
+                                     "engine_error": str(exc)[:500],
+                                     "engine_failed_at": time.time()})
+                        self.gg_store.finish_job(job_id, token, status="failed", error_code=code)
+                    else:
+                        self.gg_store.update_run(run_id, status="failed", stage="FAILED", error_code=code,
+                                                 payload={"worker_error": type(exc).__name__})
+                        self.gg_store.finish_job(job_id, token, status="failed", error_code=code)
             except Conflict:
                 return True
         finally:
@@ -208,8 +218,24 @@ class GuideGenerationWorker:
 
     def run_forever(self, *, poll_seconds: float = 1.0, stop_event: threading.Event | None = None) -> None:
         stopped = stop_event or threading.Event()
+        try:
+            transient_limit = max(1, int(os.environ.get("FUNDLEX_GUIDE_DB_FAILURE_LIMIT", "6")))
+        except ValueError:
+            transient_limit = 6
+        transient_failures = 0
         while not stopped.is_set():
-            if not self.run_once():
+            try:
+                progressed = self.run_once()
+            except (sqlite3.OperationalError, DatabaseError):
+                # B14-01: absorb transient claim-time DB faults with bounded
+                # backoff; a persistent outage still terminates the loop.
+                transient_failures += 1
+                if transient_failures >= transient_limit:
+                    raise
+                stopped.wait(min(30.0, 0.5 * (2 ** (transient_failures - 1))))
+                continue
+            transient_failures = 0
+            if not progressed:
                 stopped.wait(max(0.05, poll_seconds))
 
 

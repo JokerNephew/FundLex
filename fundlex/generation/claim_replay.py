@@ -19,6 +19,28 @@ def _compact(value: str) -> str:
     return re.sub(r"[\s\u3000\u00a0\u200b]+", "", value or "")
 
 
+# A duplicated clause frequently sits inside a numbered list item.  Sibling edits
+# cover different spans: one starts after the "4、" marker, the other covers it,
+# so one final paragraph keeps the enumeration prefix and the other drops it even
+# though the duplicated clause content is identical (FL-D570: B04/B06/B11/B17/B19
+# were wrongly blocked by DUPLICATE_SITE_DIVERGED).  A leading list-item marker is
+# structural numbering, not clause content, and a marker-only difference never
+# hides a business-text divergence (any real content difference survives the
+# normalization).  Strip it only for the duplicate-divergence comparison.
+_DUPLICATE_ENUM_PREFIX_RE = re.compile(
+    r"^(?:[（(]?(?:[0-9０-９]+|[一二三四五六七八九十百千]+)[）、])+")
+
+
+def _duplicate_comparable(value: str) -> str:
+    """Comparison form of a duplicate copy's final text for the divergence gate.
+
+    ``value`` is the already-compacted final paragraph text.  The enumeration
+    prefix is removed so copies edited with different span boundaries compare by
+    their actual clause content instead of by paragraph layout.
+    """
+    return _DUPLICATE_ENUM_PREFIX_RE.sub("", value, count=1)
+
+
 def _own_rule_append_sites(rule_id: str, operation_id: str,
                            sites: Sequence[Mapping[str, Any]],
                            targets: Sequence[Mapping[str, Any]]
@@ -552,12 +574,22 @@ def _own_effect_errors(rule: Mapping[str, Any], indices: Sequence[int],
     selected = [operations[index] for index in indices
                 if 0 <= index < len(operations)]
     own_kinds = {str(operation.get("op") or "") for operation in selected}
-    sibling_texts = [
-        _compact(str(operation.get("new_text") or ""))
-        for index, operation in enumerate(operations)
-        if index not in set(indices) and operation.get("op") in {"replace", "append"}
-        and len(_compact(str(operation.get("new_text") or ""))) >= 3
-    ]
+    from ..recall import condition_status
+    sibling_texts = []
+    for index, operation in enumerate(operations):
+        if index in set(indices) or operation.get("op") not in {"replace", "append"}:
+            continue
+        sibling = _compact(str(operation.get("new_text") or ""))
+        if len(sibling) < 3:
+            continue
+        if (facts is not None
+                and condition_status(operation.get("condition"), facts) == "FALSE"):
+            # FL-D606 replay proof: a branch the product's facts close (G14
+            # single-class vs multiple-class alternatives) can never be the
+            # alternative claim for this site; its wording overlap with the true
+            # branch's text is inherent to the rule family, not borrowing.
+            continue
+        sibling_texts.append(sibling)
     own_texts = [
         _compact(str(operation.get("new_text") or ""))
         for operation in selected
@@ -572,7 +604,16 @@ def _own_effect_errors(rule: Mapping[str, Any], indices: Sequence[int],
     # operation's own authorized removals, not sibling text.
     owned_removals.extend(_compact(str(value))
                           for value in rule.get("old_text_variants") or [] if value)
-    if expected_old_text:
+    # An ``approved_span_delete`` carries an approval over the *located sentence*,
+    # not over every word that sentence contains.  Its recorded deleted_quote /
+    # expected_old_text are executor self-claims; letting them extend removal
+    # ownership past the operation's own old wording made an over-wide approved
+    # span invisible to the residual-ownership proof (FL-D573 p87 尾句被吞).
+    # G15/G17 keep their dedicated source-owned re-proofs above.
+    executor_claim_span = (
+        content_source == "approved_span_delete"
+        and str(rule.get("rule_id") or "") not in {"G15", "G17"})
+    if expected_old_text and not executor_claim_span:
         owned_removals.append(_compact(expected_old_text))
     evidence = evidence or {}
     if (str(rule.get("rule_id") or "") == "G11" and len(selected) == 1
@@ -687,14 +728,18 @@ def _own_effect_errors(rule: Mapping[str, Any], indices: Sequence[int],
         own_texts.append(fixed_text)
     for key in ("matched_old_text", "deleted_quote", "deleted_paragraph",
                 "expected_old_text", "old_text", "deleted_fragment"):
+        if executor_claim_span and key != "matched_old_text":
+            continue
         value = evidence.get(key)
         if isinstance(value, str) and value:
             owned_removals.append(_compact(value))
     for key in ("delete_texts", "deleted_texts"):
+        if executor_claim_span:
+            continue
         values = evidence.get(key)
         if isinstance(values, (list, tuple)):
             owned_removals.extend(_compact(str(value)) for value in values if value)
-    for fragment in evidence.get("fragments") or []:
+    for fragment in (() if executor_claim_span else evidence.get("fragments") or []):
         if isinstance(fragment, Mapping):
             value = fragment.get("old_text")
             if value:
@@ -748,6 +793,23 @@ def _own_effect_errors(rule: Mapping[str, Any], indices: Sequence[int],
             expected = {new_text}
             if evidence.get("mode") == "g09_bounded_splice" and fixed_text:
                 expected.add(fixed_text)
+            if (str(rule.get("rule_id") or "") == "G14"
+                    and str(evidence.get("mode") or "").startswith("g14_")):
+                # FL-D606: the promotion-context replacement deliberately keeps
+                # the contract's promotion lead-in instead of the canonical
+                # sentence, so verbatim new_text containment cannot prove the
+                # operation.  Replay recomputes the deterministic executor from
+                # this unit's own slice; a reproduced replacement is the
+                # operation's own-effect proof.
+                from ..recall import _g14_tier1_result
+                recomputed = _g14_tier1_result(
+                    [op for op in selected if op.get("op") == "replace"],
+                    facts, before_unit)
+                if recomputed is None or _compact(recomputed.replacement) != _compact(
+                        replacement):
+                    errors.add("CLAIM_OPERATION_EFFECT_MISSING")
+                else:
+                    expected.add(_compact(recomputed.replacement))
             try:
                 instantiated, issues = instantiate_policy_text(
                     str(rule.get("rule_id") or ""), operation, facts)
@@ -1358,7 +1420,11 @@ def replay_claims(edits: Sequence[Mapping[str, Any]], before_inspection: Any,
         # An inventory ``absent``/not-applicable alias at the same source site is
         # a stale negative assertion, not a second editable occurrence.  It must
         # not make the real survey target's occurrence ambiguous (G17 p846/p1326).
-        if str(target.get("state") or "") in {"absent", "not_applicable"}:
+        # ``satisfied`` proofs assert a negative fact with no edit to
+        # double-count; the absent-site clone and its resolved parent state the
+        # same fact twice (B12 G05:2 p162, FL-D698).
+        if str(target.get("state") or "") in {"absent", "not_applicable",
+                                              "satisfied", "already_satisfied"}:
             continue
         for key in target.get("operations") or ():
             duplicate_target_groups.setdefault(str(key), []).append(target)
@@ -1461,6 +1527,14 @@ def replay_claims(edits: Sequence[Mapping[str, Any]], before_inspection: Any,
             except Exception:  # noqa: BLE001 - missing copy reported separately
                 continue
         if len(after_values) > 1:
+            # Boundary-only difference (FL-D570): sibling edits covered different
+            # spans, so one final copy keeps the list-item enumeration prefix and
+            # the other does not, while the duplicated clause content itself is
+            # identical.  Compare the content form; a genuine divergence of the
+            # clause text still fails closed below.
+            comparable = {_duplicate_comparable(value) for value in after_values}
+            if len(comparable) <= 1:
+                continue
             duplicate_failures.append({
                 "rule_id": "", "location": edited_copies[0],
                 "locations": edited_copies,
@@ -1863,11 +1937,16 @@ def replay_claims(edits: Sequence[Mapping[str, Any]], before_inspection: Any,
         # Two targets for the same operation and paragraph must carry occurrence
         # identity.  Collapsing them to ``pN`` makes a single successful edit look
         # like proof for both targets and makes replay dependent on target order.
+        # Only ``needs_edit`` candidates count toward the ambiguity: satisfied
+        # proofs assert a negative fact (no edit to double-count), so two
+        # satisfied targets at one site are the same fact stated twice (B12
+        # G05:2 p162: the resolved target plus its absent-site clone, FL-D698).
         same_location_targets: dict[str, list[Mapping[str, Any]]] = {}
         for candidate in targets:
             candidate_keys = {str(key) for key in (candidate.get("operations") or ())}
             if (operation_id in candidate_keys and not candidate.get("out_of_scope")
-                    and str(candidate.get("state") or "") not in {"absent", "not_applicable"}
+                    and not candidate.get("plan_rejected")
+                    and str(candidate.get("state") or "") == "needs_edit"
                     and str(candidate.get("location") or "")):
                 same_location_targets.setdefault(str(candidate.get("location")), []).append(candidate)
         ambiguous_locations = set()
@@ -1903,6 +1982,17 @@ def replay_claims(edits: Sequence[Mapping[str, Any]], before_inspection: Any,
             # ``claimed_operations`` remains an attribution failure marker; only the
             # target's operation binding is authoritative for effect proof.
             if target.get("attribution_error"):
+                continue
+            if target.get("plan_rejected"):
+                # The plan stage deterministically rejected this candidate as a
+                # source site (e.g. TARGET_SOURCE_MISMATCH, FL-D696).  It is a
+                # refused claim, not an engine commitment: replaying it as a
+                # required site would demand an edit the planner already proved
+                # impossible, and worst-of-sites aggregation would flip a
+                # completed obligation to OPEN (B12 G16 p796).  The rejection
+                # stays visible in the target ledger; excluding it from the
+                # required set can only remove a contradictory demand, never
+                # fabricate a site.
                 continue
             keys = {str(key) for key in (target.get("operations") or ())}
             if operation_id not in keys:
@@ -2305,16 +2395,23 @@ def replay_claims(edits: Sequence[Mapping[str, Any]], before_inspection: Any,
                     str(getattr(span, "text", ""))
                     for span in getattr(before_inspection, "paragraphs", ())))
                 if old_wording and old_wording not in source_body:
+                    # FL-D651: bind the absence evidence to EVERY shared site, not
+                    # only the first.  The coverage ledger projects per site; a
+                    # proof tied to shared_sites[0] left the sibling business site
+                    # without evidence and invented FINAL_COVERAGE_UNRESOLVED
+                    # (B15 dev20 loop-2: G14:3 closed NOT_REQUIRED at p167 but the
+                    # single evidence row sat on p166 → site_evidence_missing).
                     evidence = [{"rule_id": record.spec.rule_id,
                                  "operation_id": record.spec.operation_id,
                                  "obligation_id": record.obligation_id,
                                  "proof_kind": "alternative_wording_absent",
-                                 "site_id": shared_sites[0]["location"],
-                                 "location": shared_sites[0]["location"],
+                                 "site_id": site["location"],
+                                 "location": site["location"],
                                  "searched_literals": [str(record.spec.old_text or "")],
                                  "match_count": 0,
                                  "document_sha256": str(getattr(
-                                     before_inspection, "source_sha256", ""))}]
+                                     before_inspection, "source_sha256", ""))}
+                                for site in shared_sites]
                     obligation_state[record.obligation_id] = {
                         "state": "PASS", "artifact_status": "NOT_REQUIRED",
                         "rule_id": record.spec.rule_id,

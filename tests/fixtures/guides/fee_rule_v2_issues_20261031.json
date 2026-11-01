@@ -1,0 +1,66 @@
+{
+ "error_code": "GUIDE_VALIDATION_UNCLEAN",
+ "clean": false,
+ "errors": [
+  {
+   "code": "GUIDE_SLOT_NOT_IN_TEXT",
+   "rule_id": "G12",
+   "detail": "slot token C类基金份额 does not occur in any new_text"
+  }
+ ],
+ "warnings": [],
+ "coverage_gaps": [],
+ "verification": {
+  "findings": [
+   {
+    "kind": "ambiguous_branch",
+    "description": "指南第148段原文为“如有有收取销售服务费，则替换为……”，存在明显笔误，且未说明非浮动管理费产品、有多个份额类别但不收取销售服务费时是否调整。候选解析将其解读为 has_service_fee=true 时替换，属于对歧义表述的猜测，应显式标记而非静默处理。",
+    "evidence_quote": "如有有收取销售服务费，则替换为：依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配，并加上返还基金份额持有人的销售服务费（如有）。",
+    "paragraphs": [
+     144,
+     145,
+     146,
+     147,
+     148
+    ],
+    "rule_id": "G15"
+   }
+  ],
+  "invalid_findings": 0,
+  "coverage_explanation": "候选的15个组覆盖了指南全部实质性段落：G01覆盖[23]-[31]释义份额类别定义及替换规则；G02覆盖[34]-[40]基本情况份额类别设置及替换规则；G03覆盖[43]-[48]调低赎回费率/删除备案；G04覆盖[49]-[51]删除不得互相转换条款；G05覆盖[58]-[66]申购费率表述（含[66]同前述说明的引用，已通过references指向G01/G02解决）；G06覆盖[67]-[72]赎回金额计算；G07覆盖[73]-[81]申购费用承担的单/多类别分支；G08覆盖[82]-[86]赎回费用两种原表述统一替换；G09覆盖[87]-[89]删除7日赎回费句子；G10覆盖[90]-[99]促销费率三种表述的单/多类别分支；G11覆盖[110]-[127]销售服务费删除与新增；G12覆盖[128]-[132]删除销售服务费用途条款；G13覆盖[133]-[135]收益分配表述替换；G14覆盖[136]-[143]浮动管理费产品清算分配；G15覆盖[144]-[148]非浮动管理费产品清算分配。未被任何组使用的段落为[0]-[22]、[32]-[33]、[41]-[42]、[52]-[57]、[100]-[109]、[149]，均为空白段落，无实质内容。"
+ },
+ "rounds": 3,
+ "rounds_detail": [
+  {
+   "round": 1,
+   "repair_context_used": false,
+   "errors": 1,
+   "warnings": 0,
+   "coverage_gaps": 0,
+   "findings": 0,
+   "invalid_findings": 0,
+   "clean": false
+  },
+  {
+   "round": 2,
+   "repair_context_used": true,
+   "errors": 12,
+   "warnings": 0,
+   "coverage_gaps": 0,
+   "findings": 2,
+   "invalid_findings": 0,
+   "clean": false
+  },
+  {
+   "round": 3,
+   "repair_context_used": true,
+   "errors": 1,
+   "warnings": 0,
+   "coverage_gaps": 0,
+   "findings": 1,
+   "invalid_findings": 0,
+   "clean": false
+  }
+ ],
+ "detail": "解析结果未通过确定性校验或独立验证，不能启用；请修正指引后重新上传解析。"
+}

@@ -39,7 +39,7 @@ describe('Review pending and draft safety', () => {
     renderReview()
     const generate = screen.getByRole('button', { name: '生成选择版合同' })
     expect(generate).toBeDisabled()
-    expect(screen.getAllByText(/待处理\s+1/).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/1 待决定/).length).toBeGreaterThan(0)
 
     fireEvent.click(screen.getAllByRole('button', { name: '接受' })[0])
     await waitFor(() => expect(generate).toBeEnabled())
@@ -63,7 +63,7 @@ describe('Review pending and draft safety', () => {
     revisionView = { ...revisionView, html: '<p>合同原文已更新</p>' }
     renderReview()
     expect(screen.getByRole('button', { name: '生成选择版合同' })).toBeDisabled()
-    expect(screen.getAllByText(/待处理\s+1/).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/1 待决定/).length).toBeGreaterThan(0)
     revisionView = { ...revisionView, html: '<p>合同原文</p>' }
   })
 })

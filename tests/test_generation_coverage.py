@@ -524,6 +524,50 @@ def test_unrecognized_obligation_state_is_normalized_to_unresolved():
     assert view.counts["UNRESOLVED"] == 1
 
 
+def test_one_of_alternative_absent_evidence_closes_every_shared_site():
+    """FL-D651: a ONE_OF historical alternative that legitimately needs nothing
+    binds its absence evidence to every shared business site.  The projection is
+    site-scoped; evidence pinned to only the first site used to invent
+    FINAL_COVERAGE_UNRESOLVED at the sibling site (B15 dev20 loop-2, G14:3 p167)."""
+    def _evidence(location):
+        return {"rule_id": "G14", "operation_id": "G14:3", "obligation_id": "G14:B2:O1",
+                "proof_kind": "alternative_wording_absent", "site_id": location,
+                "location": location,
+                "searched_literals": ["基金管理人可以适当调低基金申购费率和赎回费率。"],
+                "match_count": 0, "document_sha256": "doc"}
+
+    report = {
+        "obligations": {"records": [{
+            "obligation_id": "G14:B2:O1", "rule_id": "G14", "operation_id": "G14:3",
+            "completion": "ALREADY_SATISFIED", "targets": [],
+            "sites": ["p166", "p167"]}]},
+        "artifact_claim_replay": {"obligations": {"G14:B2:O1": {
+            "state": "PASS", "artifact_status": "NOT_REQUIRED",
+            "rule_id": "G14", "operation_id": "G14:3", "obligation_id": "G14:B2:O1",
+            "failure_code": "", "sites": ["p166", "p167"],
+            "evidence": [_evidence("p166"), _evidence("p167")]}}},
+    }
+    view = build_coverage_view(report)
+    assert [(e.site_id, e.state, e.basis) for e in view.entries] == [
+        ("p166", "ALREADY_SATISFIED", "artifact_evidence:alternative_wording_absent"),
+        ("p167", "ALREADY_SATISFIED", "artifact_evidence:alternative_wording_absent")]
+
+    # The pre-fix single-site shape keeps the unproven sibling open instead of
+    # masking it: the projection must never infer a second site from one row.
+    report["artifact_claim_replay"]["obligations"]["G14:B2:O1"]["evidence"] = [
+        _evidence("p166")]
+    report["obligations"]["records"][0]["targets"] = ["T166", "T167"]
+    report["targets"] = [
+        dict(target_id="T166", rule_id="G14", location="p166",
+             state="needs_edit", operations=["G14:3"]),
+        dict(target_id="T167", rule_id="G14", location="p167",
+             state="needs_edit", operations=["G14:3"]),
+    ]
+    view = build_coverage_view(report)
+    assert [(e.site_id, e.state) for e in view.entries] == [
+        ("p166", "ALREADY_SATISFIED"), ("p167", "UNRESOLVED")]
+
+
 def test_missing_occurrence_proof_is_not_hidden_by_same_location_pass():
     report = {
         "obligations": {"records": [{

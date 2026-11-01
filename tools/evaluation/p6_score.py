@@ -36,7 +36,7 @@ from lxml import etree
 W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 Q = lambda name: "{" + W + "}" + name
 COMPACT = re.compile(r"[\s\u3000]")
-SCORER_VERSION = "p6-score-2-site-complete-20261029"
+SCORER_VERSION = "p6-score-4-appendwindow-20261101"
 _SITE_INDEX_KEYS = ("paragraph_index", "paragraph", "para_index", "source_paragraph",
                     "source_paragraph_index", "source_index")
 _SITE_LOCATION_KEYS = ("paragraph_index", "paragraph", "para_index", "index", "paragraph_id")
@@ -103,11 +103,12 @@ def target_site(target: dict) -> dict:
             "from_compact_start": index == -1}
 
 
-def _site_text(paragraphs: list[str], index: int, *, after: int = 2) -> str:
+def _site_text(paragraphs: list[str], index: int, *, after: int = 2,
+               before: int = 1) -> str:
     """Target paragraph plus the neighbouring paragraphs an edit may create."""
     if index < 0 or index >= len(paragraphs):
         return ""
-    return "\n".join(paragraphs[max(0, index - 1):index + after + 1])
+    return "\n".join(paragraphs[max(0, index - before):index + after + 1])
 
 
 def _required_clauses(required: str) -> list[str]:
@@ -324,6 +325,19 @@ def _normalise_policy(value: str) -> str:
     value = re.sub(r"（即\s*365\s*天(?:，下同)?）", "", value)
     value = value.replace("不再继续收取", "不再收取")
     value = value.replace("持有超过一年", "持续持有期限超过一年")
+    # FL-D692 (a)/(b), mainline-authorised scorer equivalence layers (labels stay
+    # frozen; only this instrument changes):
+    # (b) Currency-split class names.  A product whose classes subdivide by
+    # currency writes "A类人民币、A类美元" where the template/label names
+    # "A类基金份额"; the fee obligation is class-letter-scoped, so drop the
+    # currency qualifier from class tokens (closed domain lexicon, mirrors the
+    # existing 认购/申购 canonicalisation), then dedupe the identical tokens the
+    # exhaustive split produces ("A类、A类" -> "A类").
+    value = re.sub(r"([A-ZＡ-Ｚ]类)(?:人民币|美元现汇|美元)", r"\1", value)
+    previous = None
+    while previous != value:
+        previous = value
+        value = re.sub(r"([A-ZＡ-Ｚ]类)(?:(?:和|、|及|与)+\1类)+", r"\1类", value)
     # "A类、D类基金份额" -> "类基金份额"; "A类" -> "类基金份额"-compatible form.
     value = re.sub(r"[A-ZＡ-Ｚ](?:类|份额)?(?:[、和及与][A-ZＡ-Ｚ](?:类|份额)?)*类?基金份额", "类基金份额", value)
     value = re.sub(r"[A-ZＡ-Ｚ]类基金份额", "类基金份额", value)
@@ -331,6 +345,21 @@ def _normalise_policy(value: str) -> str:
     # which is the same obligation as the template's "A类基金份额". Collapse the bare
     # form so a correct single-class append is not read as a miss.
     value = value.replace("类基金份额", "基金份额")
+    # FL-D692 (a): fold-vs-expanded enumeration equivalence.  After the letter
+    # collapse above, the label's expanded "C类基金份额和E类基金份额" reads
+    # "基金份额和基金份额" while the engine's folded "C类、E类基金份额" reads
+    # "基金份额" — run-collapse the connector-joined repeats so both canonical
+    # forms converge (the "和"-repeated subject was the B17/T003 false-miss
+    # mechanism the mainline review identified).  Class tokens that survived the
+    # letter collapse carry no obligation distinction by design (the scorer is
+    # letter-insensitive everywhere above), so any remaining bare "X类"/"X类份额"
+    # token resolves to the same canonical "基金份额"; the loop is idempotent
+    # because a token collapse can itself create a new connector-joined repeat.
+    previous = None
+    while previous != value:
+        previous = value
+        value = re.sub(r"基金份额(?:(?:和|、|及|与)+基金份额)+", "基金份额", value)
+        value = re.sub(r"[A-ZＡ-Ｚ](?:类基金份额|类份额|类|份额)", "基金份额", value)
     return value
 
 
@@ -558,7 +587,13 @@ def score_target(target: dict, facts: dict, final_paragraphs: list[str],
     # small clause window prevents a correct append from being reported missing
     # while still requiring the full policy text.  A body/summary target has its
     # own declared site and is scored separately.
-    append_text = _site_text(final_paragraphs, final_index, after=6)
+    # FL-D790 (mainline ruling 2026-11-01): DEFINITION_GROUP_APPEND_END legally
+    # rebinds an append to an earlier paragraph of the same subsection, with the
+    # three policy clauses verbatim and replay-verified.  The forward-only
+    # window (index-1..index+6) scored that legal landing as not_executed.
+    # Symmetrize the backward reach to 6 paragraphs; the forward window and all
+    # other paths are unchanged.
+    append_text = _site_text(final_paragraphs, final_index, after=6, before=6)
 
     if operation == "append":
         if not required:

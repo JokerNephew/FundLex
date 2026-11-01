@@ -14,11 +14,11 @@ from collections import Counter
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from .edit_summary import (DELIVERY_TEXT, edit_count,
-                           summary_detail)
+from .edit_summary import (OUTCOME_LABELS, delivery_text, edit_count,
+                           outcome_label, summary_detail)
 from .recall import ENGINE_ID as RECALL_ENGINE_ID
 from .store import (Conflict, NotFound, ReportJsonError, RunStore, SCHEMA_VERSION,
-                     engine_build, parse_report_json)
+                     engine_build, parse_report_json, servable_artifact_kinds)
 
 
 # One task document is a LEFT JOIN of its manifest row and its published
@@ -88,7 +88,9 @@ class TaskStore:
             for name, definition in {"engine_id": "TEXT NOT NULL DEFAULT ''",
                                      "guide_version_id": "TEXT NOT NULL DEFAULT ''",
                                      "guide_rules_sha256": "TEXT NOT NULL DEFAULT ''",
-                                     "mode": "VARCHAR(32) NOT NULL DEFAULT 'delivery'"}.items():
+                                     "mode": "VARCHAR(32) NOT NULL DEFAULT 'delivery'",
+                                     "disabled_rule_ids": "TEXT NOT NULL DEFAULT '[]'",
+                                     "model_preferences": "MEDIUMTEXT NOT NULL DEFAULT '{}'"}.items():
                 if name not in {row["name"] for row in db.execute("PRAGMA table_info(tasks)")}:
                     db.execute(f"ALTER TABLE tasks ADD COLUMN {name} {definition}")
 
@@ -100,7 +102,8 @@ class TaskStore:
         return row
 
     def create(self, owner, name, source, files, idempotency_key=None,
-               engine_id="", guide_version_id="", guide_rules_sha256="", mode="delivery"):
+               engine_id="", guide_version_id="", guide_rules_sha256="", mode="delivery",
+               disabled_rule_ids=None, model_preferences=None, model_preferences_factory=None):
         """Create a task bound to a rule source.
 
         ``source`` is the bound guide version for the recall-first engine; the
@@ -109,19 +112,27 @@ class TaskStore:
         """
         if mode not in {"delivery", "evaluation", "diagnosis"}:
             raise ValueError("TASK_MODE_INVALID")
-        binding = [engine_id, guide_version_id, guide_rules_sha256]
-        if mode != "delivery":
-            binding.append(mode)
+        disabled = sorted({str(item).strip() for item in (disabled_rule_ids or [])
+                           if str(item).strip()})
         source_version = _source_field(source, "version")
         source_sha256 = _source_field(source, "sha256")
-        payload = [name, source_version, source_sha256, files]
-        if any(binding):
-            # Legacy requests keep their previous fingerprint; a bound engine is
-            # part of the identity of a new-style task.
-            payload.append(binding)
-        fingerprint = hashlib.sha256(json.dumps(payload, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
         with self.store._connect() as db:
             db.execute("BEGIN IMMEDIATE")
+            if model_preferences_factory is not None:
+                model_preferences = model_preferences_factory(db)
+            binding = [engine_id, guide_version_id, guide_rules_sha256]
+            if disabled:
+                binding.append(disabled)
+            if model_preferences:
+                binding.append(model_preferences)
+            if mode != "delivery":
+                binding.append(mode)
+            payload = [name, source_version, source_sha256, files]
+            if any(binding):
+                # Legacy requests keep their previous fingerprint; a bound engine is
+                # part of the identity of a new-style task.
+                payload.append(binding)
+            fingerprint = hashlib.sha256(json.dumps(payload, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
             if idempotency_key:
                 old = db.execute("SELECT id,request_hash FROM tasks WHERE owner=? AND idempotency_key=?",
                                  (owner, idempotency_key)).fetchone()
@@ -131,10 +142,13 @@ class TaskStore:
                     return self._snapshot(db, self._owned(db, owner, old["id"]))
             task_id, now = uuid.uuid4().hex, time.time()
             db.execute("""INSERT INTO tasks(id,owner,name,ruleset_version,ruleset_sha256,engine_id,
-                guide_version_id,guide_rules_sha256,mode,idempotency_key,request_hash,created_at,updated_at)
-                VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                guide_version_id,guide_rules_sha256,mode,disabled_rule_ids,idempotency_key,request_hash,
+                created_at,updated_at,model_preferences)
+                VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                        (task_id, owner, name, source_version, source_sha256, engine_id,
-                        guide_version_id, guide_rules_sha256, mode, idempotency_key, fingerprint, now, now))
+                        guide_version_id, guide_rules_sha256, mode,
+                        json.dumps(disabled, ensure_ascii=False), idempotency_key, fingerprint, now, now,
+                        json.dumps(model_preferences or {}, ensure_ascii=False)))
             db.executemany("INSERT INTO task_files(task_id,client_id,ordinal,name,size) VALUES(?,?,?,?,?)",
                            [(task_id, item["client_id"], i, item["name"], item["size"]) for i, item in enumerate(files)])
             return self._snapshot(db, self._owned(db, owner, task_id))
@@ -353,7 +367,8 @@ class TaskStore:
             "report_url": (f"/api/tasks/{task_id}/documents/{document_id}/report"
                            if document_id and row["report_json"] else None),
             "downloads": ({kind: f"/api/tasks/{task_id}/documents/{document_id}/download/{kind}"
-                           for kind in kinds} if document_id else {}),
+                           for kind in servable_artifact_kinds(kinds, row["execution_mode"])}
+                          if document_id else {}),
             "source_sha256": row["source_sha256"],
             "phase": phase,
             "report_error": report_error,
@@ -432,9 +447,18 @@ class TaskStore:
             key=lambda doc: doc.get("document_updated_at", 0),
             default={},
         ).get("phase", "")
+        try:
+            disabled_rule_ids = json.loads(row["disabled_rule_ids"] or "[]")
+        except (TypeError, ValueError):
+            disabled_rule_ids = []
+        if not isinstance(disabled_rule_ids, list):
+            disabled_rule_ids = []
         return {"id": row["id"], "name": row["name"], "legacy": legacy, "ruleset_version": row["ruleset_version"],
                 "ruleset_sha256": row["ruleset_sha256"], "status": status,
                 "engine_id": row["engine_id"], "mode": row["mode"] or "delivery",
+                "disabled_rule_ids": disabled_rule_ids,
+                "model_preferences": json.loads(row["model_preferences"] or "{}")
+                    if "model_preferences" in row.keys() else {},
                 "guide_snapshot": {"version_id": row["guide_version_id"],
                                    "rules_sha256": row["guide_rules_sha256"]},
                 "upload_status": "complete" if uploaded == total else "sealed_incomplete" if row["sealed"] else "partial" if uploaded else "pending",
@@ -492,7 +516,8 @@ class TaskStore:
                          "report_url": (f"/api/batches/{batch_id}/documents/{row['id']}/report"
                                         if row["report_json"] else None),
                          "downloads": {kind: f"/api/batches/{batch_id}/documents/{row['id']}/download/{kind}"
-                                       for kind in artifacts.get(row["id"], ())},
+                                       for kind in servable_artifact_kinds(artifacts.get(row["id"], ()),
+                                                                           row["execution_mode"])},
                          "source_sha256": row["source_sha256"], "report_error": report_error,
                          "ordinal": row["ordinal"], "reason_codes": reasons})
         task = dict(batch) | {"id": task_id, "name": "历史任务 · " + datetime.fromtimestamp(batch["created_at"], timezone.utc).strftime("%Y-%m-%d %H:%M"),
@@ -891,12 +916,13 @@ class TaskStore:
                     if ordinal == 0:
                         db.execute("""INSERT INTO batches(id,owner,ruleset_version,ruleset_sha256,mode,status,request_hash,
                             created_at,updated_at,engine_build,schema_version,engine_id,guide_version_id,
-                            guide_rules_sha256) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                            guide_rules_sha256,disabled_rule_ids,model_preferences) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                                    (batch_id, owner, task["ruleset_version"], task["ruleset_sha256"],
                                     task["mode"] or "delivery",
                                     "paused" if task["paused"] else "queued",
                                     uuid.uuid4().hex, now, now, build, SCHEMA_VERSION, task["engine_id"],
-                                    task["guide_version_id"], task["guide_rules_sha256"]))
+                                    task["guide_version_id"], task["guide_rules_sha256"],
+                                    task["disabled_rule_ids"] or "[]", task["model_preferences"] or "{}"))
                         db.execute("INSERT INTO task_batches VALUES(?,?)", (task_id, batch_id))
                     document_id = uuid.uuid4().hex
                     db.execute("""INSERT INTO documents(id,batch_id,ordinal,filename,source_sha256,source_size,input_key,
@@ -940,30 +966,21 @@ class TaskStore:
                     bid = row["batch_id"]
                     pending = db.execute("SELECT COUNT(*) FROM documents WHERE batch_id=? AND status NOT IN ('succeeded','failed')", (bid,)).fetchone()[0]
                     db.execute("UPDATE batches SET status=?,updated_at=? WHERE id=?", ("completed" if not pending else "paused" if operation == "pause" else "queued", now, bid))
+                # A pause on a task whose batches are all already terminal must
+                # not leave a stale paused bit contradicting completed batches
+                # (FL-D553 B14-03).
+                self.store._heal_task_pause(db, now)
             return self._snapshot(db, self._owned(db, owner, task_id))
 
     def report(self, owner, task_id):
+        """结果总览.md：面向合同交付的阅读件，不含资格/错误码/引擎标识等技术信息。"""
         summary = self.get(owner, task_id)
         docs = self.documents(owner, task_id, page_size=100000)["items"]
+
         def safe(value):
             return str(value or "—").replace("|", "\\|").replace("\r", " ").replace("\n", " ")
-        lines = ["# FundLex 合同修改结果总览", "", f"- 任务：{safe(summary['name'])}",
-                 f"- 合同总数：{summary['total']}", f"- 已接收：{summary['uploaded']}",
-                 f"- 尚未上传：{summary['pending_upload']}", f"- 接收失败：{summary['rejected']}",
-                 f"- 处理结束：{summary['completed']}", f"- 失败关闭：{summary['failed']}",
-                 f"- 资格统计：{summary['qualification_counts']}", f"- 交付统计：{summary['delivery_counts']}",
-                 "", "## 每份合同的修改情况", "",
-                 "下表逐份列出合同改了几处、涉及哪些条款；逐处「改之前 / 改之后」的对照见"
-                 "结果包内「逐份修改说明」下的同名修改说明。", "",
-                 "「版本」列说明交付包里的最终版来自哪里，以及附带几份修订痕迹文件：", "",
-                 "- **引擎全量**：未在工作台逐条选择，最终版与引擎结果一致；"
-                 "附「（全量痕迹版）」，即引擎打算做的全部改动。",
-                 "- **按人工选择**：在工作台把部分修订改成了「不接受」，最终版按该选择生成；"
-                 "附「（全量痕迹版）」和「（选择修订版）」两份 —— 后者只保留你接受的修订，"
-                 "接受它的全部修订即可得到最终版。", "",
-                 "| 合同文件 | 交付完整性 | 版本 | 修改处数 | 涉及条款 |",
-                 "| --- | --- | --- | --- | --- |"]
-        rows = []
+
+        reports: dict[str, dict] = {}
         for doc in docs:
             report: dict = {}
             if doc["document_id"]:
@@ -971,6 +988,32 @@ class TaskStore:
                     report = self.store.get_report(owner, doc["batch_id"], doc["document_id"])
                 except (NotFound, ReportJsonError):
                     report = {}
+            reports[doc.get("document_id") or f"pending:{doc['name']}"] = report
+
+        outcomes: Counter = Counter()
+        for doc in docs:
+            key = doc.get("document_id") or f"pending:{doc['name']}"
+            outcomes[outcome_label(reports[key], doc)] += 1
+        lines = ["# FundLex 合同修改结果总览", "", f"- 任务：{safe(summary['name'])}",
+                 f"- 合同总数：{summary['total']}", f"- 已接收：{summary['uploaded']}",
+                 f"- 尚未上传：{summary['pending_upload']}", f"- 接收失败：{summary['rejected']}"]
+        counts = "；".join(f"{label} {outcomes.get(label, 0)} 份" for label in OUTCOME_LABELS)
+        extras = "；".join(f"{label} {outcomes[label]} 份"
+                           for label in ("处理进行中", "未接收") if outcomes.get(label))
+        lines += [f"- 处理结论：{counts}" + (f"；{extras}" if extras else ""),
+                  "", "## 每份合同的修改情况", "",
+                  "下表逐份列出合同改了几处、涉及哪些条款；逐处「改了什么地方、改之前 / 改之后、"
+                  "对应指引哪一条」的对照见结果包内「逐份修改说明/<合同名>/（修改说明）.csv」。", "",
+                  "「版本」列说明交付包里的最终版来自哪里，以及附带几份修订痕迹文件：", "",
+                  "- **引擎全量**：未在工作台逐条选择，最终版与引擎结果一致；"
+                  "附「（全量痕迹版）」，即引擎打算做的全部改动。",
+                  "- **按人工选择**：在工作台把部分修订改成了「不接受」，最终版按该选择生成；"
+                  "附「（全量痕迹版）」和「（选择修订版）」两份 —— 后者只保留你接受的修订，"
+                  "接受它的全部修订即可得到最终版。", "",
+                  "| 合同文件 | 交付完整性 | 版本 | 修改处数 | 涉及条款 |",
+                  "| --- | --- | --- | --- | --- |"]
+        for doc in docs:
+            report = reports[doc.get("document_id") or f"pending:{doc['name']}"]
             count = edit_count(report)
             detail = summary_detail(report) if report else "—"
             downloads = doc.get("downloads") or {}
@@ -978,30 +1021,24 @@ class TaskStore:
             # actually turned something down; otherwise the engine redline already
             # is the record of the choice.
             reviewed = "selected_redline" in downloads
-            rows.append([safe(doc["name"]),
-                         safe(DELIVERY_TEXT.get(doc["delivery_status"], doc["delivery_status"])),
-                         "按人工选择" if reviewed else "引擎全量",
-                         str(count), safe(detail)])
-            lines.append("| " + " | ".join(rows[-1]) + " |")
-        lines += ["", "处理结束、资格符合和合同可直接使用分别记录；仅交付完整并通过验证的合同开放下载。", "",
-                  "| 文件 | 上传 | 处理 | 资格 | 交付 | 原因码 |", "|---|---|---|---|---|---|"]
-        lines.extend("| " + " | ".join(safe(doc[k]) for k in ("name", "upload_status", "job_status", "eligibility", "delivery_status"))
-                     + " | " + safe(", ".join(doc["reason_codes"])) + " |" for doc in docs)
-        actions, candidates = Counter(), Counter()
-        for d in docs:
-            if not d["document_id"]:
-                continue
-            try:
-                report = self.store.get_report(owner, d["batch_id"], d["document_id"])
-            except (NotFound, ReportJsonError):
-                continue
-            for action in report.get("actions", []):
-                if isinstance(action, dict):
-                    actions[action.get("status") or action.get("processing_status") or "unknown"] += 1
-                    for candidate in action.get("candidates", []):
-                        if isinstance(candidate, dict):
-                            candidates[candidate.get("status") or candidate.get("result") or "unknown"] += 1
-        if actions or candidates:
-            lines.extend(["", "## 规则与候选核验汇总", "", f"- action 状态：{dict(actions)}",
-                          f"- 候选位置状态：{dict(candidates)}"])
+            lines.append("| " + " | ".join([
+                safe(doc["name"]),
+                # 交付完整性走单一事实源的人读映射（未知枚举兜底不透传英文）。
+                safe(delivery_text(report, doc)),
+                "按人工选择" if reviewed else "引擎全量",
+                str(count), safe(detail)]) + " |")
+        failed = [doc for doc in docs
+                  if outcome_label(reports[doc.get("document_id") or f"pending:{doc['name']}"], doc) == "失败"]
+        if failed:
+            lines += ["", "## 需要重新提交或人工处理的合同", ""]
+            for doc in failed:
+                lines.append(f"- 《{safe(doc['name'])}》处理未产出可用结果，未包含可交付文件。"
+                             "建议：在工作台重新上传该合同再试一次；若多次失败，"
+                             "请联系支持并提供任务名称与该合同文件名。")
+        failed_upload = [doc for doc in docs if doc["upload_status"] == "rejected"]
+        if failed_upload:
+            lines += ["", "## 未接收的文件", ""]
+            for doc in failed_upload:
+                lines.append(f"- 《{safe(doc['name'])}》未通过接收校验，未进入处理；"
+                             "请修正文件后重新上传。")
         return "\n".join(lines) + "\n"

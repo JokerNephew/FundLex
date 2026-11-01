@@ -27,6 +27,7 @@ Q = lambda local: f"{{{W}}}{local}"
 PARSER_VERSION = "regulation-docx-1"
 MAX_PART_BYTES = 64 * 1024 * 1024
 MAX_FILE_BYTES = 80 * 1024 * 1024
+MAX_EXPANDED_BYTES = 200 * 1024 * 1024
 
 
 class RegulationParseError(ValueError):
@@ -119,6 +120,17 @@ def parse_regulation_docx(path: str | Path, *, source_sha256: str = "") -> Regul
         with zipfile.ZipFile(io.BytesIO(raw)) as archive:
             if "word/document.xml" not in archive.namelist():
                 raise RegulationParseError("REGULATION_DOCX_PART_MISSING")
+            # Inspect the package before expanding any member: the upload lane
+            # enforces compression-ratio/expanded-size limits, and this parser
+            # must not become a memory-DoS bypass (A1-3).
+            members = archive.infolist()
+            if any(info.flag_bits & 0x1 for info in members):
+                raise RegulationParseError("REGULATION_DOCX_INVALID",
+                                           {"reason": "encrypted"})
+            if any(info.file_size > 100 * max(info.compress_size, 1) for info in members):
+                raise RegulationParseError("REGULATION_DOCX_COMPRESSION")
+            if sum(info.file_size for info in members) > MAX_EXPANDED_BYTES:
+                raise RegulationParseError("REGULATION_DOCX_EXPANDED_LIMIT")
             data = archive.read("word/document.xml")
     except (OSError, zipfile.BadZipFile, KeyError) as exc:
         raise RegulationParseError("REGULATION_DOCX_INVALID", {"reason": type(exc).__name__}) from exc

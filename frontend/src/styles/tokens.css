@@ -1,29 +1,120 @@
 :root {
-  font-family: Inter, "Noto Sans SC", system-ui, sans-serif;
+  font-family: var(--font-ui);
   color: #20252b;
   background: #f5f6f8;
   font-synthesis: none;
+
+  /* Brand */
   --brand: #b5471e;
   --brand-dark: #8e3213;
   --brand-soft: #fff1e9;
   --brand-soft-strong: #f8dfd1;
+
+  /* Text */
   --ink: #20252b;
   --muted: #68717c;
+
+  /* Surfaces */
   --surface: #fff;
   --surface-subtle: #f7f9fa;
+  --canvas: #f5f6f8;
+
+  /* Borders */
   --border: #dfe3e8;
   --border-strong: #cfd5db;
+
+  /* Semantic */
   --success: #2f7653;
   --success-soft: #e8f4ec;
   --warning: #8a5b14;
   --warning-soft: #fff5dc;
   --danger: #a13b35;
   --danger-soft: #fbeceb;
+
+  /* Type scale: page body 14, tables/secondary 13, notes 12, tiny badges 11 */
+  --text-2xs: 11px;
+  --text-xs: 12px;
+  --text-sm: 13px;
+  --text-md: 14px;
+  --text-lg: 16px;
+  --text-xl: 20px;
+  --text-2xl: 24px;
+  --leading-tight: 1.35;
+  --leading-normal: 1.6;
+
+  /* Spacing rhythm */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+
+  /* Radii */
+  --radius-sm: 6px;
+  --radius: 10px;
+  --radius-pill: 999px;
+
+  /* Table density (legacy aliases kept; list tokens below are the source of truth). */
+  --table-cell-y: 11px;
+  --table-cell-x: 10px;
+
+  /* Unified list/table tokens (FL-D731: 所有列表唯一取值入口) */
+  --list-header-bg: var(--surface-subtle);
+  --list-header-color: var(--muted);
+  --list-row-hover-bg: var(--surface-subtle);
+  --list-row-border: var(--border);
+  --list-cell-y: 10px;
+  --list-cell-x: 12px;
+  --list-title-weight: 600;
+  --list-meta-size: var(--text-2xs);
+
   --focus: #b5471e;
   --shadow: 0 4px 18px rgb(34 40 48 / 0.05);
+
+  /* ── 第三轮设计令牌镜像（源：docs/frontend/DESIGN_TOKENS_20261101.md，与 V1 app.css 同名同值）── */
+  /* 字体 */
+  --font-ui: Inter, "PingFang SC", "Microsoft YaHei UI", "Noto Sans SC", system-ui, sans-serif;
+  /* 动效（唯一规格：三档时长+唯一缓动+允许属性集，禁盒尺寸动画） */
+  --dur-press: 50ms;
+  --dur-fast: 120ms;
+  --dur-med: 200ms;
+  --dur-slow: 250ms;
+  --ease-standard: cubic-bezier(.2,.6,.25,1);
+  /* 表单控件全状态矩阵 */
+  --ctl-border: var(--border-strong);
+  --ctl-border-hover: #aeb7c0;
+  --ctl-border-focus: var(--brand);
+  --ctl-focus-ring: 0 0 0 3px rgba(181,71,30,.14);
+  --ctl-radius: 6px;
+  --ctl-height: 36px;
+  --ctl-pad-y: 6px;
+  --ctl-pad-x: 10px;
+  --ctl-placeholder: #98a1a9;
+  --ctl-disabled-bg: #f5f6f8;
+  /* 徽标唯一规格 */
+  --badge-size: 11px;
+  --badge-weight: 650;
+  --badge-pad: 3px 9px;
+  --badge-radius: 999px;
 }
 * { box-sizing: border-box; }
-body { margin: 0; min-width: 320px; }
+body { margin: 0; min-width: 320px; font-size: var(--text-md); line-height: var(--leading-normal); }
 button, input, select, textarea { font: inherit; }
 a { color: inherit; }
 :focus-visible { outline: 3px solid rgb(181 71 30 / 0.35); outline-offset: 2px; }
+
+/* Single-line 12px muted note. */
+.meta-line { margin: 0; color: var(--muted); font-size: var(--text-xs); line-height: var(--leading-normal); }
+
+/* Collapsible "advanced details" region: small muted text, dashed dividers. */
+.advanced-details { border-top: 1px dashed var(--border-strong); padding: var(--space-2) 0; color: var(--muted); font-size: var(--text-xs); line-height: var(--leading-normal); }
+.advanced-details + .advanced-details { margin-top: var(--space-2); }
+.advanced-details summary { cursor: pointer; display: inline-flex; align-items: center; gap: var(--space-1); color: var(--muted); font-weight: 600; }
+.advanced-details summary:hover { color: var(--brand-dark); }
+.advanced-details > * + :not(summary) { margin: var(--space-2) 0 0; padding-top: var(--space-2); border-top: 1px dashed var(--border); }
+.advanced-details code, .advanced-details .preserve { overflow-wrap: anywhere; }
+.advanced-details dl { margin: 0; }
+
+/* Stat card shared by overview grids. */
+.stat-card { padding: var(--space-4); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); }

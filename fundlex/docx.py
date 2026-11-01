@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from hashlib import sha256
 from pathlib import Path
 from tempfile import NamedTemporaryFile
-from typing import Any, Mapping, Sequence
+from typing import Any, Collection, Mapping, Sequence
 from urllib.parse import unquote
 import io
 import os
@@ -483,13 +483,31 @@ def _max_revision_id_in_parts(parts: Mapping[str, bytes], limits: ZipLimits) -> 
 
 
 def _read_parts(path: str | Path, limits: ZipLimits) -> dict[str, bytes]:
+    return _read_source_and_parts(path, limits)[1]
+
+
+def _read_source_and_parts(path: str | Path, limits: ZipLimits) -> tuple[bytes, dict[str, bytes]]:
+    """Read the container exactly once and return ``(source bytes, zip parts)``.
+
+    ``inspect_docx`` used to open the archive through ``ZipFile(path)`` and
+    then read the whole file a second time for the source hash (B13 F3).  Both
+    views now come from a single read.
+    """
     path = Path(path)
     if path.suffix.lower() != ".docx":
         raise DocxError("DOCX_ONLY")
     try:
         if path.stat().st_size > limits.max_file_bytes:
             raise DocxError("ZIP_FILE_LIMIT")
-        with zipfile.ZipFile(path) as archive:
+        source = path.read_bytes()
+    except OSError as exc:
+        raise DocxError("ZIP_INVALID", str(exc)) from exc
+    return source, _read_parts_bytes(source, limits)
+
+
+def _read_parts_bytes(source: bytes, limits: ZipLimits) -> dict[str, bytes]:
+    try:
+        with zipfile.ZipFile(io.BytesIO(source)) as archive:
             infos = archive.infolist()
             if len(infos) > limits.max_entries:
                 raise DocxError("ZIP_ENTRY_LIMIT")
@@ -781,8 +799,7 @@ def _enumerate_paragraphs(root: etree._Element, limits: ZipLimits, *,
 def inspect_docx(path: str | Path, *, full: bool = False, limits: ZipLimits | None = None,
                  allow_existing_revisions: bool = False) -> DocumentInspection:
     limits = limits or ZipLimits()
-    parts = _read_parts(path, limits)
-    source = Path(path).read_bytes()
+    source, parts = _read_source_and_parts(path, limits)
     _validate_package(parts, limits, full=full,
                       allow_existing_revisions=allow_existing_revisions)
     if allow_existing_revisions:
@@ -856,8 +873,10 @@ def validate_edit_plan(source: str | Path, edits: Sequence[Mapping[str, Any]],
     ``DocxError`` when the server-side verification record does not bind the
     edit; edits without a check are rejected rather than published.
     """
+    limits = limits or ZipLimits()
     inspection = inspect_docx(source, full=True, limits=limits,
                               allow_existing_revisions=allow_existing_revisions)
+    tree = _xml(_read_parts(source, limits)[DOCUMENT], limits)
     validated: list[dict[str, Any]] = []
     occupied: dict[str, list[tuple[int, int]]] = {}
     for incoming in edits:
@@ -907,8 +926,23 @@ def validate_edit_plan(source: str | Path, edits: Sequence[Mapping[str, Any]],
         old = paragraph.text[start:end]
         if old != edit.get("expected_old_text") or _sha(old.encode("utf-8")) != edit.get("expected_old_hash"):
             raise DocxError("EXPECTED_TEXT_MISMATCH")
+        if str(edit.get("expected_old_text", "")) == str(edit.get("replacement", "")):
+            # A replacement identical to the source text would publish a
+            # redline that changes nothing while the report claims an edit.
+            raise DocxError("NOOP_EDIT", location)
         if not any(segment.start <= start and end <= segment.end for segment in paragraph.segments):
             raise DocxError("EDIT_CROSSES_BARRIER")
+        try:
+            paragraph_node, between, _, _, _ = _edit_region(tree, edit, limits,
+                                                            overlay=allow_existing_revisions)
+        except DocxError:
+            # Geometry/structure failures keep their existing enforcement at
+            # generation; validation only adds the bookmark pairing rule here.
+            between = None
+        if between is not None:
+            # Raises EDIT_BOOKMARK_RANGE_BROKEN when the surviving half of a
+            # bookmark range sits outside the edited paragraph.
+            _bookmark_dropped_partners(tree, paragraph_node, between)
         if not _safe_grapheme_boundary(paragraph.text, start) or not _safe_grapheme_boundary(paragraph.text, end):
             raise DocxError("GRAPHEME_BOUNDARY_INVALID")
         for existing_start, existing_end in occupied.setdefault(location, []):
@@ -1012,9 +1046,17 @@ def _contains_revision(node: etree._Element) -> bool:
                for element in node.iter())
 
 
-def _apply_one(root: etree._Element, edit: Mapping[str, Any], del_id: int,
-               ins_id: int, author: str, when: str, limits: ZipLimits,
-               *, overlay: bool = False) -> None:
+def _edit_region(root: etree._Element, edit: Mapping[str, Any], limits: ZipLimits,
+                 *, overlay: bool = False
+                 ) -> tuple[etree._Element, list[etree._Element],
+                            list[tuple[etree._Element, int, int]], list[etree._Element], int]:
+    """Locate the writable run region for one edit.
+
+    A single geometry implementation serves both validation (bookmark pairing)
+    and the writer, so both sides accept or reject identical structure.
+    Returns the paragraph, its children between the outermost selected runs,
+    the selected text nodes, their runs and the first run's child index.
+    """
     paragraph = _paragraph_element(root, str(edit["location"]))
     # Offsets were validated against the accepted view.  Applying them to the
     # raw XML projection lets a foreign insertion/deletion earlier in the same
@@ -1050,7 +1092,6 @@ def _apply_one(root: etree._Element, edit: Mapping[str, Any], del_id: int,
     benign = {Q("bookmarkStart"), Q("bookmarkEnd"),
               Q("lastRenderedPageBreak"), Q("proofErr")}
     runs: list[etree._Element] = []
-    deleted_runs: list[etree._Element] = []
     for node, lo, hi in selected:
         run = node.getparent()
         if run is None or run.tag != Q("r") or run.getparent() is not paragraph:
@@ -1060,14 +1101,9 @@ def _apply_one(root: etree._Element, edit: Mapping[str, Any], del_id: int,
                 or any(tag not in {Q("t")} | benign for tag in content)):
             raise DocxError("RUN_STRUCTURE_UNSUPPORTED")
         runs.append(run)
-        left, right = max(start - lo, 0), min(end - lo, hi - lo)
-        deleted_runs.append(_make_text_run(run, (node.text or "")[left:right], deleted=True))
-    first, last = selected[0], selected[-1]
-    first_run = runs[0]
-    last_run = runs[-1]
     if len({id(run) for run in runs}) != len(runs):
         raise DocxError("RUN_STRUCTURE_UNSUPPORTED")
-    insert_at = paragraph.index(first_run)
+    insert_at = paragraph.index(runs[0])
     last_at = paragraph.index(runs[-1])
     between = list(paragraph)[insert_at:last_at + 1]
     # Navigation anchors and layout/proofing hints may sit between the selected
@@ -1078,6 +1114,80 @@ def _apply_one(root: etree._Element, edit: Mapping[str, Any], del_id: int,
     if any(_contains_revision(node) for node in between if node not in runs):
         raise DocxError("FOREIGN_REVISION_INTERSECTION",
                         str(edit.get("location") or ""))
+    return paragraph, between, selected, runs, insert_at
+
+
+def _bookmark_dropped_partners(root: etree._Element, paragraph: etree._Element,
+                               between: Sequence[etree._Element]) -> list[etree._Element]:
+    """Resolve bookmark halves whose partner is dropped inside an edited span.
+
+    Both ends of a bookmark range must die together: a survivor would be an
+    unpaired bookmarkStart/bookmarkEnd and silently break every cross-reference
+    to its name.  A partner inside the same edited paragraph is returned for
+    removal (edited paragraphs may drop navigation anchors).  Word also writes
+    bookmark halves as direct children of ``w:body`` (e.g. the ``_GoBack``
+    tail marker): such a partner carries no text and belongs to no non-target
+    paragraph, so removing it together with the dropped half is
+    conservation-safe and the pair is returned for removal as well (FL-D568).
+    A partner living inside any other paragraph cannot be touched without
+    breaking non-target conservation, so the edit is rejected fail-closed.
+    """
+    dropped = {node.get(Q("id"), ""): etree.QName(node).localname
+               for node in between
+               if node.tag in {Q("bookmarkStart"), Q("bookmarkEnd")}}
+    if not dropped:
+        return []
+    # lxml element proxies are not identity-stable across iterations, so use
+    # absolute paths on the (unmutated) tree to tell nodes apart.
+    tree = root.getroottree()
+    inside = {tree.getpath(node) for node in between}
+    paragraph_path = tree.getpath(paragraph)
+    partners: list[etree._Element] = []
+    for node in root.iter():
+        if not isinstance(node.tag, str) or node.tag not in {Q("bookmarkStart"), Q("bookmarkEnd")}:
+            continue
+        bookmark_id = node.get(Q("id"), "")
+        kind = etree.QName(node).localname
+        if bookmark_id not in dropped or tree.getpath(node) in inside:
+            continue
+        if kind == dropped[bookmark_id]:
+            continue
+        parent = node.getparent()
+        if parent is not None and (tree.getpath(parent) == paragraph_path
+                                   or parent.tag == Q("body")):
+            partners.append(node)
+        else:
+            raise DocxError("EDIT_BOOKMARK_RANGE_BROKEN", bookmark_id)
+    return partners
+
+
+def _apply_one(root: etree._Element, edit: Mapping[str, Any], del_id: int,
+               ins_id: int, author: str, when: str, limits: ZipLimits,
+               *, overlay: bool = False) -> list[str]:
+    """Apply one validated edit in place.
+
+    Returns the ids of bookmark halves removed at ``w:body`` level (partner of
+    a half dropped inside the edited span, FL-D568) so the non-target
+    skeleton check can normalize exactly the same nodes.
+    """
+    paragraph, between, selected, runs, insert_at = _edit_region(
+        root, edit, limits, overlay=overlay)
+    partners = _bookmark_dropped_partners(root, paragraph, between)
+    # Body-level partner halves (e.g. the trailing ``_GoBack`` tail, FL-D568)
+    # are not paragraph children: they shift no run index and are removed via
+    # their own parent below.
+    in_paragraph = [node for node in partners
+                    if node.getparent() is not None and node.getparent().tag != Q("body")]
+    shift = sum(1 for node in in_paragraph if paragraph.index(node) < insert_at)
+    start, end = int(edit["start"]), int(edit["end"])
+    deleted_runs = [
+        _make_text_run(run, (node.text or "")[max(start - lo, 0):min(end - lo, hi - lo)],
+                       deleted=True)
+        for (node, lo, hi), run in zip(selected, runs)
+    ]
+    first, last = selected[0], selected[-1]
+    first_run = runs[0]
+    last_run = runs[-1]
     prefix = (first[0].text or "")[:start - first[1]]
     suffix = (last[0].text or "")[end - last[1]:]
     replacement: list[etree._Element] = []
@@ -1090,8 +1200,17 @@ def _apply_one(root: etree._Element, edit: Mapping[str, Any], del_id: int,
         replacement.append(_make_text_run(last_run, suffix))
     for node in between:
         paragraph.remove(node)
+    body_removed: list[str] = []
+    for node in partners:
+        parent = node.getparent()
+        if parent is None:
+            continue
+        if parent.tag == Q("body"):
+            body_removed.append(node.get(Q("id"), ""))
+        parent.remove(node)
     for offset, node in enumerate(replacement):
-        paragraph.insert(insert_at + offset, node)
+        paragraph.insert(insert_at - shift + offset, node)
+    return body_removed
 
 
 def _accept_our_revisions(root: etree._Element, manifests: Sequence[Mapping[str, Any]]) -> None:
@@ -1171,14 +1290,25 @@ def _non_target_snapshot(root: etree._Element, edited: set[str]) -> dict[str, by
     return snapshot
 
 
-def _structure_snapshot(root: etree._Element, edited: set[str]) -> bytes:
+def _structure_snapshot(root: etree._Element, edited: set[str], *,
+                        body_dropped_bookmarks: Collection[str] = ()) -> bytes:
     """Keep the complete document topology, including target paragraph properties.
 
     Only ordinary text runs in edited paragraphs can be split by the editor.
     Everything else (including nested stories, fields and table properties) is
-    compared canonically across independently reopened packages.
+    compared canonically across independently reopened packages.  Bookmark
+    halves the writer removed at ``w:body`` level (partner of a span-dropped
+    half, FL-D568) are normalized out exactly as reported.
     """
     clone = deepcopy(root)
+    if body_dropped_bookmarks:
+        dropped = set(body_dropped_bookmarks)
+        body = clone.find(Q("body"))
+        if body is not None:
+            for node in list(body):
+                if node.tag in {Q("bookmarkStart"), Q("bookmarkEnd")} \
+                        and node.get(Q("id"), "") in dropped:
+                    body.remove(node)
     for location in edited:
         paragraph = _paragraph_element(clone, location)
         for node in list(paragraph):
@@ -1246,10 +1376,11 @@ def _accepted_offsets(text: str, start: int, end: int) -> tuple[int, int]:
     """Map barrier-view offsets to the plain accepted text.
 
     The inspection projection keeps ``BARRIER`` characters around text that
-    belongs to another author.  Plans use those offsets; the accepted final has
-    no barriers, so validation must remove exactly the barriers before the
-    target.  The mapping is explicit rather than silently assuming both views
-    share an origin.
+    belongs to another author or to a persistent barrier (tab, hyperlink,
+    field, ...).  Plans use those offsets; validation compares the plain view
+    with every barrier mark stripped, so it must remove exactly the barrier
+    marks before the target.  The mapping is explicit rather than silently
+    assuming both views share an origin.
     """
     clean_length = len(text.replace(BARRIER, ""))
 
@@ -1301,6 +1432,80 @@ def _accept_all_revision_parts(parts: Mapping[str, bytes], limits: ZipLimits) ->
     return replacements
 
 
+@dataclass(frozen=True)
+class TrackedBaseNormalization:
+    """Result of flattening pre-existing tracked changes into the base text."""
+
+    had_tracked_changes: bool
+    data: bytes
+    original_sha256: str
+    base_sha256: str
+    revisions_accepted: int
+    #: Bound inventory of the pre-existing revisions that were flattened.
+    source_revisions: tuple[dict[str, str], ...]
+
+
+def normalize_tracked_base(data: bytes, *, limits: ZipLimits | None = None) -> TrackedBaseNormalization:
+    """Return the accepted-view (base) bytes for a task input DOCX.
+
+    Task input normalization (2026-10-31 product decision): a contract that
+    still carries another department's tracked changes enters the recall
+    pipeline through its **accepted view** — every ``w:ins``/``w:moveTo`` keeps
+    its content, every ``w:del``/``w:moveFrom`` is dropped, and range markers,
+    cell markers and property-change snapshots are removed everywhere in the
+    package (main story, tables, SDT content, headers/footers, footnotes,
+    endnotes and comments).  The original marks are *not* carried into the
+    output; the engine's new revisions are the only tracked changes a delivery
+    ever shows.  A rejected-view (original) projection is intentionally not
+    offered this round.
+
+    Inputs without any revision tag are returned byte-identical with
+    ``had_tracked_changes False`` so the normal path keeps its exact behavior.
+    The transform reuses the Compare accept-all implementation and the same
+    full package validation before and after; the normalized package is written
+    through the deterministic ZIP writer, re-opened and must match the
+    transformed parts exactly, like Compare input preparation.  Unsupported
+    structures (for example a paragraph-mark merge the writer cannot join)
+    fail closed with a typed ``DocxError`` instead of passing silently.
+    """
+    from .compare.revisions import _accept_revisions, _write_normalized_package
+
+    limits = limits or ZipLimits()
+    original_sha256 = _sha(data)
+    parts = _read_parts_bytes(data, limits)
+    _validate_package(parts, limits, full=True, allow_existing_revisions=True)
+    inventory = _overlay_revision_inventory(parts, limits)
+    if not inventory:
+        return TrackedBaseNormalization(False, data, original_sha256,
+                                        original_sha256, 0, ())
+    changed = dict(parts)
+    accepted = 0
+    for name, content in parts.items():
+        if not name.endswith(".xml"):
+            continue
+        root = _xml(content, limits)
+        if not _has_word_revisions(root):
+            continue
+        accepted += _accept_revisions(root)
+        changed[name] = etree.tostring(root, encoding="UTF-8", xml_declaration=True)
+    # Full validation rejects any Word revision tag left behind, so a missed
+    # combination cannot leak tracked marks into the flattened base.
+    _validate_package(changed, limits, full=True)
+    with NamedTemporaryFile(prefix="fundlex-base-", suffix=".docx", delete=False) as temp:
+        normalized = Path(temp.name)
+    try:
+        _write_normalized_package(normalized, changed, changed[DOCUMENT])
+        reopened = _read_parts(normalized, limits)
+        _validate_package(reopened, limits, full=True)
+        if reopened != changed:
+            raise DocxError("REVISION_NORMALIZATION_MISMATCH")
+        output = normalized.read_bytes()
+    finally:
+        normalized.unlink(missing_ok=True)
+    return TrackedBaseNormalization(True, output, original_sha256,
+                                    _sha(output), accepted, inventory)
+
+
 def generate_artifacts(source: str | Path, plan: ValidatedPlan, redline_path: str | Path,
                        final_path: str | Path, *, author: str = "资金清算部",
                        limits: ZipLimits | None = None,
@@ -1336,14 +1541,23 @@ def generate_artifacts(source: str | Path, plan: ValidatedPlan, redline_path: st
                          if allow_existing_revisions else ())
     next_id = (_max_revision_id_in_parts(parts, limits) if allow_existing_revisions
                else _max_revision_id(original))
+    # The selective-review contract requires an odd ``del_id`` with
+    # ``ins_id == del_id + 1``.  Foreign revision ids carry no parity
+    # guarantee, so the first generated pair starts at the next odd number
+    # above ``next_id`` instead of blindly adding one.
+    base_id = next_id + 1
+    if base_id % 2 == 0:
+        base_id += 1
     root = deepcopy(original)
     now = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
     manifest: list[dict[str, Any]] = []
     try:
+        body_dropped_bookmarks: set[str] = set()
         for number, edit in enumerate(sorted(plan.edits, key=lambda e: (e["location"], -e["start"])), start=1):
-            del_id, ins_id = next_id + number * 2 - 1, next_id + number * 2
-            _apply_one(root, edit, del_id, ins_id, author, now, limits,
-                       overlay=allow_existing_revisions)
+            del_id, ins_id = base_id + number * 2 - 2, base_id + number * 2 - 1
+            body_dropped_bookmarks.update(
+                _apply_one(root, edit, del_id, ins_id, author, now, limits,
+                           overlay=allow_existing_revisions))
             manifest.append({"edit_id": edit.get("edit_id", f"edit-{number}"), "location": edit["location"],
                              "start": edit["start"], "end": edit["end"], "expected_old_text": edit["expected_old_text"],
                              "replacement": edit["replacement"], "template_id": edit.get("template_id", ""),
@@ -1417,8 +1631,12 @@ def generate_artifacts(source: str | Path, plan: ValidatedPlan, redline_path: st
             _accept_all_revisions(baseline)
             comparison = accepted
         edited = {str(edit["location"]) for edit in plan.edits}
-        skeleton = _structure_snapshot(baseline, edited)
-        if skeleton != _structure_snapshot(comparison, edited) or skeleton != _structure_snapshot(final_reopen, edited):
+        skeleton = _structure_snapshot(baseline, edited,
+                                       body_dropped_bookmarks=body_dropped_bookmarks)
+        if skeleton != _structure_snapshot(comparison, edited,
+                                           body_dropped_bookmarks=body_dropped_bookmarks) \
+                or skeleton != _structure_snapshot(final_reopen, edited,
+                                                   body_dropped_bookmarks=body_dropped_bookmarks):
             raise DocxError("NON_TARGET_STRUCTURE_CHANGED")
         source_snapshot = _non_target_snapshot(baseline, edited)
         if source_snapshot != _non_target_snapshot(comparison, edited) or source_snapshot != _non_target_snapshot(final_reopen, edited):
@@ -1427,22 +1645,35 @@ def generate_artifacts(source: str | Path, plan: ValidatedPlan, redline_path: st
         source_projection = {span.location: span.text for span in
                              _enumerate_paragraphs(original, limits,
                                                    overlay=allow_existing_revisions)[0]}
+        # Compare expected against actual in one shared plain view.  Persistent
+        # barriers (w:tab, hyperlink results, field markers, ...) survive into
+        # the final package, so stripping their barrier marks from both sides
+        # maps plan offsets, expectations and the reopened final onto the same
+        # coordinate system.
         for location, old_text in source_texts.items():
-            expected = old_text
+            expected = old_text.replace(BARRIER, "")
             coordinates = source_projection.get(location, old_text)
             for edit in sorted((e for e in plan.edits if e["location"] == location), key=lambda e: -e["start"]):
                 start, end = _accepted_offsets(coordinates, int(edit["start"]), int(edit["end"]))
                 expected = expected[:start] + str(edit["replacement"]) + expected[end:]
-            if final_texts.get(location) != expected:
+            final_text = final_texts.get(location)
+            if final_text is None or final_text.replace(BARRIER, "") != expected:
                 raise DocxError("FINAL_TEXT_MISMATCH", location)
         for location in edited:
-            expected_formats = _text_formats(baseline, location, limits)
+            baseline_view = source_texts[location]
+            expected_formats = [fmt for char, fmt in
+                                zip(baseline_view, _text_formats(baseline, location, limits))
+                                if char != BARRIER]
             barrier_text = source_projection.get(location, "")
             for edit in sorted((e for e in plan.edits if e["location"] == location), key=lambda e: -e["start"]):
                 start, end = _accepted_offsets(barrier_text, int(edit["start"]), int(edit["end"]))
                 inherited = expected_formats[start - 1 if start == end else start]
                 expected_formats[start:end] = [None if char == "\n" else inherited for char in str(edit["replacement"])]
-            if _text_formats(final_reopen, location, limits) != expected_formats:
+            final_view = final_texts.get(location, "")
+            final_formats = [fmt for char, fmt in
+                             zip(final_view, _text_formats(final_reopen, location, limits))
+                             if char != BARRIER]
+            if final_formats != expected_formats:
                 raise DocxError("RUN_FORMAT_CHANGED", location)
         return ArtifactValidation(_sha(redline_path.read_bytes()), _sha(final_path.read_bytes()),
                                   tuple(manifest), ("package", "revisions", "final_equivalence", "non_target",

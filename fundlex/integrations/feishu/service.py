@@ -69,16 +69,33 @@ class FeishuService:
     provider = "feishu"
 
     def __init__(self, store, tasks, task_service, client, *, base_url: str = "",
-                 compare_store=None, guide_store=None):
+                 compare_store=None, guide_store=None, app_clients=None):
         self.store = store
         self.tasks = tasks
         self.task_service = task_service
         self.client = client
+        self._app_clients = app_clients
         self.integrations = IntegrationStore(store)
         self.compare = compare_store
         self.guides = guide_store
         self.base_url = base_url or os.environ.get("FUNDLEX_PUBLIC_BASE_URL", "")
         self._stop = threading.Event()
+
+    def set_app_clients(self, resolver) -> None:
+        """Route sends for an onboarded user app by the chat's tenant."""
+        self._app_clients = resolver
+
+    def _client(self, tenant_key: str = ""):
+        resolver = self._app_clients
+        if resolver is not None and tenant_key:
+            try:
+                client = resolver(tenant_key)
+            except Exception as exc:  # routing must fall back, never break a reply
+                log.warning("Feishu user app routing failed error=%s", type(exc).__name__)
+                client = None
+            if client is not None:
+                return client
+        return self.client
 
     def install(self) -> None:
         global _ACTIVE
@@ -435,11 +452,11 @@ class FeishuService:
                              new_message: bool = False) -> None:
         card = self._card_for_draft(draft)
         if new_message and draft.get("card_message_id"):
-            self._retire_card(draft["card_message_id"])
+            self._retire_card(draft["card_message_id"], tenant_key=draft.get("tenant_key") or "")
         message_id = "" if new_message else (draft.get("card_message_id") or "")
         if message_id:
             try:
-                self.client.update_card(message_id, card)
+                self._client(event.tenant_key).update_card(message_id, card)
                 return
             except Exception as exc:
                 log.warning("Feishu card update failed message_id=%s error=%s", message_id, type(exc).__name__)
@@ -498,11 +515,12 @@ class FeishuService:
         # Always use a fresh message for the next step so it remains visible.
         self._send_card_for_draft(event, self.integrations.draft(draft["id"]), new_message=True)
 
-    def _retire_card(self, message_id: str, reason: str = "这张卡片已被新卡片替代。") -> None:
+    def _retire_card(self, message_id: str, reason: str = "这张卡片已被新卡片替代。", *,
+                     tenant_key: str = "") -> None:
         if not message_id:
             return
         try:
-            self.client.update_card(message_id, retired_card(reason))
+            self._client(tenant_key).update_card(message_id, retired_card(reason))
         except Exception as exc:
             log.warning("Feishu card retire failed message_id=%s error=%s",
                         message_id, type(exc).__name__)
@@ -511,8 +529,8 @@ class FeishuService:
         """Keep exactly one pinned task-centre card for this private chat."""
         if not message_id:
             return
-        pin = getattr(self.client, "pin_message", None)
-        unpin = getattr(self.client, "unpin_message", None)
+        pin = getattr(self._client(event.tenant_key), "pin_message", None)
+        unpin = getattr(self._client(event.tenant_key), "unpin_message", None)
         if pin is None or unpin is None:
             return
         key = f"menu_card:{event.tenant_key}:{event.open_id}"
@@ -535,7 +553,7 @@ class FeishuService:
         if not message_id:
             return
         try:
-            self.client.update_card(message_id, menu_card(active))
+            self._client(event.tenant_key).update_card(message_id, menu_card(active))
         except Exception as exc:
             log.warning("Feishu pinned menu refresh failed chat_id=%s error=%s",
                         event.chat_id, type(exc).__name__)
@@ -548,7 +566,7 @@ class FeishuService:
             return
         self.integrations.update_draft(draft["id"], status="CANCELLED", error_code="")
         self._refresh_pinned_menu(event, None)
-        self._retire_card(draft.get("card_message_id") or "", "本次任务草稿已取消。")
+        self._retire_card(draft.get("card_message_id") or "", "本次任务草稿已取消。", tenant_key=event.tenant_key)
         try:
             self.integrations.discard_draft_files(draft["id"])
         except Exception as exc:
@@ -583,7 +601,7 @@ class FeishuService:
         card = menu_card(active, note)
         if message_id:
             try:
-                self.client.update_card(message_id, card)
+                self._client(event.tenant_key).update_card(message_id, card)
                 return
             except Exception:
                 pass
@@ -618,7 +636,7 @@ class FeishuService:
                for item in self.integrations.draft_files(draft["id"])):
             return
         try:
-            data, remote_name = self.client.download_message_resource(event.message_id, file_key, "file")
+            data, remote_name = self._client(event.tenant_key).download_message_resource(event.message_id, file_key, "file")
         except Exception as exc:
             log.warning("Feishu file download failed draft=%s error=%s", draft["id"], type(exc).__name__)
             self._send(event, text_card("文件下载失败", "飞书没有返回该文件内容，请重新发送文件消息。"))
@@ -680,7 +698,7 @@ class FeishuService:
                for item in self.integrations.draft_files(draft["id"])):
             return
         try:
-            data, remote_name = self.client.download_message_resource(event.message_id, file_key, "file")
+            data, remote_name = self._client(event.tenant_key).download_message_resource(event.message_id, file_key, "file")
         except Exception as exc:
             log.warning("Feishu compare download failed draft=%s error=%s", draft["id"], type(exc).__name__)
             self._send(event, compare_prompt_card(draft["id"], side, left, right,
@@ -737,7 +755,7 @@ class FeishuService:
                for item in self.integrations.draft_files(draft["id"])):
             return
         try:
-            data, remote_name = self.client.download_message_resource(event.message_id, file_key, "file")
+            data, remote_name = self._client(event.tenant_key).download_message_resource(event.message_id, file_key, "file")
         except Exception as exc:
             log.warning("Feishu guide download failed draft=%s error=%s", draft["id"], type(exc).__name__)
             self._send(event, guide_prompt_card(draft["id"], error="文件下载失败，请重新发送。"))
@@ -809,9 +827,9 @@ class FeishuService:
             self.integrations.add_outbox("task_status", task["id"],
                                          {"task_id": task["id"], "task_type": channel_type}, dedupe)
             card = self._task_status_card(owner, task["id"], mode)
-            message_id = self.client.send_card(event.chat_id, card)
+            message_id = self._client(event.tenant_key).send_card(event.chat_id, card)
             self.integrations.set_channel_card(task["id"], message_id)
-            self._retire_card(draft_card_id, "任务已创建，请使用下方最新的状态卡。")
+            self._retire_card(draft_card_id, "任务已创建，请使用下方最新的状态卡。", tenant_key=event.tenant_key)
             try:
                 self.integrations.discard_draft_files(draft["id"])
             except Exception:
@@ -819,7 +837,7 @@ class FeishuService:
         except Exception as exc:
             if linked_task_id:
                 self.integrations.update_draft(draft["id"], error_code=type(exc).__name__)
-                self._retire_card(draft_card_id, "任务已创建，状态卡正在自动重试。")
+                self._retire_card(draft_card_id, "任务已创建，状态卡正在自动重试。", tenant_key=event.tenant_key)
                 self._send_best_effort(event, text_card("任务已创建", "状态卡片发送失败，后台会自动重试；请稍后查看任务状态。"))
                 return "submitted"
             self.integrations.update_draft(draft["id"], status="COLLECTING", error_code=type(exc).__name__)
@@ -874,9 +892,9 @@ class FeishuService:
                                          {"task_id": target_id, "task_type": "compare"},
                                          f"task_status:compare:{target_id}:queued")
             card = compare_status_card(self.compare.get(owner, target_id), self.base_url)
-            message_id = self.client.send_card(event.chat_id, card)
+            message_id = self._client(event.tenant_key).send_card(event.chat_id, card)
             self.integrations.set_channel_card(target_id, message_id)
-            self._retire_card(draft_card_id, "对比任务已创建，请使用下方最新的状态卡。")
+            self._retire_card(draft_card_id, "对比任务已创建，请使用下方最新的状态卡。", tenant_key=event.tenant_key)
             try:
                 self.integrations.discard_draft_files(draft["id"])
             except Exception:
@@ -917,9 +935,9 @@ class FeishuService:
                                          {"task_id": target_id, "task_type": "guide"},
                                          f"task_status:guide:{target_id}:queued")
             card = guide_status_card(run, self.base_url)
-            message_id = self.client.send_card(event.chat_id, card)
+            message_id = self._client(event.tenant_key).send_card(event.chat_id, card)
             self.integrations.set_channel_card(target_id, message_id)
-            self._retire_card(draft_card_id, "指引任务已创建，请使用下方最新的状态卡。")
+            self._retire_card(draft_card_id, "指引任务已创建，请使用下方最新的状态卡。", tenant_key=event.tenant_key)
             try:
                 self.integrations.discard_draft_files(draft["id"])
             except Exception:
@@ -1000,7 +1018,7 @@ class FeishuService:
                               has_prev=page > 1, start=start)
         if message_id:
             try:
-                self.client.update_card(message_id, card)
+                self._client(event.tenant_key).update_card(message_id, card)
                 return
             except Exception:
                 pass
@@ -1097,7 +1115,7 @@ class FeishuService:
                         detail = self.compare.get_pair(owner, pair["id"])
                         payload = detail.get("result") or {}
                         data = json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
-                        self.client.send_file(event.chat_id, f"合同对比-{index}-{pair['id'][:8]}.json", data)
+                        self._client(event.tenant_key).send_file(event.chat_id, f"合同对比-{index}-{pair['id'][:8]}.json", data)
                         sent += 1
                         self._send_gap()
                     except Exception as exc:
@@ -1120,7 +1138,7 @@ class FeishuService:
                         if not path.is_file():
                             failures.append((filename, artifact_kind, "ARTIFACT_MISSING"))
                             continue
-                        self.client.send_file(event.chat_id, filename, path.read_bytes())
+                        self._client(event.tenant_key).send_file(event.chat_id, filename, path.read_bytes())
                         sent += 1
                         self._send_gap()
                     except Exception as exc:
@@ -1169,7 +1187,7 @@ class FeishuService:
                             # TaskStore.artifact is the task-scoped facade over the
                             # one verified RunStore accessor used by HTTP.
                             data, filename = self.tasks.artifact(owner, task_id, document_id, download_kind)
-                            self.client.send_file(event.chat_id, filename, data)
+                            self._client(event.tenant_key).send_file(event.chat_id, filename, data)
                             sent += 1
                             self._send_gap()
                             log.info("Feishu send result task=%s document=%s kind=%s status=sent",
@@ -1279,9 +1297,9 @@ class FeishuService:
                                                 "evaluation" if task_type == "evaluation" else "delivery")
                     card = self._task_status_card(channel["owner_user_id"], task_id, mode)
                 if channel.get("card_message_id"):
-                    self.client.update_card(channel["card_message_id"], card)
+                    self._client(channel.get("tenant_key") or "").update_card(channel["card_message_id"], card)
                 else:
-                    message_id = self.client.send_card(channel["chat_id"], card)
+                    message_id = self._client(channel.get("tenant_key") or "").send_card(channel["chat_id"], card)
                     self.integrations.set_channel_card(task_id, message_id)
                 self.integrations.finish_outbox(item["id"], fencing_token=int(item["fencing_token"]))
                 sent += 1
@@ -1332,7 +1350,7 @@ class FeishuService:
                             "p2p", message_id, "text", {"text": text})
 
     def _send(self, event: MessageEvent, card: dict[str, Any]) -> str:
-        return self.client.send_card(event.chat_id, card)
+        return self._client(event.tenant_key).send_card(event.chat_id, card)
 
     def _send_best_effort(self, event: MessageEvent, card: dict[str, Any]) -> None:
         try:

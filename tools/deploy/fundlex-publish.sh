@@ -160,12 +160,15 @@ migrate_schema() {
     "$DST/.venv/bin/python" -I -B -c '
 import sys
 from pathlib import Path
-sys.path.insert(0, str(Path.cwd().resolve()))
+# argv[-1] 必为 $DST（下方命令尾），生产 cwd 与其一致；显式传入避免隔离
+# 环境（无 PYTHONPATH/cwd≠DST）下被 editable pth 回落到其它工作树（FL-D800）。
+sys.path.insert(0, str(Path(sys.argv[1]).resolve()))
 try:
     from fundlex.config import local_data_dir, auth_db_target
     from fundlex.store import RunStore
     from fundlex.tasks import TaskStore
     from fundlex.integrations import IntegrationStore
+    from fundlex.integrations.feishu.onboarding import FeishuAppOnboarding
     from fundlex.compare.store import CompareStore
     from fundlex.guide_generation.store import GuideGenerationStore
     from fundlex import guide_store
@@ -174,6 +177,7 @@ try:
     store = RunStore(local_data_dir())
     TaskStore(store)
     IntegrationStore(store)
+    FeishuAppOnboarding(store)
     CompareStore(store)
     GuideGenerationStore(store).ensure_schema()
     guide_store._ensure_tables(store)
@@ -183,7 +187,7 @@ try:
 except Exception:
     # Do not echo database targets, driver errors or configuration values.
     raise SystemExit("fundlex-publish: serial schema initialization failed") from None
-'
+' "$DST"
 }
 
 stop_services() {
@@ -221,10 +225,19 @@ capture_restart_baselines() {
 }
 
 check_api() {
-  local code
-  code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 \
-    http://127.0.0.1:8010/api/capabilities) || return 1
-  [[ "$code" = 2?? ]] || { fail "API capabilities check failed ($code)"; return 1; }
+  local code attempt
+  # Fresh trees cold-import under production load; uvicorn child workers can
+  # take far longer than a single probe to become ready. Retry the liveness
+  # endpoint for up to ~120 seconds instead of failing the whole release on
+  # one early probe.
+  for attempt in $(seq 1 24); do
+    code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 \
+      http://127.0.0.1:8010/api/capabilities || true)
+    if [[ "$code" = 2?? ]]; then return 0; fi
+    sleep 5
+  done
+  fail "API capabilities check failed ($code)"
+  return 1
 }
 
 start_services() {
@@ -384,7 +397,26 @@ publish_exit() {
     printf '%s\n' preflight-failed > "$transaction/status"
   fi
   [ -z "$transaction" ] || echo "fundlex-publish: retained transaction $transaction"
+  prune_retained_transactions
   exit "$status"
+}
+
+# FL-D724/801: 每次发布会留存一份事务（~196M），历史无清理机制曾致磁盘 100%、
+# worker 存储闸 fail-closed、双重发布事故。发布完成后（成功或失败）自动保留
+# 最新 $RETAINED_KEEP（默认 3）份，其余清删；当前事务永不被自己清删。
+RETAINED_KEEP=${FUNDLEX_PUBLISH_RETAINED_KEEP:-3}
+prune_retained_transactions() {
+  local parent keep current oldest
+  parent=$(dirname "$DST")
+  keep="${RETAINED_KEEP}"
+  current="${transaction:-}"
+  # 仅清理本发布器形态的留存目录，不动别物。
+  while read -r oldest; do
+    [ -n "$oldest" ] || continue
+    [ "$oldest" = "$current" ] && continue
+    rm -rf "$oldest"
+    echo "fundlex-publish: pruned old retained transaction $oldest" >&2
+  done < <(ls -1dt "$parent"/.fundlex-publish-* 2>/dev/null | tail -n +$((keep + 1)))
 }
 
 main() {

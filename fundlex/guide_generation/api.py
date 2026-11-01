@@ -16,6 +16,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, Response
 from pydantic import BaseModel
 
 from ..store import Conflict, NotFound, RunStore
+from ..upload_validation import MAX_FILENAME_BYTES
 from .human import rebuild_evidence, update_guide_item
 from .service import (ALLOWED_SUFFIXES, MAX_PUBLIC_CONFIG_CHARS, MAX_REGULATION_BYTES,
                       ArtifactIntegrityError, candidate_engine_identity, create_run,
@@ -101,7 +102,7 @@ def register_guide_generation_routes(application, store: RunStore,
     def run_for(user: str, run_id: str) -> dict[str, Any]:
         try:
             return gg.get_run_for_owner(user, run_id)
-        except Exception:
+        except NotFound:
             raise HTTPException(404, "guide generation run not found") from None
 
     @application.post("/api/guide-generation/runs", status_code=201)
@@ -110,6 +111,11 @@ def register_guide_generation_routes(application, store: RunStore,
             config: str = Form("{}"),
             user: str = Depends(user_dependency)):
         filename = (file.filename or "").strip()
+        # Enforce the same filename byte cap as the Web task upload path;
+        # MySQL-backed stores reject oversized names with a 500 otherwise
+        # (A4-F01: this entry bypassed validate_docx_upload).
+        if len(filename.encode("utf-8")) > MAX_FILENAME_BYTES:
+            raise HTTPException(422, "UPLOAD_FILENAME_TOO_LONG")
         suffix = Path(filename).suffix.lower()
         if suffix not in ALLOWED_SUFFIXES:
             raise HTTPException(422, "REGULATION_TYPE_UNSUPPORTED")

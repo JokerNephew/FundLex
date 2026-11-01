@@ -19,13 +19,19 @@ function validateFiles(files: File[], maxBytes?: number): { accepted: File[]; is
   const seen = new Set<string>()
   for (const file of files) {
     const key = file.name.toLowerCase()
-    if (!/\.docx$/i.test(file.name) || (file.type && file.type !== DOCX && file.type !== 'application/octet-stream')) issues.push({ file, message: '只支持 DOCX 文件。' })
-    else if (!file.size) issues.push({ file, message: '空文件无法上传。' })
-    else if (maxBytes && file.size > maxBytes) issues.push({ file, message: `文件超过 ${Math.round(maxBytes / 1024 / 1024)} MB 限制。` })
-    else if (seen.has(key)) issues.push({ file, message: '同一批次中存在同名文件。' })
+    if (!/\.docx$/i.test(file.name) || (file.type && file.type !== DOCX && file.type !== 'application/octet-stream')) issues.push({ file, message: '只收 DOCX 文件' })
+    else if (!file.size) issues.push({ file, message: '这个文件是空的' })
+    else if (maxBytes && file.size > maxBytes) issues.push({ file, message: `这个文件超过 ${Math.round(maxBytes / 1024 / 1024)} MB` })
+    else if (seen.has(key)) issues.push({ file, message: '这次选的文件里有重名的' })
     else { seen.add(key); accepted.push(file) }
   }
   return { accepted, issues }
+}
+
+function formatSize(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) return '0 KB'
+  if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`
+  return `${Math.max(1, Math.round(bytes / 1024))} KB`
 }
 
 function csvEscape(value: unknown): string {
@@ -101,7 +107,7 @@ export function NewTaskPage() {
     event.preventDefault()
     if (!name.trim() && !taskId) { setError('请填写任务名称。'); return }
     if (!files.length) { setError('请至少选择一个可上传的 DOCX 文件。'); return }
-    if (!taskId && (guide.error || !guide.data?.current?.id)) { setError('当前指引不可用，请先在指引配置中完成解析或启用。'); return }
+    if (!taskId && (guide.error || !guide.data?.current?.id)) { setError('还没可用的修改指引，先去「修改指引」页传一份或启用一份。'); return }
     setBusy(true); setError(''); setProgress(0)
     try {
       const uploadIds = files.map((file) => clientIds[file.name.toLowerCase()] || asId(file))
@@ -141,7 +147,7 @@ export function NewTaskPage() {
       if (rejected.length) {
         const rejectedIds = new Set(rejected.map((receipt) => receipt.client_id))
         setFiles((current) => current.filter((file) => rejectedIds.has(clientIds[file.name.toLowerCase()] || asId(file))))
-        setError(`${rejected.length} 个文件未接收。请修正后重新选择文件，再从此页补传。`)
+        setError(`有 ${rejected.length} 个文件没传上去，改好文件名或内容后重新选。`)
         return
       }
       if (!taskId) await sealMutation.mutateAsync(created.id)
@@ -186,12 +192,12 @@ export function NewTaskPage() {
   const backTo = taskId ? `/tasks/${taskId}` : '/tasks'
 
   return <>
-    <div className="page-heading"><div><h1>{taskId ? '补传合同' : '新建任务'}</h1><p>{taskId ? '为已有任务补传尚未接收的合同，上传完成后任务会继续处理。' : '上传真实合同后，服务端会绑定当前指引并创建持久任务。'}</p></div><Link to={backTo}><Button>返回任务</Button></Link></div>
-    <Card><h2>当前指引</h2>{guide.loading ? <Spinner /> : guide.error && !taskId ? <p className="form-error">当前指引读取失败：{guide.error instanceof Error ? guide.error.message : '未知错误'}</p> : <p>{guide.data?.current?.filename || '沿用任务指引快照'} {!taskId && <StatusBadge value={guide.data?.current?.status} />} <span className="muted">版本 {taskId ? recoveryTask.data?.guide_snapshot?.version_id || '—' : guide.data?.current?.id || '—'}</span></p>}<p className="muted">任务创建后会固定这个指引版本，补传不会切换任务指引。</p></Card>
+    <div className="page-heading"><div><h1>{taskId ? '补传合同' : '新建任务'}</h1><p>{taskId ? '为已有任务补传尚未接收的合同，上传完成后任务会继续处理。' : '上传合同后将按当前修改指引逐份检查并生成修订，可随时回到任务页查看进度。'}</p></div><Link to={backTo}><Button>返回任务</Button></Link></div>
+    <Card><h2>当前指引</h2>{guide.loading ? <Spinner /> : guide.error && !taskId ? <p className="form-error">当前指引读取失败：{guide.error instanceof Error ? guide.error.message : '未知错误'}</p> : <p>{guide.data?.current?.filename || '沿用任务指引快照'} {!taskId && <StatusBadge value={guide.data?.current?.status} />}</p>}<p className="muted">任务创建后会固定这个指引版本，补传不会切换任务指引。</p></Card>
     <Card><form className="form-stack" onSubmit={submit}>
       <label>任务名称<input value={name} onChange={(event) => setName(event.target.value)} placeholder="例如：四季度合同修订" disabled={Boolean(taskId)} /></label>
       <div><span className="muted">合同文件</span><div className={`empty-state dropzone${dragging ? ' is-dragging' : ''}`} onDragOver={(event) => { event.preventDefault(); setDragging(true) }} onDragLeave={() => setDragging(false)} onDrop={(event) => { event.preventDefault(); setDragging(false); addFiles(Array.from(event.dataTransfer.files)) }}><p>拖拽 DOCX 文件到这里</p><Button type="button" onClick={() => inputRef.current?.click()} disabled={busy}>选择文件</Button><Button type="button" onClick={() => directoryRef.current?.click()} disabled={busy}>选择文件夹</Button><input ref={inputRef} type="file" accept={`.docx,${DOCX}`} multiple hidden onChange={onInput} /><input ref={directoryRef} type="file" multiple hidden onChange={onInput} {...{ webkitdirectory: '', directory: '' }} /><input ref={replaceInputRef} type="file" accept={`.docx,${DOCX}`} hidden onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ''; if (file) replaceFile(file) }} /></div></div>
-      {(files.length > 0 || issues.length > 0) && <div className="upload-manifest"><div className="upload-list-heading"><div><p className="muted">文件清单</p><div className="inline-kpis"><span className="inline-kpi"><b>{files.length + issues.length}</b>文件总数</span><span className="inline-kpi"><b>{files.reduce((sum, file) => sum + file.size, 0)}</b>总大小（字节）</span><span className="inline-kpi"><b>{files.length}</b>可接收</span><span className="inline-kpi"><b>{issues.length}</b>异常</span></div></div><Button type="button" variant="quiet" onClick={clearAll} disabled={busy}>清空清单</Button></div><div className="upload-list-toolbar"><input type="search" value={fileQuery} onChange={(event) => { setFileQuery(event.target.value); setFilePage(1) }} placeholder="搜索当前待提交文件" aria-label="搜索当前待提交文件" /><Select value={fileFilter} onChange={(event) => { setFileFilter(event.target.value as 'all' | 'accepted' | 'issue'); setFilePage(1) }}><option value="all">全部文件</option><option value="accepted">可接收</option><option value="issue">异常文件</option></Select></div>{visibleFiles.rows.length ? <div className="table-scroll"><table className="data-table upload-manifest-table"><thead><tr><th>文件名</th><th>大小</th><th>状态</th><th>操作</th></tr></thead><tbody>{visibleFiles.rows.map(({ file, issue }) => <tr key={asId(file)}><td title={(file as DirectoryFile).webkitRelativePath || file.name}>{(file as DirectoryFile).webkitRelativePath || file.name}</td><td>{(file.size / 1024 / 1024).toFixed(2)} MB</td><td>{issue ? <span className="form-error">{issue}</span> : <StatusBadge value={serverItems.find((item) => item.client_id === (clientIds[file.name.toLowerCase()] || asId(file)))?.upload_status || 'accepted'} />}</td><td className="action-row"><Button type="button" variant="quiet" onClick={() => { replaceTargetRef.current = file.name; setReplaceName(file.name); replaceInputRef.current?.click() }} disabled={busy}>替换</Button><Button type="button" variant="quiet" onClick={() => clearFile(file.name)} disabled={busy}>移除</Button></td></tr>)}</tbody></table></div> : <div className="empty-state">当前清单没有匹配文件，请调整搜索或筛选。</div>}{visibleFiles.pages > 1 && <div className="upload-pagination action-row"><Button type="button" disabled={filePage <= 1} onClick={() => setFilePage((page) => page - 1)}>上一页</Button><span className="muted">第 {Math.min(filePage, visibleFiles.pages)} / {visibleFiles.pages} 页，共 {visibleFiles.total} 个文件</span><Button type="button" disabled={filePage >= visibleFiles.pages} onClick={() => setFilePage((page) => page + 1)}>下一页</Button></div>}</div>}
+      {(files.length > 0 || issues.length > 0) && <div className="upload-manifest"><div className="upload-list-heading"><div><p className="muted">文件清单</p><div className="inline-kpis"><span className="inline-kpi"><b>{files.length + issues.length}</b>文件总数</span><span className="inline-kpi"><b>{formatSize(files.reduce((sum, file) => sum + file.size, 0))}</b>总大小</span><span className="inline-kpi"><b>{files.length}</b>可接收</span><span className="inline-kpi"><b>{issues.length}</b>异常</span></div></div><Button type="button" variant="quiet" onClick={clearAll} disabled={busy}>清空清单</Button></div><div className="upload-list-toolbar"><input type="search" value={fileQuery} onChange={(event) => { setFileQuery(event.target.value); setFilePage(1) }} placeholder="搜索当前待提交文件" aria-label="搜索当前待提交文件" /><Select value={fileFilter} onChange={(event) => { setFileFilter(event.target.value as 'all' | 'accepted' | 'issue'); setFilePage(1) }}><option value="all">全部文件</option><option value="accepted">可接收</option><option value="issue">异常文件</option></Select></div>{visibleFiles.rows.length ? <div className="table-scroll"><table className="data-table upload-manifest-table"><thead><tr><th>文件名</th><th>大小</th><th>状态</th><th>操作</th></tr></thead><tbody>{visibleFiles.rows.map(({ file, issue }) => <tr key={asId(file)}><td title={(file as DirectoryFile).webkitRelativePath || file.name}>{(file as DirectoryFile).webkitRelativePath || file.name}</td><td>{formatSize(file.size)}</td><td>{issue ? <span className="form-error">{issue}</span> : <StatusBadge value={serverItems.find((item) => item.client_id === (clientIds[file.name.toLowerCase()] || asId(file)))?.upload_status || 'accepted'} />}</td><td className="action-row"><Button type="button" variant="quiet" onClick={() => { replaceTargetRef.current = file.name; setReplaceName(file.name); replaceInputRef.current?.click() }} disabled={busy}>替换</Button><Button type="button" variant="quiet" onClick={() => clearFile(file.name)} disabled={busy}>移除</Button></td></tr>)}</tbody></table></div> : <div className="empty-state">当前清单没有匹配文件，请调整搜索或筛选。</div>}{visibleFiles.pages > 1 && <div className="upload-pagination action-row"><Button type="button" disabled={filePage <= 1} onClick={() => setFilePage((page) => page - 1)}>上一页</Button><span className="muted">第 {Math.min(filePage, visibleFiles.pages)} / {visibleFiles.pages} 页，共 {visibleFiles.total} 个文件</span><Button type="button" disabled={filePage >= visibleFiles.pages} onClick={() => setFilePage((page) => page + 1)}>下一页</Button></div>}</div>}
       {serverItems.length > 0 && <div><p className="muted">服务端接收结果</p><ul>{serverItems.map((item) => <li key={item.client_id || item.name}>{item.name}：<StatusBadge value={item.upload_status || item.job_status} /> {item.error_code || ''}</li>)}</ul></div>}
       {taskId && recoveryDocuments.data && <div className="action-row"><span className="muted">待补传 {recoveryItems.filter((item) => item.upload_status !== 'accepted').length} 份</span><Button type="button" variant="quiet" onClick={exportPending}>下载待补传 CSV</Button></div>}
       {busy && <p className="muted"><progress value={progress} max="100" /> 上传中 {Math.round(progress)}%</p>}

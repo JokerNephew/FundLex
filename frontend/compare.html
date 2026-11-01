@@ -8,6 +8,8 @@
 <link rel="icon" type="image/png" href="/static/assets/gf-favicon.png">
 <link rel="stylesheet" href="/static/compare.css">
 <link rel="stylesheet" href="/static/guide_generation.css">
+<script src="/static/status_labels.js" defer>
+</script>
 <script src="/static/app.js" defer>
 </script>
 <script src="/static/compare.js" defer>
@@ -114,11 +116,12 @@
 </svg>
 <span>修改指引</span>
 </button>
+<button class="nav-btn" data-nav="models"><svg><use href="#i-settings"/></svg><span>模型配置</span></button>
 <button class="nav-btn" data-nav="settings">
 <svg>
 <use href="#i-settings"/>
 </svg>
-<span>飞书绑定</span>
+<span>设置</span>
 </button>
 <button class="nav-btn" data-nav="users" id="nav-users" hidden>
 <svg>
@@ -126,7 +129,6 @@
 </svg>
 <span>用户管理</span>
 </button>
-<div class="sidebar-note">报告与诊断文件不作为最终合同</div>
 </nav>
   <main class="main">
 <div class="frame">
@@ -141,62 +143,16 @@
     <button type="button" class="card workspace-metric" data-workspace-status="attention"><span>需要处理的任务</span><strong id="workspace-attention">—</strong></button>
     <button type="button" class="card workspace-metric" data-workspace-status="completed"><span>近期完成的任务</span><strong id="workspace-completed">—</strong></button>
   </div>
-  <div class="card card-pad workspace-task-card"><div class="section-title"><h2>我的任务</h2><button class="btn btn-sm" id="workspace-refresh" type="button">刷新</button></div>
+  <div class="card card-pad workspace-task-card"><div class="section-title"><div><h2>全部任务</h2><small>汇总合同修改、合同比对、指引生成三类任务；各业务专属队列见对应页面</small></div><button class="btn btn-sm" id="workspace-refresh" type="button">刷新</button></div>
     <div class="business-tabs" role="group" aria-label="任务类型"><button type="button" class="is-active" data-workspace-kind="">全部</button><button type="button" data-workspace-kind="revision">修改</button><button type="button" data-workspace-kind="compare">比对</button><button type="button" data-workspace-kind="generation">生成</button></div>
-    <div class="toolbar workspace-toolbar"><div class="searchbox"><input id="workspace-search" type="search" placeholder="搜索任务名称" aria-label="搜索全部业务任务"></div><select class="control-select" id="workspace-status" aria-label="任务情况"><option value="">全部任务</option><option value="active">进行中</option><option value="attention">需要处理</option><option value="completed">近期完成</option></select><label class="workspace-date">创建日期<input type="date" id="workspace-date-from" aria-label="创建起始日期"></label><label class="workspace-date">至<input type="date" id="workspace-date-to" aria-label="创建结束日期"></label><select class="control-select" id="workspace-sort" aria-label="任务排序"><option value="updated_desc">最近更新</option><option value="created_desc">最近创建</option><option value="name">任务名称</option></select></div>
+    <div class="toolbar workspace-toolbar"><div class="searchbox"><input id="workspace-search" type="search" placeholder="搜索任务名称" aria-label="搜索全部业务任务"></div><select class="control-select" id="workspace-status" aria-label="任务情况"><option value="">全部任务</option><option value="active">进行中</option><option value="attention">需要处理</option><option value="completed">近期完成</option></select><label class="workspace-date">创建日期<input type="text" inputmode="numeric" maxlength="10" placeholder="YYYY-MM-DD" pattern="\d{4}-\d{2}-\d{2}" id="workspace-date-from" aria-label="创建起始日期，格式 YYYY-MM-DD"></label><label class="workspace-date">至<input type="text" inputmode="numeric" maxlength="10" placeholder="YYYY-MM-DD" pattern="\d{4}-\d{2}-\d{2}" id="workspace-date-to" aria-label="创建结束日期，格式 YYYY-MM-DD"></label><select class="control-select" id="workspace-sort" aria-label="任务排序"><option value="updated_desc">最近更新</option><option value="created_desc">最近创建</option><option value="name">任务名称</option></select></div>
     <div id="workspace-state" class="subnote" role="status" aria-live="polite"></div><div class="table-wrap"><table class="table workspace-table"><thead><tr><th>任务名称</th><th>业务</th><th>规模</th><th>当前进展</th><th>待办与结果提示</th><th>创建时间</th><th></th></tr></thead><tbody id="workspace-task-rows"></tbody></table></div><div class="pagination" id="workspace-pagination"></div>
   </div>
 </section>
     <section class="section" id="view-overview" aria-label="合同修改">
-<div hidden aria-hidden="true">
-      <div class="card hero batch-overview-hero">
-<div class="hero-copy">
-<div class="eyebrow-row">
-<span class="eyebrow">BATCH OVERVIEW</span>
-</div>
-<h2>批量合同修订任务总览</h2>
-<p id="overview-description">本月累计处理 <strong id="overview-processed">—</strong> 份合同，平均每份 <strong id="overview-average">—</strong> 秒。异常合同会自动保留待人工处理，支持批量导出结果。</p>
-</div>
-<div class="hero-side">
-<strong id="overview-completion-rate">—</strong>
-<span>本月处理完成率</span>
-<div class="progress-line" id="overview-progress" role="progressbar" aria-label="本月处理完成率" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
-<span class="p-done" id="overview-progress-fill" style="width:0%">
-</span>
-</div>
-<small id="overview-progress-label">— / — 份已完成 · 待处理 — 份</small>
-</div>
-</div>
-      <div class="stats" id="overview-stats">
-<div class="card stat">
-<label>本月处理合同</label>
-<b id="stat-month-contracts">—</b>
-<small id="stat-month-contracts-note">环比 —</small>
-</div>
-<div class="card stat">
-<label>处理完成率</label>
-<b id="stat-completion-rate">—</b>
-<small id="stat-completion-note">— / — 份</small>
-</div>
-<div class="card stat">
-<label>待处理合同</label>
-<b id="stat-pending">—</b>
-<small id="stat-pending-note">— 个任务进行中</small>
-</div>
-<div class="card stat">
-<label>平均处理时长</label>
-<b id="stat-average">—</b>
-<small>每份合同</small>
-</div>
-<div class="card stat">
-<label>异常合同</label>
-<b id="stat-exceptions">—</b>
-<small>需人工处理</small>
-</div>
-</div>
-</div>
 <div class="split task-overview">
 <div class="card card-pad">
+<div class="section-title"><div><h2>修改任务</h2><small>仅合同修改任务；全部三类业务任务见 <a href="#workspace" data-nav="workspace">工作台 · 全部任务</a></small></div></div>
 <div class="toolbar">
 <div class="searchbox">
 <input id="task-search" type="search" placeholder="搜索任务名称" aria-label="搜索任务名称">
@@ -260,10 +216,9 @@
 </li>
 <li>
 <strong>查看结果与报告</strong>
-<span>按资格与交付状态筛选，打开证据详情并下载逐合同报告。</span>
+<span>按处理与交付状态筛选，打开结果详情并下载合同文件。</span>
 </li>
 </ol>
-<div class="guide-note">处理结束后，在「任务详情」查看资格、交付与失败原因，并打开每份合同的证据与报告。</div>
 </div>
 </div>
 </section>
@@ -293,9 +248,9 @@
 </div>
 <small id="upload-limit">正在读取单文件限制</small>
 </div>
-<input id="file-picker" class="sr-only" type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" multiple>
-<input id="folder-picker" class="sr-only" type="file" webkitdirectory directory multiple>
-<input id="replace-picker" class="sr-only" type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document">
+<input id="file-picker" class="sr-only" type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" multiple aria-label="选择一份或多份 DOCX 合同文件">
+<input id="folder-picker" class="sr-only" type="file" webkitdirectory directory multiple aria-label="选择包含合同的文件夹">
+<input id="replace-picker" class="sr-only" type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" aria-label="选择用于替换的合同文件">
 <div class="import-top">
 <h2>文件清单</h2>
 <div class="actions">
@@ -346,7 +301,6 @@
 <h2>任务提交前检查</h2>
 <small>格式 / 大小 / 重复的本地初检</small>
 </div>
-<p class="subnote">仅接收 DOCX。检查通过的文件一起进入任务；异常文件暂不提交，可移除或替换。</p>
 <div class="guide-binding" id="guide-binding">正在读取当前指引…</div>
 <div class="mode-picker">
 <label for="import-mode">处理模式</label>
@@ -359,8 +313,8 @@
 <button class="btn btn-sm cancel-recover" data-action="cancel-recover" id="cancel-recover" hidden>退出补传，返回任务进度</button>
 <div class="plan-list" id="task-check">
 </div>
-<button class="btn btn-sm" style="width:100%;margin-top:10px" data-action="export-pending" id="export-pending" hidden>导出待补传清单 (CSV)</button>
-<button class="btn btn-primary" style="width:100%;margin-top:13px" data-action="submit" id="submit-task">创建任务并上传</button>
+<button class="btn btn-sm u-w-full u-mt-3" data-action="export-pending" id="export-pending" hidden>导出待补传清单 (CSV)</button>
+<button class="btn btn-primary u-w-full u-mt-4" data-action="submit" id="submit-task">创建任务并上传</button>
 <div class="upload-progress" id="upload-progress" hidden>
 <div class="upload-progress-head">
 <strong id="upload-progress-label">正在上传</strong>
@@ -373,7 +327,7 @@
 <div class="upload-progress-meta" id="upload-progress-meta">
 </div>
 </div>
-<p class="subnote" id="upload-message" aria-live="polite" style="margin-bottom:0">选择或拖入 DOCX 合同，确认文件清单后创建任务。</p>
+<p class="subnote u-mb-0" id="upload-message" aria-live="polite">选择或拖入 DOCX 合同，确认文件清单后创建任务。</p>
 </aside>
 </div>
 </section>
@@ -383,7 +337,7 @@
 </select>
 </label>
 </div>
-<div class="card card-pad" style="margin-bottom:14px">
+<div class="card card-pad u-mb-4">
 <div class="section-title">
 <div class="batch-title">
 <h1 class="object-title" id="task-object-title">正在读取任务…</h1>
@@ -394,9 +348,6 @@
 <button class="btn btn-sm" data-action="refresh">刷新状态</button>
 <button class="btn btn-sm" data-action="toggle-pause" id="pause-btn">暂停任务</button>
 <button class="btn btn-sm" data-action="recover" id="recover-btn">补传未接收文件</button>
-<button class="btn btn-sm btn-primary" data-action="download-all" disabled>↓ 下载全部结果 ZIP</button>
-<button class="btn btn-sm" data-action="export-results">导出结果清单 (CSV)</button>
-<button class="btn btn-sm" data-action="download-summary">↓ 下载结果总览 .md</button>
 </div>
 </div>
 <p class="subnote" id="selected-task-subtitle">
@@ -416,34 +367,39 @@
 </small>
 </div>
 </div>
-<div class="section-title">
-<strong id="task-percent">
-</strong>
-<small id="task-overall-label">
-</small>
-</div>
 <div class="progress-line" id="overall-progress">
 </div>
 <div class="legend">
 <span>
-<i style="background:var(--green)">
+<i class="p-done">
 </i>交付完成</span>
 <span>
-<i style="background:#d87769">
+<i class="p-fail">
 </i>交付异常/接收失败</span>
 <span>
-<i style="background:#d89b55">
+<i class="p-work">
 </i>处理中</span>
 <span>
-<i style="background:#d8dce0">
+<i class="p-queue">
 </i>排队</span>
 <span>
-<i style="background:#94a3b8">
+<i class="p-excluded">
 </i>已排除</span>
 <span id="progress-evaluation-legend" hidden>
-<i style="background:#8b7ba8">
+<i class="p-evaluation">
 </i>评测已处理</span>
 </div>
+</div>
+<div class="card card-pad u-mb-4">
+<div class="section-title">
+<h2>交付文件</h2>
+</div>
+<div class="detail-actions">
+<button class="btn btn-sm btn-primary" data-action="download-all" disabled>↓ 下载全部结果 ZIP</button>
+<button class="btn btn-sm" data-action="export-results">导出结果清单 (CSV)</button>
+<button class="btn btn-sm" data-action="download-summary">↓ 下载结果总览 .md</button>
+</div>
+<p class="subnote" id="download-hint" hidden>任何已接收的合同都会进入结果包；未通过处理的合同会在包内给出原因说明。</p>
 </div>
 <div class="card card-pad">
 <div class="section-title">
@@ -464,15 +420,15 @@
 </select>
 <select id="doc-qualification-filter" class="control-select" aria-label="资格筛选">
 <option value="">全部资格</option>
-<option value="eligible">资格符合</option>
-<option value="excluded_by_fund_type">已排除</option>
+<option value="eligible">可以处理</option>
+<option value="excluded_by_fund_type">不适用（特殊基金类型）</option>
 <option value="pending">未判定</option>
-<option value="failed">资格失败关闭</option>
+<option value="failed">资格不符</option>
 </select>
 <select id="doc-completeness-filter" class="control-select" aria-label="交付状态筛选">
 <option value="">全部交付</option>
-<option value="complete">产物完整</option>
-<option value="complete_with_exceptions">已交付（含例外条款）</option>
+<option value="complete">文件已完整交付</option>
+<option value="complete_with_exceptions">已交付（部分需人工核对）</option>
 <option value="evaluation_modified">已修改（评测）</option>
 <option value="incomplete">结果不完整</option>
 <option value="not_generated">未生成</option>
@@ -482,7 +438,7 @@
 <option value="queued">排队中</option>
 <option value="running">处理中</option>
 <option value="succeeded">已处理</option>
-<option value="failed">失败关闭</option>
+<option value="failed">处理失败</option>
 <option value="retry_wait">等待重试</option>
 <option value="not_started">尚未接收</option>
 </select>
@@ -517,8 +473,7 @@
 </tbody>
 </table>
 </div>
-<div id="doc-empty" class="empty" hidden>
-<strong>当前条件下没有合同</strong>调整搜索或筛选条件后再查看。</div>
+<!-- R2-F03：空态由 #doc-rows 的占位行承担，原 #doc-empty 死元素已移除。 -->
 <div class="pagination" id="doc-pagination">
 </div>
 </div>
@@ -533,7 +488,6 @@
       <div class="card card-pad compare-create" id="compare-create" hidden>
 <div class="compare-create-intro">
 <div>
-<p class="subnote">“新增 / 删除”按合同A → 合同B的方向统计。</p>
 </div>
 </div>
 <div class="compare-name-field">
@@ -573,7 +527,8 @@
 </div>
 <small>新增 / 删除的含义均按此方向解释</small>
 </div>
-<details class="compare-groups-disclosure"><summary>查看与切换全部合同组</summary><div id="compare-pair-list"></div></details>
+<p class="subnote" id="compare-pending-note" hidden>任务正在处理或等待上传，暂无比对结果；下方可核对各组文件配对，处理完成后选择合同组查看差异。</p>
+<p class="compare-groups-title"><strong>合同组</strong></p><div id="compare-pair-list"></div>
 </div>
       <div class="compare-viewer-backdrop" id="compare-viewer-backdrop" hidden></div>
 <div class="card compare-viewer" id="compare-viewer" role="dialog" aria-modal="true" aria-labelledby="compare-pair-title" tabindex="-1" hidden>
@@ -618,9 +573,6 @@
 <option value="final">最终状态</option>
 </select>
 </label>
-</div>
-<div class="compare-word-toolbar-actions">
-<button class="btn btn-sm" id="compare-report">下载差异报告</button>
 </div>
 </div>
 <div class="compare-view-body" id="compare-view-body" data-view-mode="word">
@@ -701,7 +653,7 @@
 <div class="compare-document-area">
 <div class="compare-reader-label">
 <span>合同正文</span>
-<small class="compare-lines-note">连线仅展示当前可见区域</small>
+
 </div>
 <div class="compare-columns-head" id="compare-columns-head">
 <span>
@@ -762,8 +714,14 @@
     </section>
 <section class="section" id="view-generation" aria-label="指引生成"><div id="gg-root"></div></section>
 <section class="section" id="view-document" aria-label="合同结果"><div id="document-host"></div></section>
-    <section class="section" id="view-guide" aria-label="修改指引">
-<div class="page-actions"><p class="subnote">生成的候选指引需经过导入与核验，不能自动替换当前版本。</p><button class="btn" type="button" data-nav="generation">前往指引生成</button></div>
+    <section class="section" id="view-guide" aria-label="我的指引">
+<div class="page-actions"><p class="subnote">管理自己的指引版本、启停规则开关，并决定新建任务使用哪一版。生成的候选指引需经过导入与核验，不能自动替换当前版本。</p><button class="btn" type="button" data-nav="generation">前往指引生成</button></div>
+<div class="guide-diff-tabs guide-page-tabs" role="tablist" aria-label="指引管理分区">
+<button type="button" role="tab" data-guide-page-tab="versions" class="is-active" aria-selected="true">指引版本</button>
+<button type="button" role="tab" data-guide-page-tab="diff" aria-selected="false">版本对比与上传</button>
+<button type="button" role="tab" data-guide-page-tab="rules" aria-selected="false">规则开关</button>
+</div>
+<div data-guide-pane="versions">
       <div class="card card-pad">
 <div class="section-title">
 <div class="batch-title">
@@ -779,9 +737,9 @@
 <div id="guide-current-body" class="guide-current">正在读取当前指引…</div>
 <p class="subnote">新任务创建时绑定当前指引版本；切换指引或恢复内置只影响之后创建的任务，已创建任务保持原绑定。</p>
 </div>
-      <div class="card card-pad" style="margin-top:14px">
+      <div class="card card-pad u-mt-4">
 <div class="section-title">
-<h2>可用指引</h2>
+<h2>我的指引</h2>
 <small>每个账号独立维护，不能访问他人指引</small>
 </div>
 <div class="table-wrap">
@@ -804,22 +762,63 @@
 <p class="subnote" id="guide-list-state" aria-live="polite">
 </p>
 </div>
-      <div class="card card-pad" style="margin-top:14px">
+</div>
+<div data-guide-pane="diff" hidden>
+      <div class="card card-pad u-mt-4" id="guide-diff-card">
+<div class="section-title">
+<h2>版本对比</h2>
+<small>选两个版本，看规则改了哪几条、原文哪里动了；对比完全在服务器本地计算，不调用模型</small>
+</div>
+<div class="guide-diff-selects">
+<label>基准版本（旧）
+<select id="guide-diff-from" class="control-select" aria-label="基准版本（旧）"></select>
+</label>
+<label>对比版本（新）
+<select id="guide-diff-to" class="control-select" aria-label="对比版本（新）"></select>
+</label>
+</div>
+<div class="guide-diff-tabs" role="tablist" aria-label="对比内容">
+<button type="button" role="tab" id="guide-diff-tab-rules" data-guide-diff-tab="rules" aria-selected="true">规则差异</button>
+<button type="button" role="tab" id="guide-diff-tab-text" data-guide-diff-tab="text" aria-selected="false">原文比对</button>
+</div>
+<div id="guide-diff-body" aria-live="polite"></div>
+</div>
+      <div class="card card-pad u-mt-4">
 <div class="section-title">
 <h2>上传自定义指引</h2>
 <small>仅接收 DOCX 指引原件</small>
 </div>
 <p class="subnote">上传后自动解析并独立核验；新版本不会自动启用，确认状态后再启用。</p>
 <div class="guide-upload">
-<input id="guide-file" class="sr-only" type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document">
+<input id="guide-file" class="sr-only" type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" aria-label="选择指引 DOCX 文件">
 <button class="btn" type="button" data-action="guide-choose">选择 DOCX 文件</button>
 <span class="subnote" id="guide-file-name">尚未选择文件</span>
 <button class="btn btn-primary" type="button" data-action="guide-upload" id="guide-upload-btn" disabled>上传指引</button>
 </div>
 <p class="subnote" id="guide-upload-message" aria-live="polite">解析失败可在列表中查看问题并重新解析。</p>
 </div>
+</div>
+<div data-guide-pane="rules" hidden>
+      <div class="card card-pad u-mt-4">
+<div class="section-title"><h2>规则开关</h2><small>选择一个已解析版本，查看并启停它的规则开关；只影响之后新建的任务</small></div>
+<div class="guide-diff-selects"><label>指引版本<select id="guide-rules-version" class="control-select" aria-label="选择要配置规则开关的指引版本"></select></label></div>
+<div id="guide-rules-inline" aria-live="polite"><p class="subnote">选择一个版本后在此管理规则开关。</p></div>
+</div>
+</div>
     </section>
-    <section class="section" id="view-settings" aria-label="飞书绑定">
+    <section class="section" id="view-models" aria-label="模型配置">
+<div class="card card-pad u-mb-4" id="model-settings-card">
+<div class="section-title"><h2>模型配置</h2><small id="model-settings-source">读取中</small></div>
+<div id="model-settings-body" class="subnote">正在读取模型配置…</div>
+</div>
+</section>
+    <section class="section" id="view-settings" aria-label="设置">
+<div class="card card-pad">
+<div class="section-title"><h2>账户</h2><small>当前登录账号与密码管理</small></div>
+<div class="settings-account-row"><span>当前账号 <strong id="settings-current-user">—</strong></span><button class="btn btn-sm" type="button" data-action="open-password">修改密码</button></div>
+
+</div>
+<div class="section-title u-mt-4"><h2>飞书绑定</h2><small>绑定后可直接在飞书私聊机器人发送合同、提交任务</small></div>
 <div class="feishu-binding-layout">
 <div class="card feishu-connect-card" id="feishu-connect-card" data-state="loading">
 <div class="feishu-status-row"><span class="feishu-app-icon" aria-hidden="true">↗</span><div><h2>连接你的飞书账号</h2><p>绑定到当前 FundLex 账号 <strong id="feishu-current-user">—</strong></p></div><span class="feishu-status-badge" id="feishu-binding-badge">读取中</span></div>
@@ -836,10 +835,117 @@
 <p id="feishu-oauth-message" class="subnote" role="status" aria-live="polite"></p>
 <a id="feishu-oauth-link" class="feishu-auth-link" target="_blank" rel="noopener noreferrer" hidden>在飞书中打开授权页 ↗</a>
 </div>
+<div class="feishu-app-entry" id="feishu-app-entry">
+<div class="feishu-app-entry-text"><strong>扫码时飞书提示“不是一个企业”？</strong><p>这说明你的飞书账号属于另一家企业。可以创建属于你自己企业的应用，连上后一样能私聊机器人处理合同。</p></div>
+<button class="btn" type="button" data-action="feishu-app-open" id="feishu-app-open-btn">用我的飞书企业连接</button>
+</div>
+<div class="feishu-app-summary" id="feishu-app-summary" hidden>
+<div><span class="feishu-app-dot" aria-hidden="true"></span><strong id="feishu-app-summary-title">已连接你自己的飞书企业</strong><p id="feishu-app-summary-text"></p></div>
+<button class="btn btn-sm" type="button" data-action="feishu-app-open">查看连接</button>
+</div>
 <div class="feishu-unbind-confirm" id="feishu-unbind-confirm" hidden role="group" aria-label="确认解除绑定"><strong>确认解除飞书绑定？</strong><p>解除后，机器人将不能通过此绑定关联你的账号。已创建的任务不受影响。</p><div class="settings-actions"><button class="btn btn-danger" type="button" data-action="feishu-unbind-confirm">确认解除</button><button class="btn" type="button" data-action="feishu-unbind-cancel">暂不解除</button></div></div>
 </div>
 <aside class="card feishu-help-card" aria-label="绑定与使用步骤"><h2>从绑定到使用，只需三步</h2><ol class="feishu-steps"><li><span>1</span><div><strong>生成个人二维码</strong><p>确认左侧是你要使用的 FundLex 账号，再点击扫码绑定。</p></div></li><li><span>2</span><div><strong>飞书扫码，确认授权</strong><p>用飞书而非微信扫描。授权成功后，这里会自动显示“已绑定”。</p></div></li><li><span>3</span><div><strong>私聊机器人发送合同</strong><p>在飞书找到 FundLex 机器人，发送 DOCX，按机器人提示提交任务。</p></div></li></ol><div class="feishu-safety-note"><strong>一次绑定，之后直接使用</strong><p>无需重复扫码，也无需输入绑定码。二维码限时有效，请勿转发给他人；需要更换账号时，先解除原绑定。</p></div></aside>
 </div>
+<section class="card feishu-wizard" id="feishu-app-wizard" hidden aria-label="连接你自己的飞书企业">
+<div class="feishu-wizard-head">
+<div><h2>连接你自己的飞书企业</h2><p>按下面 4 步操作即可。每一步都写清了在飞书页面点哪里，能复制的都会直接给你。</p></div>
+<button class="btn btn-sm" type="button" data-action="feishu-app-close" id="feishu-app-close">返回扫码绑定</button>
+</div>
+<ol class="feishu-wizard-steps" id="feishu-app-steps">
+<li data-step="1"><span>1</span><div><strong>创建应用</strong><small>在飞书开放平台建一个企业自建应用</small></div></li>
+<li data-step="2"><span>2</span><div><strong>填写凭证</strong><small>粘贴 App ID 与 App Secret</small></div></li>
+<li data-step="3"><span>3</span><div><strong>配置能力</strong><small>权限、机器人、事件、发布</small></div></li>
+<li data-step="4"><span>4</span><div><strong>测试并绑定</strong><small>发一句话，再发绑定码</small></div></li>
+</ol>
+<div class="feishu-wizard-body">
+<div class="feishu-wizard-panel" data-panel="1" hidden>
+<h3>在飞书开放平台创建应用</h3>
+<ol class="feishu-howto">
+<li><span>1</span><div><strong>打开飞书开放平台并登录</strong><p>用你平时使用的飞书账号登录；手机号或扫码都可以。</p></div></li>
+<li><span>2</span><div><strong>点「创建企业自建应用」</strong><p>应用名称填 <b>FundLex</b>，简介和图标可以随意填写。</p></div></li>
+<li><span>3</span><div><strong>复制两个凭证</strong><p>进入应用后点「凭证与基础信息」，复制 <b>App ID</b> 和 <b>App Secret</b>，下一步粘贴进来。</p></div></li>
+</ol>
+<p class="feishu-tip" id="feishu-app-admin-tip">需要你是所在企业的管理员。如果应用由同事创建，请让对方把 App ID 和 App Secret 发给你，或把本页步骤转给对方。</p>
+<div class="feishu-wizard-actions">
+<a class="btn btn-primary" id="feishu-app-create-link" href="https://open.feishu.cn/app?lang=zh-CN" target="_blank" rel="noopener noreferrer">打开飞书开放平台 ↗</a>
+<button class="btn" type="button" data-action="feishu-app-to-credentials">我已创建，填写凭证</button>
+</div>
+</div>
+<div class="feishu-wizard-panel" data-panel="2" hidden>
+<h3>粘贴应用凭证</h3>
+<form class="feishu-wizard-form" id="feishu-app-form" autocomplete="off">
+<label for="feishu-app-id">App ID</label>
+<input id="feishu-app-id" name="app_id" type="text" spellcheck="false" placeholder="cli_xxxxxxxxxxxxxxxx" autocomplete="off" required>
+<label for="feishu-app-secret">App Secret</label>
+<input id="feishu-app-secret" name="app_secret" type="password" spellcheck="false" placeholder="在「凭证与基础信息」中复制" autocomplete="new-password" required>
+<p class="subnote">Secret 会加密保存在服务器，之后只显示“已保存”，不会再明文展示；也不会写进日志。</p>
+<div class="feishu-wizard-actions">
+<a class="btn" id="feishu-app-credentials-link" href="https://open.feishu.cn/app?lang=zh-CN" target="_blank" rel="noopener noreferrer">去复制凭证 ↗</a>
+<button class="btn btn-primary" type="submit" id="feishu-app-submit">验证并保存</button>
+<button class="btn" type="button" data-action="feishu-app-back">返回</button>
+</div>
+</form>
+<div class="feishu-wizard-error" id="feishu-app-error" hidden role="alert"><strong id="feishu-app-error-title"></strong><p id="feishu-app-error-text"></p><a id="feishu-app-error-link" target="_blank" rel="noopener noreferrer" hidden>打开对应页面 ↗</a></div>
+</div>
+<div class="feishu-wizard-panel" data-panel="3" hidden>
+<h3>补齐能力并发布</h3>
+<p class="subnote" id="feishu-app-verify-summary">正在读取应用状态…</p>
+<div class="feishu-config-grid">
+<div class="feishu-config-card">
+<div class="feishu-config-head"><span class="feishu-config-no">1</span><strong>添加权限</strong><span class="feishu-config-state" data-check="scopes">待检测</span></div>
+<p>在「权限管理」搜索并添加下面 3 个权限。可以一次复制全部，逐个粘贴到搜索框。</p>
+<ul class="feishu-scope-list" id="feishu-app-scopes"></ul>
+<div class="feishu-wizard-actions">
+<button class="btn btn-sm" type="button" data-action="feishu-app-copy-scopes" id="feishu-app-copy-scopes">复制权限清单</button>
+<a class="btn btn-sm" id="feishu-app-link-permission" href="https://open.feishu.cn/app?lang=zh-CN" target="_blank" rel="noopener noreferrer">打开权限管理 ↗</a>
+</div>
+</div>
+<div class="feishu-config-card">
+<div class="feishu-config-head"><span class="feishu-config-no">2</span><strong>启用机器人</strong><span class="feishu-config-state" data-check="bot">待检测</span></div>
+<p>打开「机器人」，把「启用机器人」打开。没有这一步，飞书里搜不到 FundLex。</p>
+<a class="btn btn-sm" id="feishu-app-link-bot" href="https://open.feishu.cn/app?lang=zh-CN" target="_blank" rel="noopener noreferrer">打开机器人设置 ↗</a>
+</div>
+<div class="feishu-config-card">
+<div class="feishu-config-head"><span class="feishu-config-no">3</span><strong>设置事件订阅</strong><span class="feishu-config-state" data-check="event">待验证</span></div>
+<p>「事件与回调」→ 订阅方式选 <b>使用长连接接收事件</b> → 添加事件 <b>接收消息 im.message.receive_v1</b>。长连接不需要填任何服务器地址。</p>
+<a class="btn btn-sm" id="feishu-app-link-event" href="https://open.feishu.cn/app?lang=zh-CN" target="_blank" rel="noopener noreferrer">打开事件与回调 ↗</a>
+</div>
+<div class="feishu-config-card">
+<div class="feishu-config-head"><span class="feishu-config-no">4</span><strong>发布版本</strong><span class="feishu-config-state">必须完成</span></div>
+<p>「版本管理与发布」→ 创建版本 → 申请发布。企业管理员审核通过后，权限和机器人能力才会生效。</p>
+<a class="btn btn-sm" id="feishu-app-link-version" href="https://open.feishu.cn/app?lang=zh-CN" target="_blank" rel="noopener noreferrer">打开版本管理 ↗</a>
+</div>
+</div>
+<div class="feishu-wizard-actions">
+<button class="btn btn-primary" type="button" data-action="feishu-app-recheck" id="feishu-app-recheck">我已配置好，重新检测</button>
+<button class="btn" type="button" data-action="feishu-app-reenter">重新填写凭证</button>
+<button class="btn" type="button" data-action="feishu-app-back-test" id="feishu-app-back-test" hidden>返回测试步骤</button>
+</div>
+<div class="feishu-wizard-error" id="feishu-app-recheck-error" hidden role="alert"><strong id="feishu-app-recheck-error-title"></strong><p id="feishu-app-recheck-error-text"></p><a id="feishu-app-recheck-error-link" target="_blank" rel="noopener noreferrer" hidden>打开对应页面 ↗</a></div>
+</div>
+<div class="feishu-wizard-panel" data-panel="4" hidden>
+<h3>在飞书里给机器人发一句话</h3>
+<p>打开飞书，搜索机器人 <b id="feishu-app-bot-name">FundLex</b>，给它发送「你好」。我们会自动检测，不需要你再回来点按钮。</p>
+<div class="feishu-conn-state" id="feishu-app-conn-state"><span class="feishu-conn-dot" aria-hidden="true"></span><div><strong id="feishu-app-conn-title">正在建立连接…</strong><p id="feishu-app-conn-text">保存后一般 5 秒内完成。如果一直停在这里，请回到第 3 步检查「长连接」和「发布」。</p></div></div>
+<div class="feishu-binding-code" id="feishu-app-binding" hidden>
+<h3>最后一步：把绑定码发给机器人</h3>
+<p>复制下面的绑定码，在飞书私聊里发给机器人。发送后会立即绑定，本页自动完成。</p>
+<div class="feishu-code-row"><code id="feishu-app-code">……</code><button class="btn btn-sm" type="button" data-action="feishu-app-copy-code">复制绑定码</button><button class="btn btn-sm" type="button" data-action="feishu-app-new-code">换一个</button></div>
+<p class="subnote" id="feishu-app-code-expiry"></p>
+</div>
+<div class="feishu-wizard-done" id="feishu-app-done" hidden>
+<div class="feishu-done-mark" aria-hidden="true">✓</div>
+<div><strong>已连接你自己的飞书企业</strong><p id="feishu-app-done-text">现在可以在飞书私聊机器人，发送 DOCX 合同或输入「菜单」。</p></div>
+<button class="btn btn-primary" type="button" data-action="feishu-app-close">完成</button>
+</div>
+<div class="feishu-wizard-actions">
+<button class="btn btn-sm" type="button" data-action="feishu-app-view-config" id="feishu-app-view-config">查看配置状态</button>
+<button class="btn btn-danger btn-sm" type="button" data-action="feishu-app-remove" id="feishu-app-remove">移除这个应用</button>
+</div>
+</div>
+</div>
+</section>
 </section>
 <input id="dev-user" type="hidden">
     <section class="section" id="view-users" aria-label="用户管理">
@@ -868,7 +974,7 @@
 </table>
 </div>
 </div>
-<div class="card card-pad" style="margin-top:14px">
+<div class="card card-pad u-mt-4">
 <div class="section-title">
 <h2>新建账号</h2>
 <small>创建后请将用户名与初始密码告知本人</small>
@@ -895,22 +1001,18 @@
 </span>
 <span class="footer-sep" aria-hidden="true">·</span>
       <button type="button" class="footer-link" data-action="help-open">帮助中心</button>
-<span class="footer-sep" aria-hidden="true">·</span>
-      <span class="footer-link is-disabled" title="正式文本待发布，暂不提供">隐私政策</span>
-<span class="footer-sep" aria-hidden="true">·</span>
-      <span class="footer-link is-disabled" title="正式文本待发布，暂不提供">服务条款</span>
     </footer>
   </div>
 </main>
 </div>
 </div>
 <div class="detail-overlay" id="detail-overlay" hidden>
-<div class="detail-panel" id="detail-panel" role="dialog" aria-modal="true" aria-labelledby="detail-title">
+<div class="detail-panel" id="detail-panel" role="region" aria-labelledby="detail-title">
 <div class="detail-head">
 <div>
 <h1 class="object-title" id="detail-title">正在读取合同…</h1>
 </div>
-<button class="btn btn-sm" id="close-detail" aria-label="关闭合同详情" hidden>✕</button>
+<button class="btn btn-sm" id="close-detail" aria-label="返回任务" hidden>返回任务</button>
 </div>
 <div class="detail-body" id="detail-body">
 </div>
@@ -1005,24 +1107,13 @@
 </li>
 <li>
 <strong>查看结果</strong>
-<span>在任务详情按资格、交付完整性、处理状态筛选；点“查看证据”核对条款和报告，下载最终版、修订版和报告。</span>
+<span>在任务详情按处理、交付、状态筛选；点“查看结果”核对条款和报告，下载最终版、修订版和报告。</span>
 </li>
 </ol>
 </div>
 <div class="detail-section">
-<h3>状态说明</h3>
-<dl class="detail-grid">
-<dt>资格</dt>
-<dd>符合、已排除（特殊基金类型）、未判定、资格失败关闭。</dd>
-<dt>交付完整性</dt>
-<dd>产物完整、含例外条款、结果不完整、未生成。报告和诊断文件不作为最终合同。</dd>
-<dt>处理状态</dt>
-<dd>排队、处理中、已处理、失败关闭、等待重试。</dd>
-</dl>
-</div>
-<div class="detail-section">
 <h3>数据与安全</h3>
-<p class="subnote">合同文件仅在自己的账号范围内可见；下载和报告接口需要登录授权。请勿在浏览器中保存他人账号密码。隐私政策和服务条款的正式文本尚未发布，页脚暂不提供可点击链接。</p>
+<p class="subnote">合同文件仅在自己的账号范围内可见；下载和报告接口需要登录授权。请勿在浏览器中保存他人账号密码。</p>
 </div>
 <div class="detail-actions">
 <button class="btn btn-primary" type="button" data-action="help-close">知道了</button>

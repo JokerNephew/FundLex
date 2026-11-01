@@ -140,14 +140,18 @@ def test_correct_delete_with_paragraph_removed_is_completed(tmp_path):
 
 def test_declared_body_site_completes_but_unchanged_summary_site_does_not(tmp_path):
     required = ("销售服务费每日计提，按月支付；持有超过一年的基金份额不再收取销售服务费。")
+    # FL-D790: the append window now reaches six paragraphs backwards, matching
+    # real body/summary distances; keep the fixture sites at a realistic gap so
+    # the body append stays outside the summary site's window (was 4 apart).
     source = ["正文：基金份额类别定义。", "间隔一。", "间隔二。", "间隔三。",
+              "间隔四。", "间隔五。", "间隔六。", "间隔七。",
               "摘要：基金份额类别定义。", "结尾。"]
     final = [source[0] + "销售服务费每日计提，按月支付；持有超过一年的基金份额不再收取销售服务费。"
              ] + source[1:]
     body_target = {"target_id": "body", "rule_id": "G16", "op": "append",
                    "required_text": required, "paragraph_index": 0, "site_scope": "body"}
     summary_target = {"target_id": "summary", "rule_id": "G16", "op": "append",
-                      "required_text": required, "paragraph_index": 4,
+                      "required_text": required, "paragraph_index": 8,
                       "site_scope": "summary"}
     body = _score(tmp_path / "body", body_target, source, final, FACTS_WITH_SERVICE_FEE)
     summary = _score(tmp_path / "summary", summary_target, source, final,

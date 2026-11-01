@@ -16,6 +16,9 @@ MAX_UNCOMPRESSED_BYTES = int(os.environ.get("FUNDLEX_MAX_UNCOMPRESSED_BYTES", st
 MAX_BATCH_BYTES = int(os.environ.get("FUNDLEX_MAX_BATCH_BYTES", str(50 * 1024 * 1024)))
 MAX_PART_BYTES = int(os.environ.get("FUNDLEX_MAX_PART_BYTES", str(32 * 1024 * 1024)))
 MAX_COMPRESSION_RATIO = int(os.environ.get("FUNDLEX_MAX_COMPRESSION_RATIO", "100"))
+# Bounded upload names keep MySQL VARCHAR columns (guide_versions.filename is
+# VARCHAR(768)) from rejecting long user input with a 500 (A4-F01).
+MAX_FILENAME_BYTES = int(os.environ.get("FUNDLEX_MAX_FILENAME_BYTES", "200"))
 LEGACY_DOC_MAGIC = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"
 
 
@@ -30,6 +33,11 @@ class UploadValidationError(ValueError):
 def validate_docx_upload(name: str, data: bytes) -> str:
     """Validate one DOCX using the same limits as the Web task API."""
     safe_name = Path((name or "").replace("\\", "/")).name
+    if len(safe_name.encode("utf-8")) > MAX_FILENAME_BYTES:
+        raise UploadValidationError(
+            "UPLOAD_FILENAME_TOO_LONG",
+            f"file name exceeds {MAX_FILENAME_BYTES} bytes; rename the file and upload again",
+            422)
     suffix = Path(safe_name).suffix.lower()
     if suffix == ".doc" or data.startswith(LEGACY_DOC_MAGIC):
         # Legacy binary Word files must be saved as DOCX by the user.  Do not
@@ -63,11 +71,12 @@ def validate_docx_upload(name: str, data: bytes) -> str:
 
 
 def has_tracked_revisions(data: bytes) -> bool:
-    """Detect Word tracked changes before a delivery task is accepted.
+    """Detect Word tracked changes in an uploaded document.
 
-    The delivery engine deliberately refuses documents with existing revision
-    marks.  Detecting this at upload time gives the user an actionable error
-    instead of a completed task that produces no deliverable.
+    Detection helper only: tracked inputs are **not** rejected.  The recall
+    pipeline normalizes them to the accepted view at task input
+    (:func:`fundlex.docx.normalize_tracked_base`) and layers the engine's own
+    new revisions on that base.
     """
     try:
         with zipfile.ZipFile(io.BytesIO(data)) as archive:

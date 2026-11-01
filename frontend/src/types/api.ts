@@ -62,6 +62,10 @@ export interface GuideSummary {
   filename: string
   status: GuideStatus
   qualification_status?: string
+  certified?: boolean
+  /** Machine-readable reason the version cannot be enabled (null = enableable). */
+  enable_block_reason?: 'GUIDE_NOT_PARSED' | 'GUIDE_NOT_CERTIFIED' | null
+  review?: { status?: string; dimensions?: Record<string, unknown>; evaluated_at?: string } | null
   document_sha256?: string
   rules_sha256?: string
   groups?: number
@@ -70,6 +74,44 @@ export interface GuideSummary {
   created_at?: string
   updated_at?: string
 }
+
+export interface GuideDiffFieldChange { old: unknown; new: unknown }
+
+export interface GuideDiff {
+  algorithm: string
+  summary: {
+    rules_before: number
+    rules_after: number
+    added: number
+    removed: number
+    changed: number
+    groups_added: number
+    groups_removed: number
+    groups_order_changed: boolean
+    meta_fields_changed: number
+    identical: boolean
+  }
+  rules: {
+    added: { rule_id: string; rule: Record<string, unknown> }[]
+    removed: { rule_id: string; rule: Record<string, unknown> }[]
+    changed: { rule_id: string; fields: Record<string, GuideDiffFieldChange> }[]
+  }
+  groups: { added: string[]; removed: string[]; order_changed: boolean }
+  meta: Record<string, GuideDiffFieldChange>
+  validation: { before: GuideValidationSummary; after: GuideValidationSummary }
+}
+
+export interface GuideValidationSummary {
+  clean: boolean
+  errors: number
+  warnings: number
+  coverage_gaps: number
+  findings: number
+  invalid_findings: number
+  rounds: number
+}
+
+export interface GuideDiffResult { version_id: string; against: string; diff: GuideDiff }
 
 export interface GuideDetail extends GuideSummary {
   issues_detail?: Record<string, unknown>
@@ -90,6 +132,50 @@ export interface GuideSettings {
   engine_id?: string
 }
 
+export interface GuideRuleOperation {
+  label: string
+  detail?: string
+}
+
+export interface GuideRuleSetting {
+  rule_id: string
+  title?: string
+  section_hint?: string
+  enabled: boolean
+  requirement?: string
+  operations?: GuideRuleOperation[]
+}
+
+export interface GuideRuleSettings {
+  version_id: string
+  disabled_rule_ids: string[]
+  rules: GuideRuleSetting[]
+}
+
+export interface ModelRoleSettings {
+  role: 'primary' | 'review'
+  provider?: string
+  model?: string
+  api_key_set?: boolean
+  source?: 'system' | 'personal'
+  base_url?: string
+  connection_id?: string
+  system_model?: string
+  legacy_model?: string
+}
+
+export interface ModelSettings {
+  editable: boolean
+  source: 'personal' | 'deployment' | string
+  config_error?: string
+  primary: ModelRoleSettings
+  review: ModelRoleSettings
+  review_inherits: boolean
+  task_roles?: Record<string, string>
+  legacy_preferences?: boolean
+  providers: Array<{ id: string; label: string; base_url: string; models: string[] }>
+}
+
 export type TaskStatus = 'uploading' | 'queued' | 'running' | 'paused' | 'completed' | 'completed_with_exceptions' | 'failed' | string
 
 export interface GuideSnapshot {
@@ -106,6 +192,7 @@ export interface TaskSummary {
   ruleset_version?: string
   ruleset_sha256?: string
   guide_snapshot?: GuideSnapshot
+  disabled_rule_ids?: string[]
   upload_status?: string
   total?: number
   uploaded?: number
@@ -298,3 +385,25 @@ export interface CompareView {
 export interface ApiErrorBody {
   detail?: unknown
 }
+
+export interface GuideTextDiffRow {
+  id: string
+  type: 'modify' | 'insert' | 'delete' | string
+  type_label: string
+  section?: string
+  location?: string
+  old_text?: string
+  new_text?: string
+}
+
+export interface GuideTextDiff {
+  algorithm: string
+  identical: boolean
+  summary: { diffs: number; modify: number; insert: number; delete: number }
+  diffs: GuideTextDiffRow[]
+  left_html: string
+  right_html: string
+  merged_html: string
+}
+
+export interface GuideTextDiffResult { version_id: string; against: string; text_diff: GuideTextDiff }

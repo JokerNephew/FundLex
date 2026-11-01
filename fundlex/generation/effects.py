@@ -15,19 +15,93 @@ def _compact(value: str) -> str:
     return re.sub(r"\s+", "", value)
 
 
+_CLAUSE_TERMINALS = r"[。；;！？!?]"
+_CLASS_ENUM_RE = re.compile(
+    r"[A-ZＡ-Ｚ]类(?:基金份额)?(?:[、及和与·][A-ZＡ-Ｚ]类(?:基金份额)?)*")
+_CLASS_LABEL_RE = re.compile(r"([A-ZＡ-Ｚ])类")
+
+
+def _class_run_labels(value: str) -> set[str]:
+    return set(_CLASS_LABEL_RE.findall(value))
+
+
+def _clause_skeleton(clause: str) -> str:
+    """Class-enumeration runs become a placeholder so joiners/membership differ.
+
+    「C类基金份额和E类基金份额不收取申购费用」 and 「C类基金份额不收取申购费用」
+    share the skeleton 「\\x00不收取申购费用」; label comparison decides whether
+    the source actually realizes the reference clause (superset, fail-closed).
+    """
+    return _CLASS_ENUM_RE.sub("\x00", clause)
+
+
+def _realized_source_clauses(source: str, clause: str) -> list[str]:
+    """Contract-realized forms of one reference clause found in the source.
+
+    Real contracts enumerate share-class sets with different joiners and extra
+    members (canonical「C类基金份额」 vs source「C类基金份额和E类基金份额」).
+    A literal containment check then misses clauses that are plainly the same
+    policy statement (B17 G11 p294: the replacement removed the first sentence
+    but the class-expanded tail survived undetected, replay PASS + complete).
+    A source clause realizes the reference iff the non-class skeleton is
+    identical and its class labels are a superset of the reference's; a
+    narrower class set is a different statement and fails closed.
+    """
+    skeleton, labels = _clause_skeleton(clause), _class_run_labels(clause)
+    if skeleton == clause or not labels:
+        return [clause] if clause in source else []
+    realized: list[str] = []
+    for part in re.split(_CLAUSE_TERMINALS, source):
+        candidate = part.strip()
+        if len(candidate) < 8 or _clause_skeleton(candidate) != skeleton:
+            continue
+        if _class_run_labels(candidate) >= labels:
+            realized.append(candidate)
+    return realized
+
+
 def _replaced_clause_residuals(before: str, after: str, references: Sequence[str],
                               expected: str) -> list[str]:
     """Find source-proven old policy clauses that the replacement supersedes.
 
     Replacing a shared first sentence destroys a whole-reference literal match.
     Each substantial old clause still has to disappear unless the operation's
-    own new text retains it. Terminal punctuation is not policy evidence.
+    own new text retains it.  Retention is decided by occurrence count so a
+    clause the new text keeps once still flags a leftover duplicate; class-set
+    enumerations are matched through source realization (superset labels,
+    identical skeleton) so joiner or membership differences cannot hide a
+    survivor.  Terminal punctuation is not policy evidence.
     """
     source, actual, new = _compact(before), _compact(after), _compact(expected)
     clauses = dict.fromkeys(_compact(part) for reference in references
-                            for part in re.split(r"[。；;！？!?]", reference))
-    return [clause for clause in clauses if len(clause) >= 8
-            and clause in source and clause in actual and clause not in new]
+                            for part in re.split(_CLAUSE_TERMINALS, reference))
+    new_clauses = [part.strip() for part in re.split(_CLAUSE_TERMINALS, new)
+                   if part.strip()]
+
+    def _retained_in_new(realized: str) -> bool:
+        # The new text may keep the same statement with a normalized class-set
+        # joiner/structure; identical skeleton and identical label set is
+        # retention, not a survivor.
+        skeleton, labels = _clause_skeleton(realized), _class_run_labels(realized)
+        return bool(labels) and any(
+            _clause_skeleton(part) == skeleton
+            and _class_run_labels(part) == labels for part in new_clauses)
+
+    residuals: list[str] = []
+    for clause in clauses:
+        if len(clause) < 8:
+            continue
+        for realized in _realized_source_clauses(source, clause):
+            # Literal occurrences in the new text justify the same number of
+            # survivors; a joiner-normalized retention justifies at most one
+            # and only when the new text does not already contain it (a second
+            # copy is a duplicate, not retention).
+            justified = new.count(realized)
+            if not justified and _retained_in_new(realized):
+                justified = 1
+            if actual.count(realized) > justified:
+                residuals.append(realized)
+    return residuals
 
 
 def _class_labels(value: str) -> set[str]:
@@ -218,6 +292,88 @@ def _semantic_delete_hits(rule_id: str, document: str) -> list[str]:
     return hits
 
 
+def _semantic_delete_excised_by_replace(rule_id: str, original: Any, artifact: Any,
+                                        edits: Sequence[Mapping[str, Any]],
+                                        references: Sequence[str], *,
+                                        original_document: str
+                                        ) -> dict[str, Any] | None:
+    """Prove a no-site delete when a certified replace physically consumed it.
+
+    A delete whose target row is absent (inventory emitted nothing) used to be
+    unclosable even when another operation's paragraph-wide replacement carried
+    the old policy object away.  The proof needs three deterministic facts:
+
+    1. the ORIGINAL document holds the semantic variant (already established
+       by the caller — ``original_document`` carries probe hits);
+    2. the ARTIFACT is free of the semantic variant and of every authorized
+       literal reference (whole-document, position-independent);
+    3. at least one executed replace edit spans original text that contained
+       the old policy (sentence-level probe hit or literal reference).
+
+    All three together certify *excision by replacement*; any missing leg
+    leaves the operation UNPROVEN (fail-closed preserved).
+    """
+    pattern = _SEMANTIC_DELETE_PROBES.get(rule_id)
+    if pattern is None:
+        return None
+    after_document = _compact("".join(str(getattr(span, "text", ""))
+                                      for span in getattr(artifact, "paragraphs", ())))
+    if pattern.search(after_document):
+        return None
+    reference_compacts = [_compact(value) for value in references]
+    if any(value and value in after_document for value in reference_compacts):
+        return None
+    for edit in edits:
+        if str(edit.get("operation") or "") != "replace":
+            continue
+        location = str(edit.get("location") or "")
+        if not location:
+            continue
+        try:
+            before_text = str(original.by_location(location).text)
+        except (KeyError, ValueError, IndexError, AttributeError):
+            continue
+        before_compact = _compact(before_text)
+        # The old policy must sit *inside* the replaced span: an adjacent
+        # paragraph-mate sentence that the edit never covered cannot certify
+        # excision, so attribute only when coordinates prove containment.
+        try:
+            span_start = int(edit.get("start"))
+            span_end = int(edit.get("end"))
+        except (TypeError, ValueError):
+            continue
+        covered_old = False
+        for value in references:
+            needle = str(value or "")
+            if needle:
+                position = before_text.find(needle)
+                if position >= 0 and span_start <= position \
+                        and position + len(needle) <= span_end:
+                    covered_old = True
+                    break
+        if not covered_old:
+            offset = 0
+            for sentence in re.split(r"(?<=[。；;！？!?])", before_text or ""):
+                start = before_text.find(sentence, offset)
+                offset = start + max(len(sentence), 1)
+                if not sentence.strip():
+                    continue
+                if len(_compact(sentence)) < 12 or not pattern.search(_compact(sentence)):
+                    continue
+                if start >= 0 and span_start <= start \
+                        and start + len(sentence) <= span_end:
+                    covered_old = True
+                    break
+        if not covered_old:
+            continue
+        return {"covering_location": location,
+                "covering_rule_id": str(edit.get("rule_id") or ""),
+                "covering_operation_keys": list(edit.get("operation_keys") or ()),
+                "original_probe_match_count":
+                    len(_semantic_delete_hits(rule_id, original_document))}
+    return None
+
+
 def _semantic_delete_review_hits(rule_id: str, document: str) -> list[str]:
     """Return semantic delete variants that require a business decision first."""
     if rule_id != "G06":
@@ -333,6 +489,19 @@ def effect_proof_passed(proof: Mapping[str, Any] | None, *, operation_id: str = 
             for item in evidence):
         # A code-scanned document-wide delete proof has no site by construction;
         # its own evidence binds operation, obligation and zero matches.
+        return not proof.get("failure_code") and not (proof.get("site_effects") or ())
+    if artifact_status == "VERIFIED_ABSENT" and any(
+            isinstance(item, Mapping)
+            and item.get("proof_kind") == "semantic_delete_excised_by_replace"
+            and item.get("operation_id") == proof.get("operation_id")
+            and item.get("obligation_id") == proof.get("obligation_id")
+            and bool(item.get("covering_location"))
+            for item in evidence):
+        # Excised-by-replace is site-free by construction too (FL-D585 loop-3
+        # integration gap): an executed replace's span physically consumed the
+        # old policy and the artifact-wide probes came back clean.  Without
+        # this recognition the final omission review re-blocks an obligation
+        # claim replay already proved (B10/B14 loop-2 regression).
         return not proof.get("failure_code") and not (proof.get("site_effects") or ())
     sites = set(proof.get("sites") or ())
     proven_sites = {item.get("site_id") for item in evidence if isinstance(item, Mapping)
@@ -753,6 +922,24 @@ def evaluate_operation_effect(obligation: Any, original: Any, artifact: Any,
             from ..recall import _is_one_way_y_class_conversion
             semantic_hits = [hit for hit in semantic_hits
                              if not _is_one_way_y_class_conversion(hit)]
+        if semantic_hits and rule_id != "G06":
+            # The original carried the old policy object, but a no-site delete
+            # can still be proven when an executed replace physically consumed
+            # it (FL-D585 / B10: G12's paragraph-wide replacement carried the
+            # G13 7-day sentence away while the inventory emitted no G13
+            # target row).  Require the artifact to be free of both the
+            # semantic variant *and* every authorized literal — a surviving
+            # hit anywhere stays fail-closed.
+            covered = _semantic_delete_excised_by_replace(
+                rule_id, original, artifact, edits, references,
+                original_document=document)
+            if covered is not None:
+                return OperationEffect(
+                    "PASS", "VERIFIED_ABSENT", **base, evidence=({
+                        "proof_kind": "semantic_delete_excised_by_replace",
+                        "operation_id": operation_id,
+                        "obligation_id": obligation_id,
+                        **covered},))
         if semantic_hits:
             return OperationEffect(
                 "OPEN", "UNPROVEN", **base,

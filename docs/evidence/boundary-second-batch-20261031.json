@@ -1,0 +1,168 @@
+{
+ "schema": "fundlex-second-batch-boundary-v1",
+ "created_at": "2026-11-01",
+ "created_by": "第二波标签线（预告令响应；纯确定性推导，不改动任何冻结文件）",
+ "derived_from": {
+  "selection": {
+   "path": "docs/evidence/selection-second-batch-20261031.json",
+   "sha256": "32b36f02a9c6cafebee7a73fcda0791c707ac62d07fe67bb57e91daafc6187d9"
+  },
+  "labels": {
+   "path": "docs/evidence/labels-second-batch-20261031-v1.json",
+   "sha256": "423c6944687a6006d493d3f8dff4b4cb32593cc6acc26c2e2b3fb423622a88f5"
+  },
+  "verification_labels_sha256_expected": "423c6944687a6006d493d3f8dff4b4cb32593cc6acc26c2e2b3fb423622a88f5"
+ },
+ "denominator_policy": "100/100 全部进入修改分母；任何边界情形均不剔出分母，由盲读标签逐条裁决并留证据。",
+ "unparseable": {
+  "count": 0,
+  "detail": "选样时 corpus 514 份顶层 docx 全部解析成功（selection envelope corpus.parse_errors=[]，non_docx_files=[]）；本次 100 份入样原件均可解析。",
+  "cases": []
+ },
+ "protected": {
+  "count": 0,
+  "detail": "语料与入样均未发现 documentProtection；labels envelope protected_cases=[]，逐案 protected=false。",
+  "cases": []
+ },
+ "explicit_exclusion_type_kept_in_denominator": {
+  "count": 3,
+  "type": "货币市场基金（指引明确排除类型）",
+  "detail": "作为「明确排除类型」分层样本保留在分母；不预先剔出，由盲读标签逐条裁适用性并留证据。",
+  "cases": [
+   {
+    "case_id": "W2D52",
+    "file": "广发活期宝货币市场基金基金合同_20231019.docx",
+    "targets": 10,
+    "group": "dev"
+   },
+   {
+    "case_id": "W2D67",
+    "file": "广发货币市场基金基金合同_20231018.docx",
+    "targets": 7,
+    "group": "dev"
+   },
+   {
+    "case_id": "W2D71",
+    "file": "广发钱袋子货币市场基金基金合同_20191116.docx",
+    "targets": 8,
+    "group": "dev"
+   }
+  ]
+ },
+ "zero_target_cases_kept_in_denominator": {
+  "count": 16,
+  "detail": "盲读+复核+确定性收尾后判定全部条款 satisfied/not_applicable（预期修改数=0），仍保留分母；引擎若对其产生任何修改应作为过度修改计入。",
+  "cases": [
+   {
+    "case_id": "W2D04",
+    "file": "广发中证1000交易型开放式指数证券投资基金基金合同_20240207.docx",
+    "group": "dev"
+   },
+   {
+    "case_id": "W2D05",
+    "file": "广发中证2000交易型开放式指数证券投资基金基金合同_20240807.docx",
+    "group": "dev"
+   },
+   {
+    "case_id": "W2D06",
+    "file": "广发中证A50交易型开放式指数证券投资基金基金合同_20251119.docx",
+    "group": "dev"
+   },
+   {
+    "case_id": "W2D07",
+    "file": "广发中证光伏龙头30交易型开放式指数证券投资基金基金合同_20221101.docx",
+    "group": "dev"
+   },
+   {
+    "case_id": "W2D08",
+    "file": "广发中证全指家用电器交易型开放式指数证券投资基金基金合同_20220311.docx",
+    "group": "dev"
+   },
+   {
+    "case_id": "W2D10",
+    "file": "广发中证全指汽车交易型开放式指数证券投资基金基金合同_20230629.docx",
+    "group": "dev"
+   },
+   {
+    "case_id": "W2D15",
+    "file": "广发中证港股通互联网交易型开放式指数证券投资基金基金合同_20260116.docx",
+    "group": "dev"
+   },
+   {
+    "case_id": "W2D16",
+    "file": "广发中证港股通信息技术综合交易型开放式指数证券投资基金基金合同_20260424.docx",
+    "group": "dev"
+   },
+   {
+    "case_id": "W2D35",
+    "file": "广发恒指港股通交易型开放式指数证券投资基金基金合同_20240920.docx",
+    "group": "dev"
+   },
+   {
+    "case_id": "W2D38",
+    "file": "广发恒生科技交易型开放式指数证券投资基金（QDII）基金合同_20220411.docx",
+    "group": "dev"
+   },
+   {
+    "case_id": "W2H03",
+    "file": "广发中证800自由现金流交易型开放式指数证券投资基金基金合同_20260415.docx",
+    "group": "holdout"
+   },
+   {
+    "case_id": "W2H05",
+    "file": "广发中证海外中国互联网30交易型开放式指数证券投资基金（QDII）基金合同_20220113.docx",
+    "group": "holdout"
+   },
+   {
+    "case_id": "W2H06",
+    "file": "广发中证环保产业交易型开放式指数证券投资基金基金合同_20250319.docx",
+    "group": "holdout"
+   },
+   {
+    "case_id": "W2H07",
+    "file": "广发中证稀有金属主题交易型开放式指数证券投资基金基金合同_20211129.docx",
+    "group": "holdout"
+   },
+   {
+    "case_id": "W2H20",
+    "file": "广发深证100交易型开放式指数证券投资基金基金合同_20231204.docx",
+    "group": "holdout"
+   },
+   {
+    "case_id": "W2H24",
+    "file": "广发纳斯达克100交易型开放式指数证券投资基金基金合同_20250319.docx",
+    "group": "holdout"
+   }
+  ]
+ },
+ "excluded_from_modification_denominator": {
+  "count": 0,
+  "detail": "selection envelope excluded_from_modification_denominator=[]；labels 逐案 excluded=false。",
+  "cases": []
+ },
+ "uncertain_kept_visible": {
+  "count": 31,
+  "unknown_only_4": "仅 4 条 unknown（W2D65 单一类别文本变体，理由见该案 uncertain 与 schema 文档）；其余 27 条为带理由的 uncertain，不作证据缺失剔除。",
+  "per_case_uncertain_counts": {
+   "W2D01": 2,
+   "W2D02": 1,
+   "W2H04": 2,
+   "W2D11": 1,
+   "W2D17": 1,
+   "W2D18": 1,
+   "W2D25": 1,
+   "W2D30": 2,
+   "W2H12": 1,
+   "W2D33": 1,
+   "W2D48": 1,
+   "W2D52": 1,
+   "W2H20": 2,
+   "W2D57": 1,
+   "W2D60": 1,
+   "W2H24": 1,
+   "W2D65": 5,
+   "W2D66": 5,
+   "W2D67": 1
+  }
+ }
+}

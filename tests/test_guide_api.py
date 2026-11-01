@@ -119,7 +119,12 @@ def test_guide_upload_parse_switch_and_reset(client):
     assert finished["version"]["status"] == "parsed"
     detail = client.get(f"/api/guides/{custom_id}", headers=ALICE).json()
     assert detail["status"] == "parsed" and detail["current"] is False
-    assert detail["issues_detail"] == {"errors": [], "warnings": [], "coverage_gaps": []}
+    issues = detail["issues_detail"]
+    assert {key: issues[key] for key in ("errors", "warnings", "coverage_gaps")} == \
+        {"errors": [], "warnings": [], "coverage_gaps": []}
+    # Enrichment: executability canary verdict + per-block parse report.
+    assert issues["canary"]["passed"] is True
+    assert issues["parse_report"]["schema_version"] == "guide-parse-report-v1"
     assert detail["issues"] == 0
     assert detail["rules_overview"] == [{"rule_id": "G01", "title": "释义-份额类别定义", "section_hint": "释义",
                                          "operations": {"append": 1, "replace": 1, "delete": 1, "noop": 0}}]
