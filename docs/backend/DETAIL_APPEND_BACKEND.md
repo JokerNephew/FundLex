@@ -105,21 +105,34 @@
 
 PL1 飞书线 23 项全部逐行签认完毕；矩阵对应行已标 ✅。本支线有效发现：FL-D903（扩展定案，4+1 处）、FL-D906（新登记）；观察 6 项留档；其余文件「无发现」均以上表行级覆盖为依据。
 
-## G. FL-D900~906 分级处置提案（2026-11-01 总指挥「下一棒」口径：可直修/需裁决/需用户定三级）
+## G. FL-D900~906 分级处置提案 v2（总攻令口径：A/B/C 三级+现象/位置/建议逐条）
 
-修法均为一句话级；行号以签认基线 HEAD(3cab25b) 为准。FL-D905 为正向结论归档，无处置项。
+行号以签认基线 HEAD(3cab25b) 为准。FL-D905 为正向结论归档，无处置项。
+分级口径：**A=可直修**（线内代码即可，无跨线依赖、无外部事实缺口）；**B=需裁决**（跨线归口或命名需主线定稿）；**C=需用户定**（修法取决于只有用户/运维能答的事实）。
 
-| 编号 | 分级 | 修法一句话 |
-|---|---|---|
-| **FL-D900** 上传路由死代码 reasons 映射 | **可直修**（零风险） | 删除 `api.py:1413` 的九项 `reasons` 字面量（全文件引用为零，行为不变，无需回归） |
-| **FL-D902** guide_store canary/parse_report 静默 | **可直修**（低风险） | `guide_store.py:221/233` 两处 `except Exception: pass` 各补 `LOGGER.warning(..., exc_info=True)`，best-effort 语义不动 |
-| **FL-D903** 飞书线 4+1 处静默族 | **可直修**（低风险，一次过） | service.py:834/899/942 与 integrations/store.py:449/606（该模块新增 module logger）统一补 `warning` 日志并带 draft_id/dedupe_key，service.py sync_tasks:1271 补带 channel id 的日志；不改吞错/返值语义 |
-| **FL-D906** runtime 私有 `_disconnect` 依赖 | **可直修**（低风险双保险） | `_close_socket` 找不到私有方法时 `log.warning`；`_start_app` 的 handler 闭包头一行加 `if not entry["active"]: return` 活跃位闸（断连之外的第二道闸）；requirements 锁 lark-oapi 当前版本 |
-| **FL-D901** 模型设置中文 422 被信封吞 | **需裁决**（跨前后端+稳定码命名） | 后端三处改 `raise_api_error(422, "MODEL_SETTINGS_INVALID"/"MODEL_CONNECTION_INVALID")`，前端 `reasons` 表同步补两条人话译文——需主线裁决：稳定码命名定稿+前端改动归口（本线 Only 后三行，前端 reason 表在前端线名下） |
-| **FL-D904** feishu_health `__import__` 测不到 worker | **需用户定**（实为需运维一次确认） | 二选一取于「生产监控是否消费 `service_process_active` 字段」这一只有运维能答的事实：无消费者→直接改字段标记「仅同进程诊断」并改名（可直修级）；有消费者→做实跨进程探活（worker 心跳行落 integrations store 再聚合） |
+### A 类·可直修（4 项，线内可独立完成）
+
+| 编号 | 现象 | 位置 | 建议修法（一句话） |
+|---|---|---|---|
+| FL-D900 | 上传路由内构造九项「旧错误消息→错误码」映射，全文件从未被读取，现行路径已直接用 `UploadValidationError.code`——演进残留死代码，误导读者以为还有消息串匹配 | `api.py:1413`（`reasons = {...}` 字面量，引用为零静态可证） | 删除该字面量，零行为变化，无需回归 |
+| FL-D902 | executability canary 与 block_report 两处 advisory 增强 `except Exception: pass` 无日志，canary 自身坏掉时 needs_review 标记静默消失，审核面假干净无线索 | `guide_store.py:221/233` | 两处各补 `LOGGER.warning(..., exc_info=True)`，best-effort 语义不动 |
+| FL-D903 | 飞书线 4+1 处持久化/清理失败静默：建卡后草稿清理失败无迹、draft 文件行/outbox 行写库失败返 False 无日志（凭指纹/dedupe 自愈，但持续故障零痕迹）、5 秒轮询单条 channel 异常每 5 秒静默重试 | `integrations/feishu/service.py:834/899/942`（discard_draft_files)、`integrations/store.py:449/606`(add_draft_file/add_outbox)、`service.py:sync_tasks:1271` | 四处统一补 `warning` 日志（integrations/store.py 新增 module logger；outbox/add_draft_file 带 draft_id/dedupe_key，sync_tasks 带 channel id)，吞错/返值语义不变 |
+| FL-D906 | 移除用户自建应用后断连依赖 lark-oapi 私有 `_disconnect`,SDK 缺该方法时静默跳过且 ws.start(auto_reconnect) 不退出；events.py 主 handler 派发不查 `entry["active"]`——「移除即断连」语义有落空缝（现状 SDK 含该方法，非已知缺陷） | `integrations/feishu/runtime.py:146`(_close_socket)、`integrations/feishu/events.py:91`(on_message 派发闭包) | ①`_close_socket` 找不到私有方法时 `log.warning`；②handler 闭包头一行加 `if not entry["active"]: return`；③requirements 锁 lark-oapi 当前版本 |
+
+### B 类·需裁决（1 项，跨线归口）
+
+| 编号 | 现象 | 位置 | 建议修法（一句话） |
+|---|---|---|---|
+| FL-D901 | 模型设置三处中文 422 detail（查供应商/密钥/HTTPS 的排障指引）被稳定错误信封归为通用 `INVALID_REQUEST`，前端 reason 表亦无该码——用户实际只见「请求或文件无法处理」，排障指引不可达（恰是高频踩坑点） | `api.py:1269/1277/1279` 三处 `HTTPException(422, 中文)`；信封 `api_errors.code_from_detail`；前端 `reason()` 映射表 | 三处改 `raise_api_error(422, "MODEL_SETTINGS_INVALID"/"MODEL_CONNECTION_INVALID")`+前端 reason 表补两条人话译文——需主线裁决：**稳定码命名定稿**+**前端 reason 表归口**（前端线名下，本线只改 api.py 三行） |
+
+### C 类·需用户定（1 项，修法取决于外部事实）
+
+| 编号 | 现象 | 位置 | 建议修法（一句话） |
+|---|---|---|---|
+| FL-D904 | `feishu_health` 用 `__import__` 探 `active_service()` 判断 worker 存活——API 进程与 worker 是独立 systemd 单元，API 进程内 import 到的单例恒为 None，`service_process_active` 字段长期 false/误导 | `api.py:1065` | 二选一取决于「生产监控是否消费 `service_process_active`」这一只有用户/运维能答的事实：无消费者→改名标记「仅同进程诊断」（A 级工事量）；有消费者→做跨进程探活（worker 心跳行落 integrations store 再聚合） |
 
 ### 执行小结（待主线批单后施工）
 
-- 可直修 4 项（FL-D900/902/903/906）：合计约 15 行改动+1 个模块 logger，可一个 commit 完成，每条附 grep 校验（无 `except Exception` 无日志残留/死代码段消失/私有调用有兜底日志）。
-- 需裁决 1 项（FL-D901）：等主线定码名与前端归口后，本线只改 api.py 三行。
-- 需用户定 1 项（FL-D904）：请总指挥向运维确认 `service_process_active` 有无消费者，答复即定修法。
+- A 类 4 项（FL-D900/902/903/906）：合计约 15 行改动+1 个模块 logger，批单后一个 commit 完成，每条附 grep 校验（无 `except Exception` 无日志残留/死代码段消失/私有调用有兜底日志/active 闸在场）。
+- B 类 1 项（FL-D901）：等主线定码名与前端归口后，本线只改 api.py 三行。
+- C 类 1 项（FL-D904）：请总指挥向运维确认 `service_process_active` 有无消费者，答复即定修法。
