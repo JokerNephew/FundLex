@@ -21,7 +21,11 @@ from ..guide_generation.models import ClauseUnit, stable_id
 
 W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 Q = lambda local: f"{{{W}}}{local}"
-PARSER_VERSION = "contract-segmenter-1"
+# contract-segmenter-2: TOC lines must end in dot leaders + a page number;
+# a body sentence that merely trails off with "……" no longer puts the parser
+# into a state that silently skips all paragraphs until the next part/chapter
+# heading (FL-D830).
+PARSER_VERSION = "contract-segmenter-2"
 MAX_FILE_BYTES = 80 * 1024 * 1024
 MAX_PART_BYTES = 64 * 1024 * 1024
 MAX_CLAUSE_CHARS = 1400
@@ -34,7 +38,7 @@ _CN_PAREN = re.compile(r"^[（(][一二三四五六七八九十百零〇]+[）)]
 _NUM_ITEM = re.compile(r"^\d+[、．.]\s*")
 _NUM_PAREN = re.compile(r"^[（(]\d+[）)]")
 _DOTTED = re.compile(r"^\d+(?:\.\d+)+")
-_TOC_LINE = re.compile(r"(?:…{2,}|\.{4,}|·{4,})\s*\d*\s*$")
+_TOC_LINE = re.compile(r"(?:…{2,}|\.{4,}|·{4,})\s*\d+\s*$")
 _SENTENCE_END = re.compile(r"[。！？；：]$")
 _CONTINUATION_START = re.compile(r"^[，、；。）)\]】》”’]|^[a-z]")
 
