@@ -428,6 +428,23 @@ def validate_case_files(case: dict[str, Any], *, selection_sha256: str | None = 
                     _issue(issues, "REPORT_ARTIFACT_REVIEW_HASH_MISMATCH",
                            f"{case_id}.artifact_review.{kind}_sha256",
                            "artifact review hash differs from report output_validation")
+    # FL-D937(11)：v3 语义复核平面（fundlex/artifact_review 的 actions/passed
+    # 结构）在老键之外增量比对；未提供证据时维持原行为。
+    semantic_review = loaded.get("artifact_semantic_review_path")
+    if semantic_review is not None:
+        if report is not None:
+            report_validation = report.get("output_validation") or {}
+            for kind in ("final", "redline"):
+                report_hash = report_validation.get(f"{kind}_sha256")
+                review_hash = semantic_review.get(f"{kind}_sha256")
+                if report_hash and review_hash and report_hash != review_hash:
+                    _issue(issues, "REPORT_ARTIFACT_SEMANTIC_REVIEW_HASH_MISMATCH",
+                           f"{case_id}.artifact_semantic_review.{kind}_sha256",
+                           "semantic artifact review hash differs from report output_validation")
+        if semantic_review.get("passed") is False:
+            _issue(issues, "ARTIFACT_SEMANTIC_REVIEW_REJECTED",
+                   f"{case_id}.artifact_semantic_review.passed",
+                   "semantic artifact review rejected the artifact set")
     business_review = loaded.get("business_review_evidence")
     if business_review is not None:
         conclusion = business_review.get("conclusion")
