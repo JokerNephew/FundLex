@@ -8472,3 +8472,82 @@ H＝E×…
 - **登记不动工**：令牌档案增补 --text-display 档与 app.css 其余散色收编、CompareCard 元信息字段名「解析器版本」裁决（附录 1-3）；任务入口双轨/导航分组错配归 FL-D891/896（附录 4-5）。附录：`docs/frontend/DETAIL_APPEND_V2_AUDIT_20261101.md`。
 - **验证**：tsc 0 错 / vitest 24/24 / build ✓；after 截图 `/tmp/opencode/qa/shots-v2-after/`（01 列表无噪音行与快照列、03 表头与文案、04 索引列、22/23 查看器 kicker）；python 浏览器全套回归（FUNDLEX_BROWSER_TESTS=1, FUNDLEX_AUTH_MODE=dev）**101/101 通过**（422s，tests/browser/ 全套，-x 串行）。
 - **状态**：已解决（直接修批实施且四闸全绿：tsc 0/vitest 24/24/build/浏览器 101/101；登记项附录 1-5 保持 open 待主线裁决）。
+## FL-D922 多 delete-op 规则的残句恢复一律误挂 operation index 0（2026-11-01，EN1 审计 F2，延迟正确性缺陷）
+
+- **发现**：recall.py `_ensure_delete_targets_page` 句池收集规则**全部** delete ops（11241-11242/11313-11314），但三处建 Target 写死 `operations=(operation_key(rule_id, 0),)`（11351/11359/11388）；对照 G17 专用分支正确用法 `_rule_operation_key(rule, idx)`（11249/11252，主 agent 亲核属实）。
+- **现状不 live**：内置 guide 锚定规则 G06/G13/G15/G17 各 1 个 delete op（G05 双 op 不在 anchors 内）；锚定规则在新指引下获第 2 个 delete op 即错挂 → claim replay 覆盖与 ledger 误判。
+- **处置**：逐 op 建句池并携带 `_rule_operation_key(rule, idx)`；验证用例=双 delete-op 假指引断言 `:1`。
+- **状态**：发现登记，修法明确，待实施（随 FL-D921 治理批次或单独小修）。
+
+## FL-D923 derive_fact_statuses 对缺失 polarity 映射 fail-open 返回 VERIFIED（2026-11-01，EN1 审计 F3）
+
+- **发现**：recall.py `fee_group_status`（719-728）：`fee_polarities is None` 时短路跳过 UNKNOWN 检查直返 VERIFIED；`family_conflict`（702-712）同把 None 当无冲突；参数默认 None（680）。（主 agent 亲核属实。）
+- **现状不 live**：仅 1230/1252 两调用点，均传 `Facts.fee_polarities`（default_factory=dict 非 None）。
+- **处置**：None→UNKNOWN 或改必填参数。
+- **状态**：发现登记，低优先级，随下批小修。
+
+## FL-D924 resolve_quote 尾分隔符容差回退无唯一性校验（2026-11-01，EN1 审计 F4）
+
+- **发现**：recall.py（413-422）：引句末标点差异时 `find_normalized(cleaned, body)` 取**首个**命中即返回；上方 `resolve_source_quote`（378-379）对同类问题严格要求唯一候选（非唯一→None）。（主 agent 亲核属实。）
+- **影响**：同段两个仅末标点不同的相同句串会绑错副本；段落已定位故低危，属守卫不对称降级。
+- **处置**：回退路径同样收集候选、非唯一→None。
+- **状态**：发现登记，低优先级。
+
+## FL-D925 span_slice broad except 吞掉 location 不存在（2026-11-01，EN1 审计 F5-1）
+
+- **发现**：recall.py（8464-8469）：`except Exception: return ""`，location 不存在返回空串，调用方可能把空串当已取证据。（主 agent 亲核属实。）同文件另 4 处 broad except（8985-8993/6778-6783/9148-9158/9328-9332）经核为诚实留存或降级路径，排除级留档。
+- **处置**：收窄为 KeyError/DocxError。
+- **状态**：发现登记，低优先级。
+
+## FL-D926 edit_summary.verdict_text 把未知审计判定显示为「通过」（2026-11-01，EN1 审计 F-es1，展示层诚实性）
+
+- **发现**：edit_summary.py `verdict_text`（约 :121）：`.get(verdict or "", "通过（规则校验＋独立复核）" if verdict else "—")`——verdict 为非空但**不在映射内**的新值（未来 audit 新增判定）时落入默认分支，向用户显示「通过（规则校验＋独立复核）」。未知判定应回显原文或「未识别」，不得默认成通过。（主 agent 亲读发现。）
+- **影响**：展示层假阳性；不影响引擎判定只影响工作台文案。
+- **处置**：default 分支返回 `str(verdict)`（一行修）。
+- **状态**：发现登记，修法明确，待实施。
+
+## FL-D927 目标归因污染：inventory 目标被 setdefault 误标为 T3_open_rule（2026-11-01，EN1 审计 E2-F1，中）
+
+- **发现**：recall_pipeline.py 5256 `for target in targets: origins.setdefault(target.target_id, "T3_open_rule")` 在首个 `_target_ledger`（5289）之前，把所有尚无 origin 的目标——即全部 `_inventory` 产生目标（该函数从不写 origins）——批量标为 `T3_open_rule`；`_target_ledger` 886 行 `origins.get(target.target_id, "inventory")` 的 inventory 默认因此永不触发。对照：survey（1468/1474）/rebind（1633/1711）/audit_missed（3215）/sweep 族（3297/3339/3360）/variant 族（4978/4994/5006/5029）均有显式 origin，仅 inventory 无。（子会话发现，主 agent 亲核 5256/886 及 origins 写入点全表属实。）
+- **影响**：报告层 origin 字段系统性失真，inventory 覆盖账算到 T3 头上；不影响交付门禁（origin 仅展示/账本），但违反目标归因完整性纪律。
+- **处置（建议，未实施）**：setdefault 仅对 locator 本批新增目标生效，或在 `_inventory`/`_collect_targets` 处显式登记 `origins="inventory"`。
+- **状态**：发现登记，修法明确，待实施。
+
+## FL-D928 recall_pipeline 死代码族五项（2026-11-01，EN1 审计 E2-F2~F6，低，合并治理）
+
+- **发现**（子会话发现，主 agent 逐项亲核属实）：
+  1. 2903-2912 重复死分支：`elif code in {"AUDIT_VERDICT_MISSING","REVIEW_UNPROVEN"}: VERIFICATION` 与首支同条件永不可达（演进残留）。
+  2. findings 空转 5561/5607-5610/6098：`findings=[]` 初始化后，pending_findings 追加与 `_apply_artifact_proof_to_findings(findings,...)` 均作用在恒空列表（终扫 6144 才重新初始化），误导读者以为 sweep 成果参与 claim-replay 前投影。
+  3. `recovery_sweep_unverified`（5721）永为 False → 6082 分支 SWEEP_RECOVERY_UNVERIFIED 不可达（claim recovery 后必有终扫 6144+，旧顺序残留）。
+  4. `no_progress_rounds`（5723/6003/6016）只增/清零、从不读取（死计数器；真正防死循环走 snapshot 比较 6002 与 audit 侧 5343）。
+  5. `if True:` 残迹门 5614（注释自认 intentional，缩进层应消除）。
+- **处置**：一次小修清理；删除前确认无测试引用上述标识。
+- **状态**：发现登记，待实施。
+
+## FL-D921 附录（2026-11-01 补）：编排层同族证据 10+ 处（E2-F7）
+
+- recall_pipeline.py 同族硬编码（新指引静默降级为质量损失，同 E3 性质，主 agent 亲核 1067/1221/1922/2161/4004/5035 等属实）：`_FEE_SCOPE_RULES={"G15","G16","G17"}`+「销售服务费」锚词（1067/1100）；摘要复制仅 {"G18","G22"}（1221）；G22 scope 豁免（1285）；G01/G03 append-rebind（1287-1300）；satisfied 整段绑定仅 G02/G04（1453-1456）；G16 partial-clause 放行（1922）；G14 veto（1941）；「A类基金份额」字面量↔固定事实名（2161-2166）；class 等价仲裁仅 {"G02","G04","G08","G11","G18"}（2292-2333）；NO_GUIDE_SITE 关闭仅 G22/G08/G01（3764-3800）；`_BUSINESS_PENDING_RULES={"G14","G18"}`（4004）；`FUNDLEX_SEMANTIC_V2_RULES` 默认 "G09"（5035）；required terms 仅 G02/G04（5641）；`_quote_confirms_class_facts` 内置中文正则（2427-2432）。处置并入 FL-D921 主条目治理方向。
+
+## FL-D929 recall_pipeline 并发/身份/观测四项（2026-11-01，EN1 审计 E2-F8~F11，低，合并治理）
+
+- **发现**（子会话发现，主 agent 亲核 2660/4649 属实，6318/3553 证据行随审计文档留档）：
+  1. 审计并发 2660-2664：ThreadPoolExecutor 共享同一 model 网关，本层无锁，正确性依赖 ModelGateway 线程安全契约（未文档化）；模块级 `_DOCUMENT_COMPACT_CACHE`（3592）跨任务共享（id() 键，GIL 下基本安全但属跨运行状态）。
+  2. 增量复扫身份键 6318-6319/6179：以 chunk 文本为已扫身份，文本同位置集不同的第二窗不复扫（低风险；键应含 `chunk.locations`）。
+  3. business_unresolved 等值过滤 4649：两侧 dict 形态不同，`item not in notices` 恒真（将来形态意外相等会静默漏报一项，仅报告展示）。
+  4. SWEEP_CHUNK_LIMIT gap 只记一次（3553-3557，注释自认），多轮 cap 后续次数不可见，观测损失。
+- **处置**：网关卡明确线程安全契约；扫窗键补 locations；等值过滤显式化；gap 改为计数聚合。低优先级，随小修批次。
+- **状态**：发现登记，待实施。
+
+## FL-D869 补充（2026-11-01 晚，第三阶接线断裂，BH07-v2 真实复跑暴露）
+
+- **发现（生产端实锤）**：BH07-v2 真实复跑（修复后首验）仍 incomplete，G02/G04 四 holds 原样未消（另新出 G14×3 flap，单列观察）。离线探针（真实合同+真实 facts 重建）证实 `absent_delete_coverage` **正确产出**四 per-op 记录（enumerated_absence×2 + empty_group_noop×2），但消费端 `_absent_coverage_evidence`（generation/effects.py:238）的 kind 白名单只有 `*_site_scan`，三态 verdict kind 一律拒收→闸门仍答 `verified site missing`。生产上游正确、下游拒收，mutation 全绿假象（旧测试只测生产端）。
+- **处理（877383b 已实施）**：kind 白名单接入三态（通用机制，对任意产此记录的规则生效；fail-closed 判定本体不变）；新增两条消费端测试（records 在场→四 op PASS/VERIFIED_ABSENT；费义素句在场→无 record→仍 CLAIM_OPERATION_UNPROVEN），29/29 绿。
+- **真实验证已闭环（BH07-v3，877383b）**：delivery_status=**complete**，unresolved=[]；G02:0/G02:1/G04:0/G04:1 四 op 经 claim_replay:VERIFIED_ABSENT 关闭为 ALREADY_SATISFIED（enumerated_absence×2+empty_group_noop×2 证据链与离线探针一致）；7 项真实编辑照常通过 ARTIFACT_VERIFIED；G14:3 SEMANTIC_VERIFIED、G14:4/5 alternative_wording_absent —— **G14 v1→v2 flap 未复现**（维持观察判定：模型面抽样波动，非机制缺陷，不单列条目）。账本 bh07-v3-ledger.sqlite，cost 0.0227/17 calls。
+- **状态**：已解决并验证（适用版本 ad70cd6+877383b；dev/mutation/真实三路闭环）。全量回归守门在途回执后封板。
+
+## 总图 v2 语料交叉验证挂图登记（2026-11-01，主线令：总图×CORPUS_TYPOLOGY 两线对照，R6 收口）
+
+- **交付**：REVISION_FAILURE_MODES.md v2 §6（38 旧 FM 逐条语料映射 + 4 新 FM 追加）。口径：唯一名 542、批内 28（selection d89f40b5 名单切分，实测与语料剖析全数一致）/批外 514；数源 corpus_typology.json 可复跑。
+- **新追加 FM**：FM-37 带宽定义（零或单类 426/425=NOT_APPLICABLE 宇宙，资格分流主战场）；FM-39 字母集合二元假设（非 A/C 47/42、≥3 字母 25/21，引擎实证=FL-D921，处置=R7）；FM-40 未见类型×结构复合资格面（股票/货币/其他 38 批内 0 + ETF 149，处置=R8 分层门槛）；FM-41 直销渠道极性链（候选观察：直销 149/141、∩零类 86，BH07 实跑 UNKNOWN 经仲裁完结未败——**不当作已证缺陷**，r2/r3 数据定死活）。
+- **结论（报主线裁决口径）**：批外 514 中 461 份（89.7%）落在批内未测形态并集——第二波必过未测区，属分母/分层设计项非恐慌项；已修四家族确定罩量 ≈79 + ETF 结构面 149 待 R4。
+- **FL 编号说明**：FM-37/40/41 现仅挂图（候选/治理项），未占 FL-D 新号段以防与他线冲突，待主线按实证转正式登记。
