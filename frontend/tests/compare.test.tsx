@@ -1,6 +1,9 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { ComparePage } from '../src/pages/Compare/ComparePage'
+import { CompareListPage } from '../src/pages/Compare/CompareListPage'
+import { CompareNewPage } from '../src/pages/Compare/CompareNewPage'
+import { CompareTaskPage } from '../src/pages/Compare/CompareTaskPage'
 
 const mocks = vi.hoisted(() => ({
   oldTaskRefetch: vi.fn(),
@@ -29,11 +32,29 @@ const createdTask = {
   pairs: [{ id: 'pair-1', label: '合同 1', status: 'pending', left: { name: '原版.docx' }, right: { name: '修订版.docx' } }],
 }
 
-function selectFiles() {
+// FL-D846：比对链路拆三路由后，上传链路测试走真实路由跳转
+// （/compare → /compare/new → /compare/:taskId）。
+function renderChain() {
+  return render(
+    <MemoryRouter initialEntries={['/compare']}>
+      <Routes>
+        <Route path="/compare" element={<CompareListPage />} />
+        <Route path="/compare/new" element={<CompareNewPage />} />
+        <Route path="/compare/:taskId" element={<CompareTaskPage />} />
+      </Routes>
+    </MemoryRouter>,
+  )
+}
+
+async function submitNewTask() {
+  renderChain()
+  fireEvent.click(screen.getByRole('button', { name: '＋ 新建对比任务' }))
+  await waitFor(() => expect(screen.getByRole('button', { name: '开始上传并对比' })).toBeTruthy())
   const inputs = Array.from(document.querySelectorAll('.compare-side-inputs input[type="file"]'))
   expect(inputs).toHaveLength(2)
   fireEvent.change(inputs[0], { target: { files: [new File(['left'], '原版.docx', { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' })] } })
   fireEvent.change(inputs[1], { target: { files: [new File(['right'], '修订版.docx', { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' })] } })
+  fireEvent.click(screen.getByRole('button', { name: '开始上传并对比' }))
 }
 
 describe('Compare first-upload recovery', () => {
@@ -49,24 +70,20 @@ describe('Compare first-upload recovery', () => {
   })
 
   it('refreshes the newly created task by its explicit id instead of an old undefined-task closure', async () => {
-    render(<ComparePage />)
-    fireEvent.click(screen.getByRole('button', { name: '＋ 新建对比任务' }))
-    selectFiles()
-    fireEvent.click(screen.getByRole('button', { name: '开始上传并对比' }))
+    await submitNewTask()
 
     await waitFor(() => expect(mocks.sealMutateAsync).toHaveBeenCalledWith('compare-task-1'))
     await waitFor(() => expect(mocks.refetchCompareTask).toHaveBeenCalledWith('compare-task-1'))
     expect(mocks.oldTaskRefetch).not.toHaveBeenCalled()
     expect(mocks.refetchCompareTask).not.toHaveBeenCalledWith('')
     expect(mocks.refetchCompareTask).not.toHaveBeenCalledWith(undefined)
+    // 提交成功后进入比对工作台路由
+    await waitFor(() => expect(screen.getByRole('button', { name: '← 返回对比任务列表' })).toBeTruthy())
   })
 
   it('does not report a successful seal query failure as an upload interruption', async () => {
     mocks.refetchCompareTask.mockRejectedValueOnce(new Error('查询任务失败'))
-    render(<ComparePage />)
-    fireEvent.click(screen.getByRole('button', { name: '＋ 新建对比任务' }))
-    selectFiles()
-    fireEvent.click(screen.getByRole('button', { name: '开始上传并对比' }))
+    await submitNewTask()
 
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('任务已提交，但状态刷新失败'))
     expect(screen.getByRole('alert')).not.toHaveTextContent('上传中断')

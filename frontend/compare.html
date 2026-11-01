@@ -514,41 +514,26 @@
       <div class="card card-pad compare-detail" id="compare-detail" hidden>
 <div class="section-title">
 <div>
+<button class="btn btn-sm" type="button" data-compare-back-list>← 返回比对任务列表</button>
 <h1 class="object-title" id="compare-task-name">正在读取任务…</h1>
 </div>
 <p id="compare-task-status">
 </p>
 </div>
-<div class="compare-direction-note">
-<span class="compare-direction-icon" aria-hidden="true">→</span>
-<div>
-<strong>差异统计方向</strong>
-<span>合同A → 合同B</span>
+<p class="subnote" id="compare-pending-note" hidden>任务正在处理或等待上传，暂无比对结果；下方芯片可核对各组文件配对，处理完成后选择合同组查看差异。</p>
+<div class="compare-pair-strip" id="compare-pair-list" role="tablist" aria-label="合同组" aria-orientation="horizontal"></div>
 </div>
-<small>新增 / 删除的含义均按此方向解释</small>
-</div>
-<p class="subnote" id="compare-pending-note" hidden>任务正在处理或等待上传，暂无比对结果；下方可核对各组文件配对，处理完成后选择合同组查看差异。</p>
-<p class="compare-groups-title"><strong>合同组</strong></p><div id="compare-pair-list"></div>
-</div>
-      <div class="compare-viewer-backdrop" id="compare-viewer-backdrop" hidden></div>
-<div class="card compare-viewer" id="compare-viewer" role="dialog" aria-modal="true" aria-labelledby="compare-pair-title" tabindex="-1" hidden>
+<div class="card compare-viewer" id="compare-viewer" role="region" aria-labelledby="compare-pair-title" tabindex="-1" hidden>
 <div class="compare-viewer-toolbar">
 <div class="compare-viewer-title">
 <div>
 <strong id="compare-pair-title">
 </strong>
 </div>
-<div class="head-actions">
-<button class="btn btn-sm" id="compare-prev-pair">上一组</button>
-<span class="compare-pair-counter" id="compare-pair-counter">
-</span>
-<button class="btn btn-sm" id="compare-next-pair">下一组</button>
-<button class="btn btn-sm compare-viewer-close" id="compare-close-viewer" type="button" aria-label="关闭比对结果">× 关闭</button>
-</div>
 </div>
 <div class="compare-summary-row">
 <div class="compare-summary-stat">
-<span>当前结果</span>
+<span>合同A → 合同B</span>
 <strong id="compare-summary">
 </strong>
 </div>
@@ -564,7 +549,6 @@
 <button class="btn btn-sm is-active" id="compare-view-word" type="button" data-compare-view-mode="word">Word 视图</button>
 <button class="btn btn-sm" id="compare-view-classic" type="button" data-compare-view-mode="classic">双栏对照</button>
 </div>
-<span class="compare-word-revision-summary"><strong id="compare-revision-count">0</strong> 处修订</span>
 <label class="compare-word-toggle compare-word-only"><input type="checkbox" id="compare-show-sources"> 显示源文档</label>
 <label class="compare-word-markup compare-word-only" for="compare-markup-mode">显示标记
 <select id="compare-markup-mode" class="control-select">
@@ -575,6 +559,7 @@
 </label>
 </div>
 </div>
+<p class="compare-viewer-empty" id="compare-viewer-empty" role="status" hidden></p>
 <div class="compare-view-body" id="compare-view-body" data-view-mode="word">
 <aside class="compare-diff-rail compare-word-revisions" aria-labelledby="compare-rail-title">
 <div class="compare-word-pane-head compare-word-revisions-head">
@@ -598,6 +583,24 @@
 </select>
 </div>
 <div class="compare-diff-list" id="compare-diff-list" aria-label="修订列表" tabindex="0">
+</div>
+<div class="compare-selection-bar" aria-label="人工选择与生成">
+<div class="compare-selection-line">
+<span id="compare-selection-progress">正在读取选择状态…</span>
+<span id="compare-selection-status" role="status" aria-live="polite">
+</span>
+</div>
+<div class="compare-selection-actions">
+<button class="btn btn-sm" id="compare-selection-left-all" type="button">全部采用 A</button>
+<button class="btn btn-sm" id="compare-selection-right-all" type="button">全部采用 B</button>
+<button class="btn btn-sm" id="compare-selection-pending" type="button">定位待选择</button>
+<button class="btn btn-sm" id="compare-selection-save" type="button" disabled>保存</button>
+<button class="btn btn-primary btn-sm" id="compare-selection-generate" type="button" disabled>生成选择结果</button>
+</div>
+<small id="compare-selection-issues" class="compare-selection-issues">
+</small>
+<div id="compare-selection-downloads" class="compare-selection-downloads">
+</div>
 </div>
 </aside>
 <div class="compare-column-splitter" id="compare-rail-splitter" role="separator" aria-label="调整修订栏宽度" aria-orientation="vertical" aria-valuemin="220" aria-valuemax="620" aria-valuenow="300" tabindex="0" title="拖动调整修订栏宽度，双击恢复默认"></div>
@@ -688,26 +691,6 @@
 </svg>
 </div>
 </div>
-</div>
-</div>
-<div class="compare-selection-panel" aria-label="人工选择与生成">
-<div class="compare-selection-summary">
-<strong>人工选择</strong>
-<span id="compare-selection-progress">正在读取选择状态…</span>
-<span id="compare-selection-status" role="status" aria-live="polite">
-</span>
-<small id="compare-selection-issues" class="compare-selection-issues">
-</small>
-</div>
-<div class="compare-selection-actions">
-<button class="btn btn-sm" id="compare-selection-left-all" type="button">全部采用 A</button>
-<button class="btn btn-sm" id="compare-selection-right-all" type="button">全部采用 B</button>
-<button class="btn btn-sm" id="compare-selection-pending" type="button">定位待选择</button>
-<button class="btn btn-sm" id="compare-selection-save" type="button" disabled>保存当前选择</button>
-<button class="btn btn-sm" id="compare-selection-preview" type="button" disabled>预览可生成性</button>
-<button class="btn btn-primary btn-sm" id="compare-selection-generate" type="button" disabled>生成选择结果</button>
-</div>
-<div id="compare-selection-downloads" class="compare-selection-downloads">
 </div>
 </div>
 </div>
