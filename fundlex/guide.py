@@ -29,7 +29,11 @@ NS = {"w": W}
 Q = lambda local: f"{{{W}}}{local}"
 
 GUIDE_SCHEMA_VERSION = "guide-rules-v1"
-PARSER_VERSION = "guide-parse-1"
+# guide-parse-2: table-body content is extracted (previously only direct
+# body-level paragraphs were read, silently dropping guide rules written in
+# tables); owner-facing validation details are Chinese sentences with the
+# technical string preserved in ``detail_tech`` (FL-D898/FL-D904).
+PARSER_VERSION = "guide-parse-2"
 GUIDE_PARSE_PROMPT_VERSION = "guide_parse_v1"
 GUIDE_VERIFY_PROMPT_VERSION = "guide_verify_v1"
 
@@ -38,6 +42,21 @@ CONDITION_KINDS = ("none", "class_count", "has_service_fee", "is_floating_fee", 
 OPERATIONS = ("append", "replace", "delete", "noop")
 FINDING_KINDS = ("missing_group", "wrong_condition", "wrong_text", "wrong_operation",
                  "missing_reference", "ambiguous_branch")
+
+# Owner-facing Chinese names for machine vocabulary.  User-visible validation
+# ``detail`` strings must read as Chinese sentences (FL-D883/S5): internal
+# identifiers stay in ``detail_tech`` for the model repair context and logs.
+CONDITION_KIND_LABELS = {"none": "无条件", "class_count": "份额类别数量",
+                         "has_service_fee": "是否收取销售服务费",
+                         "is_floating_fee": "是否浮动管理费", "compound": "组合条件"}
+FINDING_KIND_LABELS = {"missing_group": "规则缺失", "wrong_condition": "适用条件不符",
+                       "wrong_text": "条款文本不符", "wrong_operation": "修改操作不符",
+                       "missing_reference": "引用未解析", "ambiguous_branch": "分支表述歧义"}
+_FIELD_LABELS = {"title": "规则标题", "requirement": "修改要求",
+                 "old_text_variants": "原文线索列表", "slot_tokens": "份额类别槽位词列表",
+                 "references": "依据引用列表"}
+_OP_FIELD_LABELS = {"new_text": "新条款文本", "old_text": "原条款文本", "text": "说明文本"}
+_OP_LABELS = {"append": "追加", "replace": "替换", "delete": "删除", "noop": "不改"}
 
 # Business domains named by the guide's own group headings. Only used to keep a
 # heading-only paragraph out of the deterministic coverage-gap list.
@@ -162,20 +181,32 @@ def extract_guide_source(path: str | Path) -> GuideSource:
     except etree.XMLSyntaxError as exc:
         raise GuideError("GUIDE_SOURCE_UNREADABLE",
                          {"path": str(target), "reason": "XMLSyntaxError"}) from exc
-    paragraphs: list[GuideParagraph] = []
     body = root.find(Q("body"))
+    paragraphs: list[tuple[str, str]] = []
+
+    def _collect(container: Any) -> None:
+        for element in container:
+            if element.tag == Q("p"):
+                text, emphasis = _paragraph_text_emphasis(element)
+                paragraphs.append((text, emphasis))
+            elif element.tag == Q("tbl"):
+                # A guide whose instructions live in a table is still guide
+                # text: previously only direct body paragraphs were read, so
+                # table content silently vanished (FL-D904).
+                for node in element.iter(Q("p")):
+                    text, emphasis = _paragraph_text_emphasis(node)
+                    paragraphs.append((text, emphasis))
+
     if body is not None:
-        for element in body:
-            if element.tag != Q("p"):
-                continue
-            text, emphasis = _paragraph_text_emphasis(element)
-            paragraphs.append(GuideParagraph(index=len(paragraphs), text=text, emphasis=emphasis))
-    if not any(paragraph.text.strip() for paragraph in paragraphs):
+        _collect(body)
+    paragraphs_out = [GuideParagraph(index=index, text=text, emphasis=emphasis)
+                      for index, (text, emphasis) in enumerate(paragraphs)]
+    if not any(paragraph.text.strip() for paragraph in paragraphs_out):
         raise GuideError("GUIDE_SOURCE_EMPTY",
-                         {"path": str(target), "paragraphs": len(paragraphs)})
-    full_text = "\n".join(f"[{paragraph.index}] {paragraph.text}" for paragraph in paragraphs)
+                         {"path": str(target), "paragraphs": len(paragraphs_out)})
+    full_text = "\n".join(f"[{paragraph.index}] {paragraph.text}" for paragraph in paragraphs_out)
     return GuideSource(path=str(target), source_sha256=source_sha256,
-                       paragraphs=tuple(paragraphs), full_text=full_text)
+                       paragraphs=tuple(paragraphs_out), full_text=full_text)
 
 
 # ---------------------------------------------------------------------------
@@ -204,8 +235,13 @@ def _clip(text: str, limit: int = 80) -> str:
     return text if len(text) <= limit else text[:limit] + "…"
 
 
-def _issue(code: str, rule_id: str, detail: str) -> dict[str, Any]:
-    return {"code": code, "rule_id": rule_id, "detail": detail}
+def _issue(code: str, rule_id: str, detail: str, tech: str | None = None) -> dict[str, Any]:
+    """One validation issue.  ``detail`` is the owner-facing Chinese sentence;
+    ``tech`` keeps the machine phrasing for the model repair context (the
+    owner UI never renders it, FL-D883)."""
+    issue = {"code": code, "rule_id": rule_id, "detail": detail}
+    issue["detail_tech"] = tech if tech is not None else detail
+    return issue
 
 
 def _string_list(value: Any) -> list[str] | None:
@@ -242,6 +278,37 @@ def _condition_error(condition: Any) -> str | None:
     else:
         if not isinstance(value, bool):
             return f"kind {kind} requires a boolean value"
+    return None
+
+
+def _condition_error_zh(condition: Any) -> str | None:
+    """Owner-facing Chinese twin of :func:`_condition_error` (FL-D883/S5)."""
+    if not isinstance(condition, dict):
+        return "适用条件必须是由「类型」和「取值」组成的结构"
+    kind = condition.get("kind")
+    if kind not in CONDITION_KINDS:
+        names = "、".join(CONDITION_KIND_LABELS[item] for item in CONDITION_KINDS)
+        return f"适用条件类型无效（只能是：{names}）"
+    value = condition.get("value", _MISSING)
+    label = CONDITION_KIND_LABELS[kind]
+    if kind == "none":
+        if value is not None:
+            return "「无条件」的取值必须为空"
+    elif kind == "class_count":
+        if isinstance(value, bool) or not (value == 1 or value == "multiple"):
+            return "份额类别数量条件的取值只能是 1（单一类别）或“multiple”（多个类别）"
+    elif kind == "compound":
+        if not isinstance(value, list) or not value:
+            return "组合条件必须包含至少一个子条件"
+        for part in value:
+            detail = _condition_error_zh(part)
+            if detail:
+                return f"组合条件中的子条件不合法：{detail}"
+            if isinstance(part, dict) and part.get("kind") == "compound":
+                return "组合条件不能再嵌套组合条件"
+    else:
+        if not isinstance(value, bool):
+            return f"「{label}」条件的取值必须是“是”或“否”"
     return None
 
 
@@ -319,99 +386,137 @@ def validate_parsed_guide(source: GuideSource, parsed: dict) -> dict:
     if isinstance(parsed, dict) and isinstance(parsed.get("groups"), list):
         groups = parsed["groups"]
     else:
-        errors.append(_issue("GUIDE_GROUP_INVALID", "", "parsed document has no groups array"))
+        errors.append(_issue("GUIDE_GROUP_INVALID", "", "解析结果里没有规则列表",
+                             "parsed document has no groups array"))
     seen_rule_ids: dict[str, int] = {}
     for position, group in enumerate(groups):
         expected_id = f"G{position + 1:02d}"
         if not isinstance(group, dict):
-            errors.append(_issue("GUIDE_GROUP_INVALID", expected_id, f"group #{position} is not an object"))
+            errors.append(_issue("GUIDE_GROUP_INVALID", expected_id,
+                                 f"第 {position + 1} 条规则的结构不是有效的规则对象",
+                                 f"group #{position} is not an object"))
             continue
         rule_id = group.get("rule_id")
         if not isinstance(rule_id, str) or not re.fullmatch(r"G\d{2}", rule_id):
-            errors.append(_issue("GUIDE_RULE_ID_INVALID", expected_id, f"rule_id {rule_id!r} is not Gnn"))
+            errors.append(_issue("GUIDE_RULE_ID_INVALID", expected_id,
+                                 f"规则编号 {rule_id!r} 不是两位序号格式（如 G01）",
+                                 f"rule_id {rule_id!r} is not Gnn"))
             rule_id = expected_id
         elif rule_id in seen_rule_ids:
             errors.append(_issue("GUIDE_RULE_ID_INVALID", rule_id,
+                                 f"规则编号 {rule_id} 重复出现（首次在第 "
+                                 f"{seen_rule_ids[rule_id] + 1} 条规则）",
                                  f"rule_id duplicated (first at group #{seen_rule_ids[rule_id]})"))
         elif rule_id != expected_id:
             errors.append(_issue("GUIDE_RULE_ID_INVALID", rule_id,
+                                 f"规则编号 {rule_id} 不连续，此处应为 {expected_id}",
                                  f"rule_id {rule_id} is not sequential; expected {expected_id}"))
         seen_rule_ids.setdefault(rule_id, position)
         for field in ("title", "requirement"):
             value = group.get(field)
             if not isinstance(value, str) or not value.strip():
-                errors.append(_issue("GUIDE_GROUP_INVALID", rule_id, f"{field} must be a non-empty string"))
+                errors.append(_issue("GUIDE_GROUP_INVALID", rule_id,
+                                     f"{_FIELD_LABELS[field]}不能为空",
+                                     f"{field} must be a non-empty string"))
         section_hint = group.get("section_hint")
         if not isinstance(section_hint, str):
-            errors.append(_issue("GUIDE_GROUP_INVALID", rule_id, "section_hint must be a string"))
+            errors.append(_issue("GUIDE_GROUP_INVALID", rule_id, "章节定位必须是文本",
+                                 "section_hint must be a string"))
         elif not section_hint.strip():
-            warnings.append(_issue("GUIDE_SECTION_HINT_EMPTY", rule_id, "section_hint is empty"))
+            warnings.append(_issue("GUIDE_SECTION_HINT_EMPTY", rule_id, "没有填写章节定位",
+                                   "section_hint is empty"))
         for field in ("old_text_variants", "slot_tokens", "references"):
             if _string_list(group.get(field)) is None:
-                errors.append(_issue("GUIDE_GROUP_INVALID", rule_id, f"{field} must be a list of strings"))
+                errors.append(_issue("GUIDE_GROUP_INVALID", rule_id,
+                                     f"{_FIELD_LABELS[field]}必须是文本列表",
+                                     f"{field} must be a list of strings"))
         if not isinstance(group.get("class_substitution"), bool):
-            errors.append(_issue("GUIDE_GROUP_INVALID", rule_id, "class_substitution must be a boolean"))
+            errors.append(_issue("GUIDE_GROUP_INVALID", rule_id,
+                                 "份额类别替换开关必须是“是”或“否”",
+                                 "class_substitution must be a boolean"))
         operations = group.get("operations")
         if not isinstance(operations, list) or not operations:
-            errors.append(_issue("GUIDE_GROUP_INVALID", rule_id, "operations must be a non-empty list"))
+            errors.append(_issue("GUIDE_GROUP_INVALID", rule_id, "没有可执行的修改操作",
+                                 "operations must be a non-empty list"))
             operations = []
         new_texts: list[str] = []
         for op_index, operation in enumerate(operations):
             label = f"operations[{op_index}]"
+            at = f"第 {op_index + 1} 个操作"
             if not isinstance(operation, dict):
-                errors.append(_issue("GUIDE_GROUP_INVALID", rule_id, f"{label} is not an object"))
+                errors.append(_issue("GUIDE_GROUP_INVALID", rule_id,
+                                     f"该规则{at}的结构不是有效的操作对象",
+                                     f"{label} is not an object"))
                 continue
             kind = operation.get("op")
             if kind not in OPERATIONS:
+                names = "、".join(_OP_LABELS[item] for item in OPERATIONS)
                 errors.append(_issue("GUIDE_GROUP_INVALID", rule_id,
+                                     f"该规则{at}的修改类型无效（只能是：{names}）",
                                      f"{label}.op {kind!r} is not append/replace/delete/noop"))
                 continue
             operations_by_kind[kind] += 1
             relation = operation.get("group_kind")
             if relation not in {"INDEPENDENT", "ALL_OF", "ONE_OF", "BRANCH"}:
                 errors.append(_issue("GUIDE_GROUP_INVALID", rule_id,
+                                     f"该规则{at}没有明确标注与其他操作的关系（并列/组合/择一/分支）",
                                      f"{label}.group_kind must be explicit"))
             if (relation == "ONE_OF") != bool(operation.get("one_of_group")):
                 errors.append(_issue("GUIDE_GROUP_INVALID", rule_id,
+                                     f"该规则{at}的“择一招牌”与“择一分组”不一致",
                                      f"{label}.one_of_group does not match group_kind"))
             required = {"append": ("new_text",), "replace": ("old_text", "new_text"),
                         "delete": ("old_text",), "noop": ("text",)}[kind]
             for field in required:
                 value = operation.get(field)
+                field_name = _OP_FIELD_LABELS[field]
                 if not isinstance(value, str) or not value.strip():
                     errors.append(_issue("GUIDE_GROUP_INVALID", rule_id,
+                                         f"该规则{at}的「{_OP_LABELS[kind]}」操作缺少{field_name}",
                                          f"{label}.{field} must be a non-empty string"))
                 elif not _verbatim(value, normalized):
                     errors.append(_issue("GUIDE_TEXT_NOT_VERBATIM", rule_id,
+                                         f"该规则{at}的{field_name}不是从指引原文逐字摘录的"
+                                         f"（不应改写、增删字词或标点）：{_clip(value)}",
                                          f"{label}.{field} is not a verbatim guide substring: {_clip(value)}"))
                 if field == "new_text" and isinstance(value, str):
                     new_texts.append(value)
             condition_error = _condition_error(operation.get("condition"))
             if condition_error:
-                errors.append(_issue("GUIDE_GROUP_INVALID", rule_id, f"{label}.condition {condition_error}"))
+                errors.append(_issue("GUIDE_GROUP_INVALID", rule_id,
+                                     f"该规则{at}的适用条件不合法："
+                                     f"{_condition_error_zh(operation.get('condition'))}",
+                                     f"{label}.condition {condition_error}"))
             else:
                 conditions_by_kind[operation["condition"]["kind"]] += 1
         joined_new_text = "".join(_compact(text) for text in new_texts)
         for token in _string_list(group.get("slot_tokens")) or []:
             if not token.strip():
-                errors.append(_issue("GUIDE_GROUP_INVALID", rule_id, "slot_tokens contains an empty token"))
+                errors.append(_issue("GUIDE_GROUP_INVALID", rule_id,
+                                     "份额类别槽位词列表里出现了空条目",
+                                     "slot_tokens contains an empty token"))
             elif _compact(token) not in joined_new_text:
                 errors.append(_issue("GUIDE_SLOT_NOT_IN_TEXT", rule_id,
+                                     f"槽位词「{_clip(token)}」没有出现在任何新条款文本中",
                                      f"slot token {_clip(token)} does not occur in any new_text"))
         indices = group.get("source_paragraphs")
         if not isinstance(indices, list) or not indices:
             errors.append(_issue("GUIDE_PARAGRAPH_RANGE_INVALID", rule_id,
+                                 "没有标注该规则来自指引的哪些段落",
                                  "source_paragraphs must be a non-empty list"))
         else:
             bad = [value for value in indices
                    if not isinstance(value, int) or isinstance(value, bool) or value not in valid_indices]
             if bad:
                 errors.append(_issue("GUIDE_PARAGRAPH_RANGE_INVALID", rule_id,
+                                     f"标注的来源段落超出了指引正文范围（共 {paragraph_count} 段）"
+                                     f"：{_clip(str(bad))}",
                                      f"source_paragraphs outside 0..{paragraph_count - 1}: {_clip(str(bad))}"))
             else:
                 covered.update(indices)
                 if sorted(set(indices)) != indices:
                     warnings.append(_issue("GUIDE_PARAGRAPH_ORDER", rule_id,
+                                           "来源段落编号没有按升序排列或有重复",
                                            "source_paragraphs is not sorted and unique"))
     coverage_gaps = [paragraph.index for paragraph in source.paragraphs
                      if paragraph.index not in covered and not _heading_only(paragraph.text)]
@@ -714,12 +819,17 @@ def _render_repair_context(validation: dict, verification: dict) -> str:
     if errors:
         lines.append("DETERMINISTIC_VALIDATION_ERRORS")
         for error in errors[:40]:
-            lines.append(f"- [{error.get('code')}] rule {error.get('rule_id') or '-'}: {error.get('detail')}")
+            # The repair context feeds the model, so it uses the technical
+            # phrasing (``detail_tech``); the owner-facing ``detail`` is Chinese
+            # (FL-D883/S5).
+            detail = error.get("detail_tech") or error.get("detail")
+            lines.append(f"- [{error.get('code')}] rule {error.get('rule_id') or '-'}: {detail}")
     warnings = validation.get("warnings") or []
     if warnings:
         lines.append("DETERMINISTIC_VALIDATION_WARNINGS")
         for warning in warnings[:10]:
-            lines.append(f"- [{warning.get('code')}] rule {warning.get('rule_id') or '-'}: {warning.get('detail')}")
+            detail = warning.get("detail_tech") or warning.get("detail")
+            lines.append(f"- [{warning.get('code')}] rule {warning.get('rule_id') or '-'}: {detail}")
     gaps = validation.get("coverage_gaps") or []
     if gaps:
         lines.append(f"UNCOVERED_PARAGRAPHS: {_index_list(list(gaps))}")
