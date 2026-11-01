@@ -7503,3 +7503,11 @@ H＝E×…
 - **对照证据**：同日 loop-6 冻结树 B15 complete（`/tmp/opencode/qa/loop6-fix-matrix/b15-frozen/`，$0.0327/25c/227s，G11 p164 FOUND+CLOSED）——抖动单发性仍成立，首次跨树复发说明频率高于「罕见」。
 - **下一步**：统计 loop-7 全波 G11 compose schema 失败率；≥2 波复发即升级为机制条目（compose 校验失败 deterministic tier1/fixed-text 回退，或业务轮对 MODEL: 软失败的有限再盘）。
 - **状态**：观察项（已复发一次，未升级解剖）。
+
+## FL-D699 释义容器型 composite 内的恒等类替换被计划面永久扣件：实例化恒等⇒satisfied-noop（2026-11-01，loop-7 残存单因子 B05，qa-recall-miss）
+
+- **发现**：loop-7（ada83eb）唯一 FAIL=B05 5 holds 诚实扣件。FL-D697a 容器守卫精确事前拒证（`RECALL_COMPOSITE_REPLACE_SCOPE_UNPROVEN`，破坏性编辑结构性排除）、G16 兄弟盲区支消退；残余机制缺陷：rebind_clause_continuation 把 G02:0 词级替换绑到 p118+p119 释义容器 composite，守卫拒整段替换（正确），但 G02:0 实例化新文本=A类基金份额==旧引用（subscription_group=["A"] 硬事实）——恒等替换本应判定已满足，却无通道闭合 → G02:B1:O1 MISS_PLAN_GAP 永久扣件（统计 -13）。主线裁决归族 FL-D650/683（模型生成面挥发触发的形状），要求机制化 span/no-op 约束而非提示词调优。
+- **机制修复**：plan 阶段 composite 分支在 `plan_composite_target` 前判恒等——`target_class_ops_identity`（recall.py）：class_substitution 规则、三群组事实均 VERIFIED、目标认领的适用 replace 操作逐一 instantiate_slots==old_text（逐操作粒度，混合型产品只坍缩恒等支、不动实工支）→ 目标转 satisfied-noop（ledger reason `class_substitution_identity_noop`），复用 FL-D052/FL-D106 硬事实边界与 R033 `class_operation_binding` 先例。
+- **mutation 测试**（`tests/test_loop6_repairs.py` 增 3 例，累计 11）：恒等闭合/混合事实不坍缩+守卫仍 fail-closed/非类替换规则与未验证事实拒坍缩。
+- **真实复验矩阵（2026-11-01，`/tmp/opencode/qa/loop8-fix-matrix/`，HEAD 686f080）**：**B05 complete**（0 holds、24/24 CLOSED_REPLAY、audit issues=∅、recovery=∅，$0.0311/25c——本轮模型直接判 G02 satisfied，恒等坍缩无需实发，病灶形态由 mutation 用例按 loop-7 ledger 形状离线覆盖）；**B12 complete**（0 holds、24/24 CLOSED，$0.0229/23c）；**B15 complete**（0 holds、21/21 CLOSED，$0.0265/23c）。全量回归 2543/0/139。
+- **状态**：已修复并验证（qa-recall-miss-20261031@686f080 起）；恒等坍缩实发留 loop-8 全波观察（复合 rebind 形态再现时判定路径）。

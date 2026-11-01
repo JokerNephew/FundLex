@@ -1634,3 +1634,8 @@ dev20 v2 闭环：修复循环直到 §7 门槛（无已确证严重错误、无
 - 真实复验矩阵（/tmp/opencode/qa/loop6-fix-matrix/，账本仅观测）：B05 complete 0-hold（-13 形态消除）、B12 complete 0-hold、B15 两轮波动残（run1 inventory 静默 18t、run2 G11 schema 双连→FL-D794 观察项登记）；冻结树同日 B15 complete 对照。
 - 登记：DETAIL 追加 FL-D697/698/695更新/794；commit c977573（码+测试）；docs 待提交。
 - 下一步：提交 docs；报 /tmp/opencode/qa/status/qa-recall-miss.md 主线，等 loop-7 冻结令。
+
+---
+## 2026-11-01 breakpoint-4（loop-7 残存单因子修复完成，HEAD 686f080）
+- FL-D699：容器内恒等类替换 satisfied-noop（plan composite 分支即时转换，逐操作粒度+VERIFIED 事实守卫）；mutation 3 例累计 11 绿；全量回归 2543/0/139。
+- 真实矩阵 loop8-fix-matrix：B05/B12/B15 全 complete 0-hold。登记+报主线段已更新。下一步：主线合并→feat-recall loop-8。
