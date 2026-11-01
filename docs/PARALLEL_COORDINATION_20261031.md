@@ -89,3 +89,7 @@
 - ✅ recall-miss r4 → ada83eb（FL-D697 容器校验/FL-D698 satisfied 消歧/FL-D695 残渣；24 测绿）；loop-7 冻结令已发 feat-recall
 - ✅ 前端第三轮规划过目通过 → 批0/批1 动工令（FL-D803~815 入册；验收=并排对照非 token）
 - 在跑：loop-7 dev20；前端设计收敛批0/批1
+
+### 2026-11-01 10:4x 会话映射补充
+- **A4vO9d5**=guide-generation 专项（ses_e6b1fb214ffe9UIKWT7A4vO9d5，worktree qa-gg-audit）：FL-D820 后续全面检查/守门补强/错误人读化；号段 FL-D820~829
+- 第三轮需求追加 5 项已发前端主线合并施工
