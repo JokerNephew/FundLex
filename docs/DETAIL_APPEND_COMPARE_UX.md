@@ -53,6 +53,90 @@
 - **状态**：**已修复并验证**（同分支）。
 - **变更记录**：2026-11-01 登记；2026-11-01 修复并回归验证。
 
-## 附：工单 B（链路重设计）状态
+## FL-D843 P3 比对工作台结构合一（dialog→内嵌 region，2026-11-01 实施）
 
-- 方案已写 [docs/frontend/COMPARE_CHAIN_REDESIGN_20261101.md](frontend/COMPARE_CHAIN_REDESIGN_20261101.md)（现状信息分布、三禁令删除清单、P1/P2/P3 页面划分、布局规格、迁移兼容、FL-D843~848 拆解），按号令**报主线过目后动工**；A/B 合并排期建议：A 已完可先行合并，B 待主线批准方案后按 FL-D843→847 顺序施工。
+- **发现日期**：2026-11-01（工单 B，方案 docs/frontend/COMPARE_CHAIN_REDESIGN_20261101.md §2.5 已获主线批准）。
+- **问题与影响**：V1 比对结果区为全屏 dialog（`role=dialog`+backdrop+Esc/×关闭/上一组/下一组按钮），与任务详情两段嵌套；合同组纵列列表占高约 100px/组；direction-note 与摘要行「当前结果」方向信息重复；Word 工具条修订计数与 rail 头计数重复——违反三禁令（重复信息、层级嵌套）。
+- **处理方法（已实施）**：compare.html/detail+viewer 合一为页面内嵌 `role=region`；chip 合同组切换条（`role=tablist` 横向滚动，保留 `#compare-pair-list` id 与 `.compare-pair-status` 类降测试 churn，chip 内序号/组名/文件名/状态·差异数/错误文本）；删 direction-note（方向改摘要行前缀「合同A → 合同B」）、删 Word 工具条重复计数（rail 保留 `compare-revision-count-rail`）、删 backdrop/关闭/上一组/下一组/Esc 及 `compare-pair-counter`；detail 头加 `[data-compare-back-list]`「← 返回比对任务列表」；新增 `setViewerEmpty`/`#compare-viewer-empty`：失败/处理中组点开 region 显空态不再静默留旧结果。compare.js：`setFullscreenViewer`→`setViewerOpen` 清理 dialog 引用。
+- **验证**：node --check；tests/browser/test_v1_frontend_remediation.py 16/16（word-style 用例视口 1440→1600 记档：region 受应用框宽约束，rail 拖宽后 word-layout 宽钳制 `container-480` 不够原 +20 断言）；走查截图 docs/frontend/evidence/compare-chain-20261101/ p3-* 6 张目检合格。
+- **状态**：**已实施并验证**；走查捕获缺陷另列 FL-D849~852。
+- **变更记录**：2026-11-01 实施；2026-11-01 走查修复 FL-D849/850 后复验合格。
+
+## FL-D844 选择控件并入 rail 底部（2026-11-01 实施）
+
+- **发现日期**：2026-11-01。
+- **问题与影响**：人工选择与生成面板为视图底部整宽条（跨面板高度外的第六功能区），「预览可生成性」按钮与「生成选择结果」的服务端校验功能重叠（预览/生成/编辑三态认知负担）。
+- **处理方法（已实施）**：`.compare-selection-bar` 移入 `.compare-word-revisions`（修订 rail）底部 sticky——进度行+状态行+操作行+下载行；删底部 `.compare-selection-panel` 全段与「预览可生成性」按钮；compare.js 删 `previewSelection`/`selectionAction('preview')` 分支、渲染与禁用逻辑、绑定，点「生成选择结果」即走服务端校验，阻塞原因经 `#compare-selection-issues`/`#compare-selection-status` 内联展示（`setViewerEmpty` 选择器同步去 panel）。
+- **验证**：node --check；remediation 16/16（selection/generate 链路用例全绿，含晚响应防串组回归）；走查 p3-workbench 截图 rail 底条目检合格。
+- **状态**：**已实施并验证**。
+- **变更记录**：2026-11-01 实施并回归绿。
+
+## FL-D845 修订列表项压缩为单行（2026-11-01 实施）
+
+- **发现日期**：2026-11-01。
+- **问题与影响**：修订 rail 单项 136px（摘要三行截断+选择按钮区另起行），130 处修订场景滚动成本大、目录感弱。
+- **处理方法（已实施）**：修订项单行网格 `24px 序号 | 42px 类型徽标 | 1fr 摘要 | 采用A | 采用B`（`.compare-diff-jump`/`.compare-choice` `display:contents` 摊平入同一 grid）；`DIFF_ITEM_HEIGHT` 136→44（虚拟滚动常数，与 `height:44px` 设计值一致）；摘要强制单行 ellipsis（废止 `-webkit-line-clamp:3`）；choice 视觉文案「采用 A/B」→「A/B」+`title="采用合同A/B此版本"`（语义不丢，腾出摘要宽度）；移动端（≤760px）choice 折回第二行（`grid-column:1/-1`）。
+- **验证**：tsc/node --check；走查 p3-workbench-desktop/mobile 截图目检单行观感合格；tests/browser/test_compare_scroll_perf.py 门禁（滚动流畅+块级对齐）过；workbench 53/53。
+- **状态**：**已实施并验证**（word rail 旧高度覆写冲突处理见 FL-D851）。
+- **变更记录**：2026-11-01 实施；走查后追加 FL-D851 修复并复验。
+
+## FL-D846 V2 比对链路拆三路由（2026-11-01 实施）
+
+- **发现日期**：2026-11-01。
+- **问题与影响**：V2 `ComparePage` 单页承载任务列表+新建表单+比对工作台（~880 行），信息架构与批准的 P1/P2/P3 两级嵌套不符。
+- **处理方法（已实施）**：拆 `/compare`（CompareListPage：列表+新建入口）、`/compare/new`（CompareNewPage：新建与首传闭环，成功后 `navigate('/compare/'+id,{state:{notice,warning}})`）、`/compare/:taskId?pair=`（CompareTaskPage：chip 切换条 `role=tablist`+内嵌 region，searchParams 持 pair，失败/处理中组显 `compare-viewer-empty` 空态）；共享件/工具入 `src/pages/Compare/shared.tsx`（同步删 V2 工具条重复修订计数）；删 ComparePage.tsx；App.tsx 三 lazy 路由；V2 app.css 同步清理 dialog/direction-note/双计数/revision-summary 规则，chip 横向滚动；tests/compare.test.tsx 重写三路由 MemoryRouter 链、components.test.tsx 导入改 shared。
+- **验证**：frontend tsc/lint/vitest 24/24、npm run build 通过（CompareList/New/Task+shared 分 chunk）；tests/browser/test_frontend_v2.py 11/11。
+- **状态**：**已实施并验证**（首传 notice 丢失缺陷见 FL-D852）。
+- **变更记录**：2026-11-01 实施；走查/回归捕获 FL-D852 后修复复验。
+
+## FL-D847 浏览器测试适配与走查验证（2026-11-01 完成）
+
+- **发现日期**：2026-11-01。
+- **问题与影响**：FL-D843~846 结构性变更使既有浏览器用例引用失效选择器/旧交互（上一组下一组/关闭/backdrop/dialog role/工具条计数/单页 V2 路由），且批准要求逐 FL 满配用户视角走查截图。
+- **处理方法（已实施）**：test_v1_frontend_remediation.py——`#compare-next-pair`→`[data-compare-pair="1"]`、`#compare-revision-count`→`-rail`、dialog role/backdrop 断言改 region、关闭退出行改「返回比对任务列表→列表→再进入」、`[data-compare-back-list]` 加 `#compare-task-status` 作用域（页内两实例）、word-style 视口 1440→1600 记档；test_frontend_v2.py——深链 `/compare/{taskId}` 直入工作台、下一组改 chip nth(1)+`wait_for_url(pair=)`、heading 改任务名。走查脚本 /tmp/opencode/qa/shot_b_walk.py（V1 三态：成功/处理中/失败 × desktop/mobile）+ shot_b_v2.py（V2 三页 × desktop/mobile），归档 docs/frontend/evidence/compare-chain-20261101/ 12 张，逐张目检。
+- **验证**：remediation 16/16、perf 门禁 pass（label after-b）、frontend_fixes 15/15、workbench 53/53（`test_review_list_splitter_drag` 满负载偶发 flake，单跑过）、V2 11/11、vitest 24/24、tsc/lint/build。走查目检捕获并已修复 FL-D849~852。
+- **状态**：**已完成并验证**。
+- **变更记录**：2026-11-01 适配+走查；同日捕获缺陷修复后全套复跑绿。
+
+## FL-D848 文档归档与提交（2026-11-01 完成）
+
+- **处理方法（已实施）**：本册登记 FL-D843~852；COMPARE_CHAIN_REDESIGN_20261101.md §2.5 施工表标注完成；横向协同产出 docs/frontend/COMPARE_SCROLL_REUSE_NOTES.md（同步滚动/并排对照复用接口说明，供 FL-D891 指引版本比对复用）。
+- **状态**：**已完成**（提交前全套回归绿为准）。
+- **变更记录**：2026-11-01 登记。
+
+## FL-D849 合同组 chip 错误文本竖排（走查捕获，2026-11-01 发现）
+
+- **发现日期**：2026-11-01（FL-D847 走查 p3-failed 截图目检）。
+- **问题与影响**：失败组 chip 内 `.compare-pair-error` 错误文本逐字竖排，chip 被撑至 ~280px 高。
+- **根因（两处叠加）**：1) chip 三列 grid（`34px minmax(0,1fr) auto`）下第 4 子元素 error 落进第二行第一列（34px 窄列）；2) 首轮修复规则 `.compare-pair-error{grid-column:1/-1}` 所在行首有一个游离 `.`（`./\*` 开头），选择器非法整条规则被浏览器丢弃——诊断经 computed style 确认 width=34px、gridColumn=auto。
+- **处理方法（已实施）**：`.compare-pair-error{grid-column:1/-1}` + 清除游离残点。
+- **验证**：重拍 p3-failed-desktop/mobile 目检错误文本横排、chip 高度回归正常。
+- **状态**：**已修复并验证**。
+- **变更记录**：2026-11-01 发现→修复→走查复验。
+
+## FL-D850 region 聚焦引发主滚动区跳动（走查捕获，2026-11-01 发现）
+
+- **发现日期**：2026-11-01（走查 workbench 截图顶部出现 chip 残影带，诊断为真实布局现象非截图假象）。
+- **问题与影响**：打开比对结果时 `setViewerOpen` 对 viewer `focus()`，聚焦使 `.main` 滚动容器下滚（detail 卡 top=-80），任务头与 chip 切换条被甩出视野，深链进入尤甚。
+- **处理方法（已实施）**：`viewer.focus({preventScroll:true})`——焦点送达 region 保可访问性，滚动位置不动。
+- **验证**：重拍 p3-workbench 截图任务头/chip 条/结果区同屏完整；remediation 16/16 复跑绿。
+- **状态**：**已修复并验证**。
+- **变更记录**：2026-11-01 发现→修复→复验。
+
+## FL-D851 word rail 修订项旧高度覆写与单行化冲突（走查捕获，2026-11-01 发现）
+
+- **发现日期**：2026-11-01（走查 workbench 截图修订项仍 ~135px 高、choice 折行）。
+- **问题与影响**：FL-D845 的单行规则被更高优先级旧规则整体覆写：`.compare-word-revisions .compare-diff-item`（height:128px/block 布局）、`#compare-viewer .compare-word-revisions .compare-diff-item`（height:136px）、`...diff-jump`（grid 三列）、`...choice`（padding 74px 折行）及移动端两条例；摘要折行溢出。
+- **处理方法（已实施）**：六处旧覆写全部改造为单行 44px/jump·choice `display:contents`/移动端折行第二行规格；摘要 `-webkit-line-clamp:3` 废止改单行 ellipsis。
+- **验证**：重拍截图单行 44px 生效、目检合格；perf 门禁+workbench 53/53 复跑绿。
+- **状态**：**已修复并验证**。
+- **变更记录**：2026-11-01 发现→修复→复验。
+
+## FL-D852 V2 首传成功提示被 searchParams 默认 effect 清除（回归捕获，2026-11-01 发现）
+
+- **发现日期**：2026-11-01（test_frontend_v2.test_compare_first_upload_seals_and_refetches_explicit_task 红）。
+- **问题与影响**：CompareNewPage 提交成功后 `navigate('/compare/'+id,{state:{notice,warning}})`，但 CompareTaskPage 补默认 pair 的 effect `setSearchParams(...,{replace:true})` 不带 state——react-router replace 会清空 location.state，「已提交，对比任务正在处理。」提示永远不显示。
+- **处理方法（已实施）**：effect 改为 `setSearchParams(...,{replace:true,state:location.state})`。
+- **验证**：复现脚本确认请求链完整且页面恢复显示 notice；V2 浏览器 11/11、vitest 24/24 绿。
+- **状态**：**已修复并验证**。
+- **变更记录**：2026-11-01 发现→修复→回归绿。

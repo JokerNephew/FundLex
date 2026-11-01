@@ -101,16 +101,16 @@
 
 ### 2.5 施工拆解（FL-D843~848，主线批准后执行）
 
-| 编号 | 内容 | 文件域 |
-| --- | --- | --- |
-| FL-D843 | P3 结构：detail+viewer 合一、chip 组切换、删 direction-note/双计数/dialog 壳 | compare.html/.js/.css |
-| FL-D844 | 选择条并入 rail 底部 + 删「预览可生成性」+ 下载行 | compare.html/.js/.css |
-| FL-D845 | 修订列表压缩 + 整高主区布局 | compare.css(/js) |
-| FL-D846 | V2 三路由拆分与 IA 对齐 | src/pages/Compare, src/app |
-| FL-D847 | 浏览器测试适配 + 用户视角走查截图 | tests/browser |
-| FL-D848 | 方案评审修订项（主线批注落点） | 本文档 |
+| 编号 | 内容 | 文件域 | 状态（2026-11-01） |
+| --- | --- | --- | --- |
+| FL-D843 | P3 结构：detail+viewer 合一、chip 组切换、删 direction-note/双计数/dialog 壳 | compare.html/.js/.css | ✅ 已完成并回归绿（走查缺陷修复见 FL-D849/850） |
+| FL-D844 | 选择条并入 rail 底部 + 删「预览可生成性」+ 下载行 | compare.html/.js/.css | ✅ 已完成并回归绿 |
+| FL-D845 | 修订列表压缩 + 整高主区布局（单行 44px，DIFF_ITEM_HEIGHT 136→44） | compare.css(/js) | ✅ 已完成并回归绿（rail 旧覆写处理见 FL-D851） |
+| FL-D846 | V2 三路由拆分与 IA 对齐 | src/pages/Compare, src/app | ✅ 已完成并回归绿（首传 notice 修复见 FL-D852） |
+| FL-D847 | 浏览器测试适配 + 用户视角走查截图 | tests/browser | ✅ 已完成：remediation 16/16、fixes 15/15、workbench 53/53、V2 11/11、perf 门禁；截图 12 张入 docs/frontend/evidence/compare-chain-20261101/ 并逐张目检 |
+| FL-D848 | 方案评审修订项（主线批注落点） | 本文档 | ✅ 已完成：发现册 FL-D843~852 登记、本文标注、复用说明 docs/frontend/COMPARE_SCROLL_REUSE_NOTES.md |
 
-风险：dialog→inline 改变焦点管理与滚动容器，需复用 FL-D840 后的滚动同步测试集（test_compare_scroll_perf + 既有 sync 回归）防回归。
+风险：dialog→inline 改变焦点管理与滚动容器，需复用 FL-D840 后的滚动同步测试集（test_compare_scroll_perf + 既有 sync 回归）防回归。**已落实**：perf 门禁（label after-b）与全部 sync 相关回归在 B 施工后复跑通过；region focus 引发的滚动容器跳动已由 FL-D850（preventScroll）消除。
 
 ---
 
