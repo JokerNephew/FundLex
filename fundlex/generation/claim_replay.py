@@ -2572,7 +2572,9 @@ def check_delete_residuals(rules_by_id: Mapping[str, dict], after_inspection: An
                 continue
             operation_id = _operation_key(rule, index, operation)
             record = obligations.record(operation_id) if obligations is not None else None
-            if record is not None and record.applicability.status != "TRUE":
+            # Same defence as replay_claims above (FL-D936(9)): a malformed ledger
+            # record narrows the snapshot, it must not abort the residual sweep.
+            if record is not None and str(getattr(getattr(record, "applicability", None), "status", "")) != "TRUE":
                 continue
             known = {str(target.get("location") or "") for target in targets
                      if operation_id in target.get("operations", ()) and not target.get("out_of_scope")}
