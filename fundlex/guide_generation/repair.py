@@ -76,7 +76,7 @@ def repair_items(router, items: list[GuideItem], requirements: list[PolicyRequir
                                  response_schema=REPAIR_SCHEMA, instruction=REPAIR_INSTRUCTION,
                                  prompt_version=REPAIR_VERSION, role="guide_author")
         except Exception as exc:
-            return item, [], f"{type(exc).__name__}:{getattr(exc, 'code', '')}"
+            return item, [], "", f"{type(exc).__name__}:{getattr(exc, 'code', '')}"
         value = result.value
         item.title = str(value.get("title") or item.title)
         item.business_requirement = str(value.get("business_requirement") or item.business_requirement)
@@ -109,7 +109,7 @@ def repair_items(router, items: list[GuideItem], requirements: list[PolicyRequir
         item.applicability = proxy.applicability
         if "direct_sale_fee_scope_guard" in proxy.notes:
             item.metadata["direct_sale_fee_scope_guard"] = True
-        return item, fixes, str(value.get("repair_notes") or "")
+        return item, fixes, str(value.get("repair_notes") or ""), ""
 
     repaired: list[GuideItem] = []
     extra_findings: list[dict[str, Any]] = []
@@ -117,16 +117,28 @@ def repair_items(router, items: list[GuideItem], requirements: list[PolicyRequir
     with ThreadPoolExecutor(max_workers=max(1, min(max_workers, len(targets)))) as executor:
         futures = [executor.submit(one, item) for item in targets]
         for future in as_completed(futures):
-            item, fixes, note = future.result()
-            if item.status == "repaired":
-                calls += 1
-                repaired.append(item)
-                extra_findings.extend(fixes)
+            item, fixes, note, error = future.result()
+            if error:
+                # A single failed repair call must stay visible: previously
+                # the error string was discarded and no finding was recorded,
+                # so the round looked fully successful (FL-D826).
                 extra_findings.append({
-                    "finding_id": stable_id("F", "REPAIR", item.guide_item_id, note, length=20),
+                    "finding_id": stable_id("F", "REPAIR-FAIL", item.guide_item_id,
+                                            error, length=20),
                     "guide_item_id": item.guide_item_id, "category": "repair",
-                    "severity": "info", "status": "repaired", "source": "guide_repair",
-                    "description": "已执行一轮独立复核后的修复：" + (note or "字段已更新"),
-                    "evidence_quote": item.new_text[:300],
+                    "severity": "major", "status": "open", "source": "guide_repair",
+                    "description": "修复模型调用失败，该条目维持原样：" + error,
+                    "evidence_quote": "",
                 })
+                continue
+            calls += 1
+            repaired.append(item)
+            extra_findings.extend(fixes)
+            extra_findings.append({
+                "finding_id": stable_id("F", "REPAIR", item.guide_item_id, note, length=20),
+                "guide_item_id": item.guide_item_id, "category": "repair",
+                "severity": "info", "status": "repaired", "source": "guide_repair",
+                "description": "已执行一轮独立复核后的修复：" + (note or "字段已更新"),
+                "evidence_quote": item.new_text[:300],
+            })
     return repaired, extra_findings, calls
