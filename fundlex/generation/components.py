@@ -1,10 +1,12 @@
 """Required policy components and their literal evidence (plan §16).
 
-A component is complete only when **all** of its terms occur inside the same
-obligation/site output.  Terms are deliberately short and literal: they describe the
-mechanism the guide requires, not a paraphrase.  The registry's
-``required_components`` ids resolve here; an unknown id is a configuration error
-(fail closed) rather than being silently ignored.
+A component is complete when **any** of its terms occurs inside the same
+obligation/site output: terms are alternative wordings of one mechanism
+(其他销售机构 / 直销机构之外; 超过一年 / 超过1年 / 满一年), not a conjunction
+(aligned with ``validators.check_components``, FL-D937(9)).  Terms are deliberately
+short and literal: they describe the mechanism the guide requires, not a
+paraphrase.  The registry's ``required_components`` ids resolve here; an unknown
+id is a configuration error (fail closed) rather than being silently ignored.
 """
 from __future__ import annotations
 

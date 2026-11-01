@@ -611,5 +611,6 @@ def _int_or_none(value: Any) -> int | None:
 
 def accept_all(redline: str | Path, report: Mapping[str, Any]) -> dict[Any, Any]:
     """Decision map that accepts every revision the engine produced."""
-    return {int(item["del_id"]): ACCEPT for item in _manifests_from_report(report)} | {
-        int(item["ins_id"]): ACCEPT for item in _manifests_from_report(report)}
+    manifests = _manifests_from_report(report)
+    return {int(item["del_id"]): ACCEPT for item in manifests} | {
+        int(item["ins_id"]): ACCEPT for item in manifests}

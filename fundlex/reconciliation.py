@@ -87,6 +87,9 @@ CLASS_TEXT: dict[str, dict[str, str]] = {
         "owner": "replay",
     },
     "MISS_COVERAGE_RESIDUAL": {
+        # Not emitted by the current classifier (FL-D929): kept as a stable
+        # public class for wire compatibility, same reservation as
+        # ``MISS_EDIT_LOST`` above.
         "zh": "覆盖审计在最终产物中仍发现该义务缺少闭环证明（覆盖残余）。",
         "en": "The final coverage sweep still finds no closing proof for this "
               "obligation in the artifact.",
@@ -101,6 +104,9 @@ CLASS_TEXT: dict[str, dict[str, str]] = {
         "owner": "ledger",
     },
     "MISS_REVIEW_PENDING": {
+        # Not emitted by the current classifier (FL-D929): the only emitter was
+        # an unreachable tail guarded by a false precondition. Kept as a stable
+        # public class for wire compatibility.
         "zh": "义务处于待复核开放状态，未归入更具体的缺口类别。",
         "en": "The obligation remains open in a review-pending state without a "
               "more specific gap classification.",
@@ -239,9 +245,10 @@ def classify_record(record: Any, *, plan_edits: list[Mapping[str, Any]],
         return _finish("MISS_PLAN_GAP", "none")
     if proof is not None and _norm(proof.get("state")) == "FAIL":
         return _finish("MISS_EFFECT_UNPROVEN", "none")
-    if not proof_passed:
-        return _finish("MISS_EFFECT_UNPROVEN", "none")
-    return _finish("MISS_REVIEW_PENDING", "none")
+    # ``proof_passed`` is necessarily False here (the True path returned above),
+    # so any remaining open record with a declared target is an unproven effect.
+    # The old ``MISS_REVIEW_PENDING`` tail was unreachable (FL-D929).
+    return _finish("MISS_EFFECT_UNPROVEN", "none")
 
 
 def reconcile(report: Mapping[str, Any], ledger: Any) -> dict[str, Any]:

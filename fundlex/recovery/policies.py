@@ -83,5 +83,8 @@ def load_policy() -> RecoveryPolicy:
         env_name = "FUNDLEX_RECOVERY_" + key.upper()
         raw_value = os.environ.get(env_name, "").strip()
         if raw_value:
-            overrides[key] = int(raw_value)
+            try:
+                overrides[key] = int(raw_value)
+            except ValueError as exc:
+                raise RecoveryPolicyError(f"{env_name} must be an integer") from exc
     return policy.with_overrides(overrides) if overrides else policy

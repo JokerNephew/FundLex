@@ -265,10 +265,10 @@ def process_v2(input_path: Path, output_dir: Path, ruleset_version: str = "v2",
         edits = outcome["edits"]
         report["edit_plan"] = {"count": len(edits), "sha256": plan.plan_sha256, "edits": edits,
                                "validated": True, "executable": not evaluation and not review_blocked,
-                               "reason": "DELIVERY_MODE" if not evaluation else "EVALUATION_MODE",
+                               "reason": ("V3_ARTIFACT_REVIEW_REJECTED" if review_blocked
+                                          else ("DELIVERY_MODE" if not evaluation
+                                                else "EVALUATION_MODE")),
                                "boundary_policy": "trim-inline-whitespace-sentence-span-v1"}
-        if review_blocked:
-            report["edit_plan"].update(executable=False, reason="V3_ARTIFACT_REVIEW_REJECTED")
         (output_dir / "edits.json").write_text(json.dumps(report["edit_plan"], ensure_ascii=False, indent=2),
                                                encoding="utf-8")
         failed_actions = [action for action in report["actions"]
@@ -280,7 +280,6 @@ def process_v2(input_path: Path, output_dir: Path, ruleset_version: str = "v2",
         report["exceptions"] = [{"action_id": action["action_id"], "reason": action.get("failure_reason"),
                                  "description": action.get("description")} for action in failed_actions]
         if review_blocked:
-            report["edit_plan"].update(executable=False, reason="V3_ARTIFACT_REVIEW_REJECTED")
             report["delivery_status"] = "incomplete"
             return report
         if evaluation:

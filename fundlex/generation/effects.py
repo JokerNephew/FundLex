@@ -15,6 +15,18 @@ def _compact(value: str) -> str:
     return re.sub(r"\s+", "", value)
 
 
+def _occurrence_value(site: Mapping[str, Any]) -> int:
+    """Replay sites may carry a malformed index; treat it as "no occurrence".
+
+    A bad cache record must put the site into UNPROVEN review, never crash the
+    whole effect pass (FL-D928; same guard as generation/coverage.py:249-252).
+    """
+    try:
+        return int(site.get("occurrence_index", -1))
+    except (TypeError, ValueError):
+        return -1
+
+
 _CLAUSE_TERMINALS = r"[。；;！？!?]"
 _CLASS_ENUM_RE = re.compile(
     r"[A-ZＡ-Ｚ]类(?:基金份额)?(?:[、及和与·][A-ZＡ-Ｚ]类(?:基金份额)?)*")
@@ -809,7 +821,7 @@ def _verified_site_closure(sites: Sequence[Mapping[str, Any]], original: Any,
         closed.append(site)
         # Repeated body/summary paragraphs remain separate required sites. Never
         # infer occurrence identity for the narrow G02/G04 substitution path.
-        if int(site.get("occurrence_index", -1)) >= 0:
+        if _occurrence_value(site) >= 0:
             continue
         body = _compact(str(span.text))
         if len(body) < 20:
@@ -1063,12 +1075,12 @@ def evaluate_operation_effect(obligation: Any, original: Any, artifact: Any,
     bound_quotes: dict[str, list[str]] = {}
     for site in sites:
         location = str(site.get("location") or site.get("site_id") or "")
-        occurrence = int(site.get("occurrence_index", -1))
+        occurrence = _occurrence_value(site)
         site_id = f"{location}#occurrence:{occurrence}" if occurrence >= 0 else location
         bound_quotes.setdefault(site_id, []).append(str(site.get("quote") or ""))
     for site in sites:
         location = str(site.get("location") or site.get("site_id") or "")
-        occurrence = int(site.get("occurrence_index", -1))
+        occurrence = _occurrence_value(site)
         site_id = f"{location}#occurrence:{occurrence}" if occurrence >= 0 else location
         if not location or site_id in seen:
             continue

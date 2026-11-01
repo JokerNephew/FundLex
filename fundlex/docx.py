@@ -478,6 +478,9 @@ def _max_revision_id_in_parts(parts: Mapping[str, bytes], limits: ZipLimits) -> 
         try:
             highest = max(highest, _max_revision_id(_xml(data, limits)))
         except DocxError:
+            # Intentional (FL-D936(10)): callers validate the whole package
+            # before this scan, so an unparsable part is already rejected; the
+            # scan only needs every parseable part's max id.
             continue
     return highest
 
@@ -1027,6 +1030,9 @@ def _max_revision_id(root: etree._Element) -> int:
             try:
                 highest = max(highest, int(element.get(Q("id"), "0")))
             except ValueError:
+                # Intentional (FL-D936(10)): a non-numeric foreign id cannot
+                # raise the max; generation-side REVISION_ID_UNEXPECTED guards
+                # collide with it on write, so skipping here is safe.
                 continue
     return highest
 

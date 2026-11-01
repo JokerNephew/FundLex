@@ -415,6 +415,14 @@ def splice_pairs(old_text: str, new_text: str, *, window: int = 6
     return pairs
 
 
+#: A splice that shrinks the span by more than this many compacted characters is
+#: treated as accidental text loss and refused (safety bound for guide-pair
+#: replacement: legit G09/G18 splices differ by a handful of characters, not
+#: three digits). Empirical bound from the G09/G18 corpus; tuning requires
+#: re-measuring against those fixtures (FL-D937(10) — previously a bare 120).
+_MAX_SPLICE_SHRINK_CHARS = 120
+
+
 def plan_splice(before: str, pairs: list[tuple[str, str]]) -> TemplateResult | None:
     """Apply the bounded context pairs that occur verbatim in the span."""
     replacement = before
@@ -428,7 +436,7 @@ def plan_splice(before: str, pairs: list[tuple[str, str]]) -> TemplateResult | N
             applied.append([old_ctx, new_ctx])
     if not applied:
         return None
-    if len(_compact(replacement)) < len(_compact(before)) - 120:
+    if len(_compact(replacement)) < len(_compact(before)) - _MAX_SPLICE_SHRINK_CHARS:
         return None
     return TemplateResult(replacement=replacement, content_source="tier1_splice",
                           evidence={"mode": "bounded_splice", "applied": applied})

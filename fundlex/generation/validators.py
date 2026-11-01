@@ -564,14 +564,3 @@ def validate_policy_components(*, components: PolicyComponents,
                 failure_class="GENERATION",
             ))
     return ValidationReport(findings=tuple(extra), changes=report.changes)
-
-
-def _token_context(text: str, token: str) -> str:
-    """The smallest sentence-ish window around ``token`` (for removal checks)."""
-    index = _compact(text).find(token)
-    if index < 0:
-        return token
-    compact = _compact(text)
-    start = max(0, index - 24)
-    end = min(len(compact), index + len(token) + 24)
-    return compact[start:end]

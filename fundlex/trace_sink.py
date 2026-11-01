@@ -66,7 +66,15 @@ from typing import Any, Iterator
 _LOGGER = logging.getLogger("fundlex.trace_sink")
 
 _LOCK = threading.Lock()
-_CAPTURE_TEXT = True
+
+# Capture-on/off is per-traced-document, and a worker owns one document per
+# thread (same rationale as ``_ACTIVE`` below): thread-local kills the race
+# where two concurrent documents crossed each other's redaction flag (FL-D936(2)).
+_CAPTURE_TEXT = threading.local()
+
+
+def _capture_text() -> bool:
+    return getattr(_CAPTURE_TEXT, "enabled", True)
 
 _DEFAULT_MAX_BYTES = 64 * 1024 * 1024
 _DEFAULT_KEEP_ROTATED = 10
@@ -115,7 +123,7 @@ def digest(text: str | None) -> str | None:
 def _redact(text: str | None) -> Any:
     if text is None:
         return None
-    if _CAPTURE_TEXT:
+    if _capture_text():
         return text
     return {"sha256": hashlib.sha256(text.encode("utf-8")).hexdigest(), "chars": len(text)}
 
@@ -193,8 +201,7 @@ def _write(record: dict[str, Any]) -> None:
 def trace_document(*, name: str, document_id: str, metadata: dict | None = None,
                    tags: list[str] | None = None) -> Iterator[str]:
     """Open a document trace. Yields the deterministic trace id (always)."""
-    global _CAPTURE_TEXT
-    _CAPTURE_TEXT = _env_flag("FUNDLEX_TRACE_CAPTURE_TEXT", True)
+    _CAPTURE_TEXT.enabled = _env_flag("FUNDLEX_TRACE_CAPTURE_TEXT", True)
     tid = trace_id_for(document_id)
     if enabled():
         _write({"kind": "trace", "trace_id": tid, "document_id": document_id,

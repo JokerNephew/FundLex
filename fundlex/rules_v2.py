@@ -187,7 +187,7 @@ def _validate_action(action: dict[str, Any], known_ids: set[str]) -> None:
         if generation.get("kind") not in {"direct_sales_clause", "redemption_fee_ownership"}:
             raise RuleV2Error("V2_GENERATION_KIND_INVALID")
         # Reference text is guidance only; it must not carry A/C slot tokens
-        # that would gate writes (TEMPLATE_VARIANT_UNNAPROVED in v1).
+        # that would gate writes (TEMPLATE_VARIANT_UNAPPROVED in v1).
         if "template_slots" in generation:
             raise RuleV2Error("V2_TEMPLATE_SLOTS_UNSUPPORTED")
     if generation["mode"] == "template":
