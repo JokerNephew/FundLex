@@ -8815,3 +8815,13 @@ H＝E×…
 - **BH01 新回摆**：r1 complete/r2 incomplete——G13@p242 `AUDIT_VERDICT_MISSING`：audit 正确识 needs_edit（「应对短持有期赎回费表述删除」）但 **plan 台无 G13 项**（计划遗漏族形态，与 dev 线 FL-D693/791 家族同形）→ 单义务连坐扣全案 -20。是否修复副作用未确证（applicability 变更不影响 G13 TRUE）；建议主线立号并与计划守护机制族对照。
 - **状态**：BH07 恢复通道形态 + BH01 计划遗漏 → **主线 FL-D981/982 接修中**；FL-D862/863/864 机制生效已实证（残余另册）；第二波维持冻结。
 - **变更记录**：2026-11-01 新增。
+
+## 留出 r3 病灶收口（FL-D981 命中实证、qa-recall-miss FL-D869 命中实证、G14 天花板实证）——报主线复核第二波放行（2026-11-01，qa-feat-recall）
+
+- **总账**：r3 103/111=92.8%（r1 51.4→r2 74.8→r3），fc=0（硬门槛七连），wrong=0，actual=reported=6/8。账本段 13：$0.2124/168c/37.1min。
+- **FL-D981 命中实证（BH01 回摆消除）**：G13 T013@p242 重新落地 needs_edit 并执行，全案 unresolved 0 → complete 20/20；r2 的 AUDIT_VERDICT_MISSING plan 缺口未再出现。
+- **qa-recall-miss FL-D869（BH07 二阶）命中实证**：恢复通道生成目标 R022-R028 **清零**；G02/G04 全执行落地（T002/T005 needs_edit 执行、T003/T006 absent 闭合、-G02-1 satisfied）。**MISS_RECOVERY_GENERATED 形态灭绝**。
+- **G14 天花板实证（EN1 预交底兑现）**：BH07 残余 6 unresolved 全部 G14 MISS_TARGET_RESOLUTION（3 CLAIM_REPLAY + 3 FINAL_OPERATION_UNPROVEN「verified site missing」）——目标解析层天花板，EN1 声明「FL-D869 不为 G14 背书、r3 复发不记回摆、建议列第二波观测项」；单案 8 uncompleted 全系 G14 扣件连坐 not_executed，与诚实扣件门语义一致，非谎报。
+- **不回摆核验**：BH02/03/04/05/08 五连不回摆；无新回摆、无新家族。
+- **状态**：FL-D981 与（qa-recall-miss）FL-D869 视主线口径可标「留出实证收口」；BH07/G14 转第二波观测项；第二波放行与否请主线裁定（本线门槛全过）。
+- **变更记录**：2026-11-01 新增。
