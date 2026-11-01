@@ -51,4 +51,4 @@
 
 ### D. 5 分钟真实验证手册
 
-→ `/tmp/opencode/qa/feishu-onboarding/REAL_CROSS_ENTERPRISE_RUNBOOK.md`（待用户提供第二个企业账号后按表执行，含验收点清单与失败分支）。
+→ `docs/qa/feishu-onboarding/REAL_CROSS_ENTERPRISE_RUNBOOK.md`（已入库，截图走查记录同目录）（待用户提供第二个企业账号后按表执行，含验收点清单与失败分支）。
