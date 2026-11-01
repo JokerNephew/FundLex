@@ -309,7 +309,7 @@ def test_location_spanning_foreign_region_fails_closed(tmp_path):
             "end": tail + 2, "expected_old_text": old,
             "expected_old_hash": hashlib.sha256(old.encode()).hexdigest(),
             "template_id": "fixed", "replacement": NEW}
-    # EN3-F4: 几何守卫在验证期即触发 (与写手同一谓词), 并被逐编辑归罪机制隔离;
+    # FL-D1006: 几何守卫在验证期即触发 (与写手同一谓词), 并被逐编辑归罪机制隔离;
     # 修复前此类编辑吞到生成期才爆, 整份合同陪葬.
     with pytest.raises(DocxError) as error:
         validate_edit_plan(source, [edit], {"fixed": NEW}, allow_existing_revisions=True)

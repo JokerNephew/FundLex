@@ -962,7 +962,7 @@ def validate_edit_plan(source: str | Path, edits: Sequence[Mapping[str, Any]],
         # here (instead of deferring to generation) lets the pipeline's
         # per-edit attribution (_drop_unvalidatable_edits) isolate one guilty
         # edit — e.g. a span crossing a foreign revision — instead of losing
-        # the whole contract at the generation boundary (EN3-F4).
+        # the whole contract at the generation boundary (FL-D1006).
         paragraph_node, between, _, _, _ = _edit_region(tree, edit, limits,
                                                         overlay=allow_existing_revisions)
         # Raises EDIT_BOOKMARK_RANGE_BROKEN when the surviving half of a
@@ -1670,7 +1670,7 @@ def generate_artifacts(source: str | Path, plan: ValidatedPlan, redline_path: st
         # writer provably preserves the original topology outside edited
         # paragraphs, and the final package is bound to accept-all(redline)
         # by the canonical equality above, so raw-tree equivalence transfers
-        # to the final package (EN3-F5).
+        # to the final package (FL-D1007).
         baseline = original
         comparison = red_reopen
         anchor_raw = allow_existing_revisions

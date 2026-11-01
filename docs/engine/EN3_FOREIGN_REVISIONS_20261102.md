@@ -25,11 +25,11 @@
 
 | 编号 | 发现 | 根因 | 处置 | 反例/验证 |
 |---|---|---|---|---|
-| EN3-F1 | A 轨摄入对 Word 合法形状整机拒入（31/32） | `_validate_overlay_structure` 把段落标记修订与嵌套 ins>del 一律按"拓扑变化"拒绝 | **opaque-region 放宽**：段落标记（pPr/rPr 祖父链）与嵌套 ins/del 视为不可入编辑的元数据区；trPr 行标记与 move 仍 fail-closed（语料 0 命中，边界写明）。投影天然已正确（ins 计文字禁写/del 占零坐标），清单哈希覆盖外层即覆盖内层 | `tests/test_docx_overlay_contract.py` 两条旧策略断言改写为新契约（含 trPr/move 仍拒的反突变断言）；语料 32/32 摄入 |
-| EN3-F2 | C 策略（先拒绝）能力缺失 | 仅 accept 投影实现 | `compare/revisions._reject_revisions`（accept 的单点镜像：ins/moveTo 摘子树、del 解包+delText→t、段落标插入=合并（与接受删除同构复用 `_join_marked_paragraphs`）、行/单元格插入摘行、属性变更从快照回滚+快照内陈旧标记剥离、cellMerge fail-closed）；`normalize_tracked_base(disposition=)`，生产主链默认 accept 不变 | 合成四形状 accept/reject 镜像断言 + **语料 32 份与独立参照实现全文字流全等比对**（非子串抽查） |
-| EN3-F3 | 拒绝视图 mutation 网 | — | 后置 `_validate_package(full=True)` 天然捕获任何残留标记 | mutation 测试：`_reject_revisions` 变异为空操作 → normalize 必须抛（已入套件） |
-| EN3-F4 | 跨区编辑（跨越外来 del）在 validate 期被吞（except DocxError: pass），`generate_artifacts` 才整机爆——逐编辑归罪机制 `_drop_unvalidatable_edits` 对几何类失效**结构性失灵**（一次模型越界 → 整份合同陪葬） | `validate_edit_plan` 959-965 故意吞几何错误，与自身 docstring「同一几何实现，双方同判」矛盾；写手与验证实际同谓词，吞错只换挡不挡事 | 移除吞错，验证期即抛原码（书签配对检查保持）| 跨区格测试断言 validate 期 fail-closed；既有 200 项相关测试 0 回归；`_drop_unvalidatable_edits` 既有行为不依赖被吞错误（其归罪用例即为自己 validate 抛错路径）|
-| EN3-F5 | A 轨写回整体验证坐标系坍塌：外来**段落标删除**在 accepted 树里物理合并段落，`p{n}` 键整体位移；生成校验用 plan 的原树 location 键查 accepted 树 → NON_TARGET_STRUCTURE_CHANGED/FINAL 系误报，凡编辑点位于任一删段标之后必炸（修复前语料 22/32 写回失败） | 生成校验骨架/非目标/文本/格式四套检查以 accepted 树承载原树坐标 | **原树锚定**：写手已证明不改拓扑（manifest+非目标双重断言），所有 location 键检查改锚原树（original vs redline 原树 c14n/文本/格式三方对拍）；final 与 accept-all(redline) 的 c14n 全等检查不动，结构/文本保证沿等式传导；格式检查在「仅沉降我方 id」的克隆上恢复 run 级断言（外来 wrapper 由清单 c14n 防篡）| 语料 32 份写回 33 格全绿；合成同形状回归（clean/flush-adjacent-del/header）|
+| FL-D1003 | A 轨摄入对 Word 合法形状整机拒入（31/32） | `_validate_overlay_structure` 把段落标记修订与嵌套 ins>del 一律按"拓扑变化"拒绝 | **opaque-region 放宽**：段落标记（pPr/rPr 祖父链）与嵌套 ins/del 视为不可入编辑的元数据区；trPr 行标记与 move 仍 fail-closed（语料 0 命中，边界写明）。投影天然已正确（ins 计文字禁写/del 占零坐标），清单哈希覆盖外层即覆盖内层 | `tests/test_docx_overlay_contract.py` 两条旧策略断言改写为新契约（含 trPr/move 仍拒的反突变断言）；语料 32/32 摄入 |
+| FL-D1004 | C 策略（先拒绝）能力缺失 | 仅 accept 投影实现 | `compare/revisions._reject_revisions`（accept 的单点镜像：ins/moveTo 摘子树、del 解包+delText→t、段落标插入=合并（与接受删除同构复用 `_join_marked_paragraphs`）、行/单元格插入摘行、属性变更从快照回滚+快照内陈旧标记剥离、cellMerge fail-closed）；`normalize_tracked_base(disposition=)`，生产主链默认 accept 不变 | 合成四形状 accept/reject 镜像断言 + **语料 32 份与独立参照实现全文字流全等比对**（非子串抽查） |
+| FL-D1005 | 拒绝视图 mutation 网 | — | 后置 `_validate_package(full=True)` 天然捕获任何残留标记 | mutation 测试：`_reject_revisions` 变异为空操作 → normalize 必须抛（已入套件） |
+| FL-D1006 | 跨区编辑（跨越外来 del）在 validate 期被吞（except DocxError: pass），`generate_artifacts` 才整机爆——逐编辑归罪机制 `_drop_unvalidatable_edits` 对几何类失效**结构性失灵**（一次模型越界 → 整份合同陪葬） | `validate_edit_plan` 959-965 故意吞几何错误，与自身 docstring「同一几何实现，双方同判」矛盾；写手与验证实际同谓词，吞错只换挡不挡事 | 移除吞错，验证期即抛原码（书签配对检查保持）| 跨区格测试断言 validate 期 fail-closed；既有 200 项相关测试 0 回归；`_drop_unvalidatable_edits` 既有行为不依赖被吞错误（其归罪用例即为自己 validate 抛错路径）|
+| FL-D1007 | A 轨写回整体验证坐标系坍塌：外来**段落标删除**在 accepted 树里物理合并段落，`p{n}` 键整体位移；生成校验用 plan 的原树 location 键查 accepted 树 → NON_TARGET_STRUCTURE_CHANGED/FINAL 系误报，凡编辑点位于任一删段标之后必炸（修复前语料 22/32 写回失败） | 生成校验骨架/非目标/文本/格式四套检查以 accepted 树承载原树坐标 | **原树锚定**：写手已证明不改拓扑（manifest+非目标双重断言），所有 location 键检查改锚原树（original vs redline 原树 c14n/文本/格式三方对拍）；final 与 accept-all(redline) 的 c14n 全等检查不动，结构/文本保证沿等式传导；格式检查在「仅沉降我方 id」的克隆上恢复 run 级断言（外来 wrapper 由清单 c14n 防篡）| 语料 32 份写回 33 格全绿；合成同形状回归（clean/flush-adjacent-del/header）|
 
 ### 3. 如实记录的残余边界（非缺陷，fail-closed 或明示降级）
 
@@ -94,4 +94,4 @@
 - 读实际产物：battery 全部以 python-docx 真读 DOCX + zip part 级断言；final 与 accept-all(redline) c14n 全等即「Word 打开无修复提示」的结构保证（python-docx 双开为零修复代理）。
 - 机制面证明：四处改动均落在通用抽象层（摄入白名单谓词、规范化镜像、验证吞错移除、校验锚定坐标系）；无任何按文件名/费率文本/样本条件的分支。
 - 留史：本文件 + evidence JSON + 状态文件 `/tmp/opencode/qa/status/qa-engine-tracked.md`。
-- 编号说明：EN3 发现暂用本地编号 EN3-F1..F5；FL-D 正式号段请主线派号后由收口线回填（本树中央册不擅动）。
+- 编号说明：发现已由总指挥 2026-11-02 派定正式号段 **FL-D1003~FL-D1007**（映射顺序 EN3-F1..F5；FL-D1007=坐标错位根级缺陷，标最高危）；集中册登记见 [DETAIL_APPEND_EN3](../DETAIL_APPEND_EN3.md)。施工版本 cbcf3cc 起；完工=矩阵 83 格全绿 + 定版全量回归 **2802 passed / 145 skipped / 0 failed** + 真实语料 32 份过机证据 + 真实模型双 PASS。
