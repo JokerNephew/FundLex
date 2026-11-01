@@ -610,3 +610,108 @@ def test_mutation_g06_gate_still_closed_without_boundary(tmp_path):
                                        _facts(), boundary_locations=None)
     assert result.state == "OPEN"
     assert "g06_subsection_scope_missing" in str(result.reason)
+
+
+# ---------------------------------------------------------------------------
+# FL-D869: BH07 second order — class-grouping replace completion verdict
+# ---------------------------------------------------------------------------
+
+def _g02_contract_paragraphs(extra=()):
+    return [
+        "本基金根据销售所适用账户的不同，将基金份额分为A类基金份额和Y类基金份额。"
+        "A类基金份额不得对个人养老金账户进行销售，Y类基金份额仅面向个人养老金账户销售。",
+        "本基金A类、Y类基金份额分别设置代码。由于基金费用可能存在不同,"
+        "本基金A类基金份额和Y类基金份额将分别计算基金份额净值。",
+        *extra,
+    ]
+
+
+def _g02_coverage(tmp_path, name, paragraphs, facts, targets=()):
+    from types import SimpleNamespace
+    from fundlex.recall import absent_delete_coverage
+    insp = _inspect(tmp_path, name, paragraphs)
+    guide = json.loads(_guide_path().read_text())
+    ledger = compile_obligations(guide)
+    apply_facts(ledger, facts)
+    rules_by_id = {rule["rule_id"]: rule for rule in guide["groups"]}
+    locations = frozenset(f"p{index}" for index in range(len(paragraphs)))
+    scopes = {"G02": SimpleNamespace(locations=locations),
+              "G04": SimpleNamespace(locations=locations)}
+    return absent_delete_coverage(rules_by_id, list(targets), insp, scopes,
+                                  ledger, facts=facts)
+
+
+def test_g02_g04_enumerated_absence_and_empty_group_certificates(tmp_path):
+    """BH07 shape: enumeration/partition sentences only + VERIFIED-empty
+    service group -> enumerated absence for the letter ops, empty-group
+    no-op for the service-side ops."""
+    facts = _facts_multi_no_svc()
+    records = _g02_coverage(tmp_path, "g02", _g02_contract_paragraphs(), facts)
+    assert records["G02:0"]["kind"] == "enumerated_absence"
+    assert records["G02:1"]["kind"] == "empty_group_noop"
+    assert records["G04:0"]["kind"] == "enumerated_absence"
+    assert records["G04:1"]["kind"] == "empty_group_noop"
+
+
+def test_mutation_g02_certificate_blocked_by_fee_regime_sentence(tmp_path):
+    """A real fee-grouping prototype sentence is the operation's object: the
+    certificate must NOT fire (fail closed), even for G04 which shares the
+    reference term."""
+    facts = _facts_multi_no_svc()
+    records = _g02_coverage(tmp_path, "g02b", _g02_contract_paragraphs(extra=(
+        "A类基金份额：指在投资者申购时收取申购费用，"
+        "不再从本类别基金财产中计提销售服务费的基金份额。",
+    )), facts)
+    assert "G02:0" not in records
+    assert "G04:0" not in records
+    # ...but the empty-group service-side ops stay completable.
+    assert records["G02:1"]["kind"] == "empty_group_noop"
+
+
+def test_mutation_g02_certificates_need_verified_facts(tmp_path):
+    """UNKNOWN fee groups fail closed for every completable shape."""
+    facts = _facts_multi_no_svc()
+    object.__setattr__(facts, "fact_status",
+                       {"share_class_structure": "VERIFIED",
+                        "subscription_fee_group": "VERIFIED",
+                        "service_fee_group": "UNKNOWN"})
+    records = _g02_coverage(tmp_path, "g02u", _g02_contract_paragraphs(), facts)
+    assert "G02:0" not in records
+    assert "G02:1" not in records
+
+
+def test_mutation_g02_false_recovery_binding_is_rebutted(tmp_path):
+    """FL-D869: a recovery target claiming the op on an enumeration paragraph
+    must not disable the certificate; the same claim with a real fee sentence
+    in scope keeps the operation open."""
+    from fundlex.recall import Target
+    facts = _facts_multi_no_svc()
+    claim = Target(target_id="R-valse", rule_id="G02", location="p0",
+                   quote="分为A类基金份额和Y类基金份额", state="needs_edit",
+                   start=0, end=0, reason="claim_operation_recovery:G02:0",
+                   operations=("G02:0",))
+    records = _g02_coverage(tmp_path, "g02r", _g02_contract_paragraphs(),
+                            facts, targets=(claim,))
+    assert records["G02:0"]["kind"] == "enumerated_absence"
+    # A real fee-regime sentence still wins over the claimed site.
+    claim2 = Target(target_id="R-real", rule_id="G02", location="p2",
+                    quote="A类基金份额收取申购费", state="needs_edit",
+                    start=0, end=0, reason="claim_operation_recovery:G02:0",
+                    operations=("G02:0",))
+    records = _g02_coverage(tmp_path, "g02r2", _g02_contract_paragraphs(extra=(
+        "A类基金份额收取申购费用，Y类基金份额的申购费用另有约定。",
+    )), facts, targets=(claim2,))
+    assert "G02:0" not in records
+
+
+def test_g02_identity_noop_ac_product(tmp_path):
+    """Dev AC shape: instantiated replacements equal the references, so the
+    identity no-op fires even inside fee sentences (dev 回归防回摆)。"""
+    facts = _facts()
+    paragraphs = [
+        "A类基金份额：指在投资者申购时收取申购费用，不再从本类别基金财产中计提销售服务费的基金份额。",
+        "C类基金份额：指从本类别基金财产中计提销售服务费的基金份额。",
+    ]
+    records = _g02_coverage(tmp_path, "g02i", paragraphs, facts)
+    assert records["G02:0"]["kind"] == "identity_noop"
+    assert records["G02:1"]["kind"] == "identity_noop"

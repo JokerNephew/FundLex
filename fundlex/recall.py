@@ -10820,6 +10820,84 @@ _DELETE_REVIEW_PROBES = {
 }
 
 
+# FL-D869: the class-grouping rules (G02/G04) act on the fee-regime sentence
+# that keys one guide-example letter on the subscription/service-fee grouping.
+# Only these regime lexemes identify such a sentence; management/custody fee
+# clauses (管理费/托管费…) belong to other rules' domains and must neither
+# block nor justify the certificate.
+_CLASS_GROUPING_FEE_LEXEME = re.compile(r"(?:认购费|申购费|销售服务费|服务费)")
+
+
+def _class_grouping_replace_verdict(spec: Any, facts: Any,
+                                    inspection: DocumentInspection,
+                                    scanned: Sequence[str]) -> dict[str, str] | None:
+    """Per-operation completion verdict for a class-grouping replace (FL-D869).
+
+    Returns ``{"kind": ..., "reason": ...}`` when the operation completes
+    without an edit, else ``None``.  Three completable shapes, each a hard
+    fact with an explicit judgment (FL-D052/FL-D106 discipline):
+
+    ``empty_group_noop`` — instantiate_slots reports SERVICE_/SUBSCRIPTION_
+    GROUP_EMPTY and that group fact is VERIFIED-empty: the class group the
+    binding would name does not exist, so the operation is a satisfied no-op
+    (FL-D699/FL-D090 philosophy).  UNKNOWN facts fail closed.
+
+    ``identity_noop`` — the instantiated replacement compact-equals its
+    reference: nothing to change (per-operation letter stability).
+
+    ``enumerated_absence`` — no in-scope occurrence of the exact reference
+    term sits in a fee-regime sentence: the contract names the classes only
+    in enumeration / sales-account-partition / code-setup sentences, which
+    are not the substitution's object (rewriting one would corrupt it,
+    e.g. BH07「分为A类、Y类基金份额和Y类基金份额」).  Any fee-regime
+    sentence keyed on the single reference letter is the real object and
+    blocks the certificate (fail closed) even when a recovery target claims
+    the operation — a false enumeration binding is rebutted, a real site is
+    never certified away.
+    """
+    if facts is None:
+        return None
+    if any(facts.status_of(name) != "VERIFIED" for name in
+           ("share_class_structure", "subscription_fee_group",
+            "service_fee_group")):
+        return None
+    old = str(spec.old_text or "").strip()
+    new = str(getattr(spec, "new_text", "") or "").strip()
+    if not old or not new:
+        return None
+    instantiated, issues = instantiate_slots(new, facts)
+    if "SERVICE_GROUP_EMPTY" in issues or "SUBSCRIPTION_GROUP_EMPTY" in issues:
+        group = (facts.service_group if "SERVICE_GROUP_EMPTY" in issues
+                 else facts.subscription_group)
+        if not tuple(group or ()):
+            return {"kind": "empty_group_noop",
+                    "reason": ("class group bound by the replacement is "
+                               "VERIFIED-empty: the binding object is absent "
+                               "(satisfied no-op)")}
+        return None
+    if issues or not instantiated:
+        return None
+    if _compact(instantiated) == _compact(old):
+        return {"kind": "identity_noop",
+                "reason": ("instantiated replacement equals its reference "
+                           "(satisfied no-op)")}
+    term = _compact(old)
+    for location in scanned:
+        try:
+            text = str(inspection.by_location(location).text)
+        except (KeyError, ValueError, IndexError, AttributeError):
+            continue
+        for sentence in re.split(r"(?<=[。；;！？!?])", text):
+            compact_sentence = _compact(sentence)
+            if (term in compact_sentence
+                    and _CLASS_GROUPING_FEE_LEXEME.search(compact_sentence)):
+                return None
+    return {"kind": "enumerated_absence",
+            "reason": ("no fee-regime sentence keyed on the reference letter "
+                       "inside the rule scope; enumeration/partition sentences "
+                       "are not the substitution's object (absence no-op)")}
+
+
 def absent_delete_coverage(rules_by_id: Mapping[str, Any],
                            targets: Sequence[Target], inspection: DocumentInspection,
                            scopes: Mapping[str, Any] | None, obligations: Any,
@@ -10875,17 +10953,18 @@ def absent_delete_coverage(rules_by_id: Mapping[str, Any],
         elif spec.op == "replace":
             if spec.rule_id not in replace_noop:
                 continue
-            if spec.rule_id in {"G02", "G04"}:
-                # Class-group substitution is a no-op only when the hard class
-                # facts instantiate every replacement to the existing wording.
-                # A different class set must still be located and edited.
-                rule = rules_by_id.get(spec.rule_id) or {}
-                if facts is None or not class_substitution_letter_stable(rule, facts):
-                    continue
+            if spec.rule_id in {"G02", "G04"} and facts is None:
+                continue
         else:
             continue
         if spec.operation_id in in_scope_operations:
-            continue
+            # FL-D869: the blanket "a claimed site disables the certificate"
+            # guard makes G02/G04 unclosable whenever recovery binds them onto
+            # an enumeration sentence (BH07).  The per-operation verdict below
+            # replaces it: a real fee-regime sentence still blocks, so false
+            # bindings are rebutted while real sites stay fail-closed.
+            if not (spec.op == "replace" and spec.rule_id in {"G02", "G04"}):
+                continue
         references = [str(value) for value in
                       (spec.old_text, *spec.alternatives) if str(value).strip()]
         if spec.op == "replace" and spec.rule_id == "G18":
@@ -10910,6 +10989,26 @@ def absent_delete_coverage(rules_by_id: Mapping[str, Any],
         scanned = [location for location in scanned
                    if any(str(span.location) == location for span in inspection.paragraphs)]
         if not scanned:
+            continue
+        if spec.op == "replace" and spec.rule_id in {"G02", "G04"}:
+            # FL-D869: per-operation completion verdict for class-grouping
+            # replaces (empty group / identity / enumerated absence); the
+            # literal-containment check below cannot cover the BH07 shape
+            # because the reference term IS present — inside non-fee
+            # enumeration sentences.
+            verdict = _class_grouping_replace_verdict(spec, facts, inspection,
+                                                      scanned)
+            if verdict is None:
+                continue
+            records[spec.operation_id] = {
+                "kind": verdict["kind"],
+                "operation_id": spec.operation_id,
+                "obligation_id": record.obligation_id,
+                "scanned_locations": scanned,
+                "document_sha256": inspection.source_sha256,
+                "reason": verdict["reason"],
+                "review_candidates": [],
+            }
             continue
         scoped_document = _compact("\n".join(
             inspection.by_location(location).text for location in scanned))
