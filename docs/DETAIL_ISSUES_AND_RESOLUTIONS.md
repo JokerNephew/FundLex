@@ -8964,3 +8964,8 @@ H＝E×…
 - 前后对照截图 9 张（c03af74 独立 worktree 构建 pre-dist，同机同视口桌面+移动，已回读复核）存 docs/frontend/evidence/listbox-20261101/；完工报告 FL_D991_COMPLETION_REPORT_20261101.md（用户原话 U1/U2 断言全 ✅）。
 - 质量双保险：A=自拍截图自检（有）；B=质检子agent 环境无 subagent 工具，如实申报并申请主线补派。
 - 状态：全工单项完成（S1+组件测试绿+选型备案），待主线验收；V1 集成移交主线另行排期。
+
+## FL-D1002 fc 硬门首破：complete 虚报双形态（2026-11-02 00:0x，第二波 holdout25 初读，open·最高危）
+- holdout25=138/274(50.4%)，wrong=0，**fc=2**（reported 8/actual 6）。
+- 形态一 gate 旁路（W2H04）：unresolved 台账明列 3 条（FINAL_COVERAGE_UNRESOLVED 等）交付仍 complete；形态二 audit 盲区（W2H12）：G22 T019 旧文在场（kept），audit 零识别。
+- EVAL 处置合纪律（不隐去/不改 gold/原档全留）；根因派 EN1（两族最小复现+机制定位+mutation 反例）；第二波总判定待全量读数后主线裁定。
