@@ -176,3 +176,11 @@
 ### 2026-11-01 22:4x INT 整合收口线设立（用户亲定分工建议落地）
 - 用户指示：「不一定要你收口，你可以安排别的对话专门负责收口，但他们得充分了解任务要求」→ 设 INT 线（唯一授权写主线树的副官），章程经子agent两轮审查（一审抓3越权通道+1 AGENTS冲突+1撞车+命令错误，全部补丁后V2发送）。
 - 分工终版：裁决/派号/GO=总指挥；界面验收=监督线；合并/验证/合并侧台账=INT；监督线对 INT 合并有抽审权。
+
+## 【INT 合并台账】（本小节归 INT 收口线追加维护，其余区域只读）
+
+- 2026-11-01 23:0x 就任首批收口（详情 /tmp/opencode/qa/dispatch-log/INT-LOG.md #1~#3）：
+  - ✅ `4672773` EN1(qa-recall-miss) 总攻文档 3 件摘收（纯 docs 通道，FETCH_HEAD bda16b4…）
+  - ✅ `2b0cb28` GG(qa-gg-audit) 总攻文档 13 件摘收（纯 docs；DETAIL_APPEND_GG_AUDIT 冲突 1 处按并集先例解决）
+  - ✅ `fabff06` EVAL(qa-feat-recall) A2/A3 文档 6 件摘收（纯 docs；剔除碰治理档 3 commit 已上报）
+  - ⏳ 阻塞：qa-frontend-v2（D991 已过验收，但增量含 DETAIL_ISSUES/package.json/package-lock.json 治理+lock 三件套，待总指挥逐件明示）；qa-frontend-c（待 ACCEPT-FL-D990/994 + node_modules 软链回潮需该线先清）；qa-audit-platform（PL2 待放行条）
