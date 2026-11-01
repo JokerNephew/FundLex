@@ -84,3 +84,8 @@
 - ✅ recall-miss r3 → 9efe827（FL-D695/696 机制修复）；loop-6 冻结令已发 feat-recall
 - ✅ compare-tracked → 30cf69e（修订痕迹接受视图；worker/store 双特性共存）——compare 域全部线收口
 - 在跑：loop-6 dev20；项9 已完；留 compare 性能复测（低噪窗口）
+
+### 2026-11-01 09:5x 收口进度（巡线29）
+- ✅ recall-miss r4 → ada83eb（FL-D697 容器校验/FL-D698 satisfied 消歧/FL-D695 残渣；24 测绿）；loop-7 冻结令已发 feat-recall
+- ✅ 前端第三轮规划过目通过 → 批0/批1 动工令（FL-D803~815 入册；验收=并排对照非 token）
+- 在跑：loop-7 dev20；前端设计收敛批0/批1
