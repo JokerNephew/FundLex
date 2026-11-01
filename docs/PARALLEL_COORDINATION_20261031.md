@@ -142,3 +142,9 @@
 - **监督线 qa-overseer（会话 WO4MKd 尾）**：用户亲令设立，独立树 qa-overseer；追溯+产出侧+常驻三审计，驳回权；发现号段 FL-D960~979；工单留档制 /tmp/opencode/qa/dispatch-log/（API 窗口仅找回 6 份历史工单，产出侧审计补足）
 - recall 修复回归 2659/0 绿 → **留出第二轮令已发**（新引擎冻结 05c3ef1）
 - compare-ux B 阶段（FL-D843~848 链路重设计）并入 7b95c38（vitest24/build/浏览器 12 绿）
+
+### 2026-11-01 17:5x 三并收口（GG/CX/V2）
+- GG 并入 7931390（FL-D898 质量门+16测+27文件签认+parse-2/prompt-v2 有意升级，两处测试断言跟进 38997a5/续）
+- CX 并入 92aa408（FL-D853~860 签认修复；事故：主线误 reset 后已按 reflog 无损重建历史）
+- V2 并入（FL-D899 普查+直修；冲突裁决：app.css 取比对新形态/ComparePage.tsx 尊重 B 重设计删除/DETAIL 并集）→ vitest24/build/浏览器12 全绿
+- 工单留档制落地：dispatch-log/MAINLINE-2026-11-01.md（监督线常驻审计料）
