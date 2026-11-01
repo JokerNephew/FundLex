@@ -140,3 +140,33 @@
 - 状态与验证：**泄露通道已关闭并复核干净；凭据未轮换（待所有者决定）；防范规则已写入本线操作（不再将环境变量值输出到任何日志/工具结果）**。
 - 下一步：建议主线/管理员评估轮换该 MySQL 凭据（与 FL-D547 记录的旧凭据回显事件并案评估）；发布守门脚本增加「输出过滤器：禁止回显含 KEY/SECRET/PASSWORD/URL 凭据段的环境变量值」检查。
 - 变更记录：2026-11-01 新增。
+
+## FL-D903 新指引解析质量保障体系：可检验质量门标准+多形态测试矩阵+表达质量检查层（FL-D898 工单落地）（2026-11-01）
+
+- 发现日期：2026-11-01，总指挥扩展工单（用户亲定「新指引能不能很好解析成合适的规则，是你需要保证的」）。
+- 问题与影响：解析通道此前只回答「能不能跑」（确定性校验/独立核验/可执行性金丝雀），从未回答「解析出的规则对用户是不是好规则」：①「解析得好」无可检验标准；②多形态指引（无强调格式/通用编号/表格承载/修订痕迹）无解析测试矩阵；③诊断 detail 是英文技术串直怼用户（FL-D883 的同源病灶），findings 的 kind 枚举码直接渲染。
+- 证据：frontend/app.js:1333+（errors/warnings 的 detail 英文技术串直渲染、findings 的 kind 枚举码直渲染）；guide.py 旧 _issue detail 全英文（如 `operations[0].condition class_count requires value 1`）。
+- 处理方法（本线已实施）：①质量门检查清单落档 docs/GUIDE_PARSE_QUALITY_GATE.md（标准 S1-S9+诊断红线+矩阵 M1-M12，每条标注检验位置与状态）。②guide.py：PARSER_VERSION 升 guide-parse-2；validate_parsed_guide 全部 detail 中文化（操作位置「第 N 个操作」、字段中文名、条件中文名），技术串保留在 `detail_tech` 并由 _render_repair_context 专用（模型 repair 上下文不吃中文变更）。③新模块 fundlex/guide_quality.py：presentation_report（S1-S5：人话标题、要求≥8 字、占位符检出、章节定位域提醒、内部标识符红线 INTERNAL_TOKENS）与 check_parse_quality（版本级 5 项 advisory 清单：structure/verification/executability/presentation/code_map）。④guide_store.py：verification findings 持久化时附 `kind_zh`；_parse_enrichment 输出 `quality_checklist`。⑤guide_report.py CODE_EXPLANATIONS 补全（section_hint 空/段落顺序/覆盖缺口/legacy 未注册/文档无效），未归类即矩阵测试失败。⑥tests/test_guide_parse_quality_matrix.py 16 测（M1-M11 零模型构造 DOCX 多形态+M12 基准工具可用性）；test_guide.py 断言适配中文契约+detail_tech 双断言。
+- 状态与验证：**代码已实施+确定性测试全绿**（matrix 16 + guide 系 123 passed；venv 补装 cryptography 后 guide_parse_quality/pipeline 恢复可收集——并线后对新依赖的环境缺口，非代码问题）。**真实模型基准实跑进行中**（v4+V2+engine-smoke 2，账本 /tmp/opencode/qa/guide-parse-bench-fl-d898.sqlite，结果回填本条）。presentation 检查定位 advisory，不改 certified/enable 闸语义（升级与否留主线决定）。
+- 下一步：基准实跑结果回填验证；发布时需对既有含表指引版本重解析（PARSER_VERSION v2 段落索引变化，同类 resync 注意事项已写明）；FL-D905 前端协同落地。
+- 变更记录：2026-11-01 新增。
+
+## FL-D904 指引解析表格盲区：body 内 w:tbl 内容全部静默丢失（已修复，guide-parse-2）（2026-11-01）
+
+- 发现日期：2026-11-01，FL-D898 施工通读 extract_guide_source 时发现。
+- 问题与影响：extract_guide_source 旧实现只迭代 body 直属 w:p，**表格（w:tbl）内的指引内容全部静默丢失**——规则写在表格里的指引：混合文档表现为规则静默缺失（且因 source_paragraphs 无索引可指，覆盖校验也不报），纯表格指引被误报 GUIDE_SOURCE_EMPTY「没读到文本」。属于 S7「结构无丢失」的实质缺口。
+- 证据：旧 guide.py extract_guide_source 循环 `if element.tag != Q("p"): continue`；矩阵测试 M6（test_m6_table_content_is_extracted_and_parseable）修复前后对比。
+- 处理方法：_collect 递归收集 body 直属段落+表格内全部段落（保持文档流顺序）；PARSER_VERSION 升 guide-parse-2（含表文档段落索引变化，既有版本需重解析才受益）。
+- 状态与验证：**已修复并验证**（M6 测表格段可引用、逐字校验通过、零覆盖缺口；M7 测表格内修订删除痕不混入）。
+- 下一步：发布说明注明含表指引需重新解析；评估存量版本是否触发 resync（与 FL-D900 守门同类）。
+- 变更记录：2026-11-01 新增。
+
+## FL-D905 【协同项，施工归前端线】指引问题区块 findings 渲染改用 kind_zh；detail_tech 不得进浏览器（2026-11-01）
+
+- 发现日期：2026-11-01，FL-D883 根治施工时定位前端渲染面。
+- 问题与影响：frontend/app.js:1338「独立核验发现」区块把 finding 的 kind 机器枚举码（wrong_text/missing_group/ambiguous_branch 等内部变量名）当 code 直渲染给用户。后端已在 issues 载荷附带 `kind_zh`（FL-D903，中文名映射 FINDING_KIND_LABELS）；validation issues 现同时带 `detail`（中文）与 `detail_tech`（技术串，供模型 repair context）——前端若改读 detail_tech 属于回退，需防呆。
+- 证据：frontend/app.js:1338（`guideIssueDetails(finding&&finding.kind?finding.kind:'FINDING',...)`）；guide_store._quality_failure_issues 的 kind_zh 产出。
+- 处理方法：本线仅登记（前端文件域归前端线）。建议一行切换：`finding.kind_zh || finding.kind`；GUIDE_ISSUE_HINTS 无需新增（kind 枚举不再进入渲染路径后可保留兜底）。
+- 状态与验证：**已登记，未修复（归属前端线）**；后端侧 kind_zh 已就绪并在 guide 系测试覆盖。
+- 下一步：前端线切换渲染字段并回归指引问题区块；并册时确认编号。
+- 变更记录：2026-11-01 新增。
