@@ -8427,3 +8427,11 @@ H＝E×…
 - **证据**：`/api/session/<id>/message` 中 assistant message `model={"id":"deepseek-v4.1-flash","providerID":"fundlex"}`、created→completed≈1.2s、content=[]×连续多条；对照健康线前端 l8yCbACU=`hon-maas/kimi-k3`；serve 配置 `/home/opencode/.config/opencode/opencode.json` `"model": "fundlex/deepseek-v4.1-flash"`。
 - **处理方法**：①根治口径——**一切经 API 新建的调度会话必须在 create payload 显式钉模型**：`{"model":{"id":"kimi-k3","providerID":"hon-maas","variant":"high"}}`（schema 为 Model.Ref：`{"id","providerID"[,"variant"]}`，`"hon-maas/kimi-k3"` 字符串或 `{providerID,modelID}` 均 400）；②prompt 体内带 model 字段与 PATCH /api/session 均改不了既建会话模型（实证无效）；③两线以新会话重建（gg=XMWmAw4/ux=OhgIvj8），钉模型后 150s 内验证到真实产出（assistant content 非空+状态文件落盘）；④废弃僵尸会话 A4vO9d5/nHOKfnt 不再发令。
 - **状态**：已解决（调度 SOP 更新）；遗留建议：serve 全局默认模型应改成健康模型或 flash 修复，挂运维待办。
+
+## FL-D670 第二波边界清单单列：不可解析 0 / 受保护 0 / 货币市场 3 留分母 / 零目标 16 留分母（2026-11-01，第二波标签线）
+
+- **发现日期**：2026-11-01（响应主线「第二波 100 份准备激活」预告令，对既有冻结产物做边界复核并单列清单）。
+- **结论（非问题，属边界口径登记）**：第二波 100 份全部进入修改分母——①语料 514 份顶层 docx 全部可解析（parse_errors=0、无 .doc）；②入样 0 份受保护（protected_cases=[]，逐案 protected=false）；③货币市场 3 份（W2D52/W2D67/W2D71）作为指引「明确排除类型」分层样本**保留分母**，由盲读标签逐条裁适用性；④16 份零目标案（全部判 satisfied/not_applicable，预期修改数=0）**保留分母**，引擎对其产生任何修改应按过度修改计；⑤excluded_from_modification_denominator=[]。清单工件 `docs/evidence/boundary-second-batch-20261031.json`（sha256 `1703702101b3846bd6416c238601408a181b1d88d3454437d427d3983778ef1d`），纯确定性推导自冻结 selection/labels/verification（推导前 sha 自校验通过）。
+- **处理方法**：边界情形不剔分母、不预排除，全部经盲读裁决并留证据；清单供评分工位对齐分母口径。
+- **状态**：已登记并完成（边界清单随标签冻结一并就绪，等主线放行令跑评测）。
+- **变更记录**：2026-11-01 新增（第二波标签线，固定子池 FL-D670..679 首用）。
