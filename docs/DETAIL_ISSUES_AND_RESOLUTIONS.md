@@ -7550,3 +7550,76 @@ H＝E×…
 - **交叉验证接口（R6）**：主线 500+ 语料结构剖析（类型学+失败相关性矩阵）到位后回填各 FM 覆盖面；语料高频而图未画的形态一律追加新 FM 编号，不得口头带过。
 - **编号裁决记录**：本线程原批号段 FL-D865~869 中 865 被主线用于 BH06 DOCUMENT_PROTECTED（边界案），故机制修复条目改用 FL-D866（BH04）/867（BH05）/868（BH02）/869（BH07），本框架用 FL-D897。
 - **状态**：总图已交付（本树）；R1（BH07 二阶）实施待续。
+
+## FL-D921 指引耦合硬编码遍布确定性通道：新指引静默失效（2026-11-01，EN1 全覆盖审计发现，跨 recall/targeting/rule_scope 三文件）
+
+- **发现（系统性，高优先级）**：rule_id 字面量与现行指引中文文案写死在 survey/触达/合并/site guard/补漏各层；用户上传任意新指引后这些机制不报错不记账、静默失效或 fail-open。主证据：recall.py `_DELETE_SENTENCE_ANCHORS`（10716-10721 仅 G06/G13/G15/G17，入口过滤 11197）→ 新指引规则无残句补漏通道；site guard `_TARGET_ANCHORS`（10157 起）fail-open `rule_id not in _TARGET_ANCHORS: return True`（10425-10426）→ 未收录规则任意段落通过；`_RULE_TOPIC_TOKENS`（6184 起）按 G-id；`_EXAMPLE_GROUP_PATTERNS`（5952-5955）写死示例字母 A/B、C/D；`_G08_ACTUAL_RATE`（10442）、G22 终结锚（7682）、`_G06_SUBSECTION_RE`（1315）；全文件 G01-G22 字面量 242 处。targeting.py：classify 锚 G08/G09/G11/G12/G13（258-268）+G16/G02/G04 特例（490-511）+G11 跨段特例三处——但仅作**优先级**加权（P2/P3 通用片段锚仍在），降级为质量损失静默而非通道关闭。rule_scope.py：policy 调度表（1187-1204）按 rule_id 分派六族——新指引落 `_resolve_default`（**有设计的通用回退**）；`_KNOWN_TITLES` 及「收益分配原则」等中文条款标题为合同词表跨指引稳定可接受；G06 精确句 fallback（849）为现行指引证词字面量。
+- **与用户铁律的关系**：FL-D897 用户明令「机制必须对任意新指引成立」——本条目是该原则尚未治理的系统性残余面；内置 guide 下全绿但不迁移。
+- **处置方向（建议，未实施）**：架构级修复——规则元数据/锚词从指引解析产物注入而非源码常量；分三档治理（①fail-open 点必须关：site guard 未收录规则；②通道关闭点必须有通用等价物：残句补漏、锚词表；③优先级加权点保留特判但新指引必须有账本可见的降级记录）。
+- **状态**：发现登记，待主线裁决架构处置（与 FL-D897 大修框架联动）。
+
+## FL-D922 多 delete-op 规则的残句恢复一律误挂 operation index 0（2026-11-01，EN1 审计 F2，延迟正确性缺陷）
+
+- **发现**：recall.py `_ensure_delete_targets_page` 句池收集规则**全部** delete ops（11241-11242/11313-11314），但三处建 Target 写死 `operations=(operation_key(rule_id, 0),)`（11351/11359/11388）；对照 G17 专用分支正确用法 `_rule_operation_key(rule, idx)`（11249/11252，主 agent 亲核属实）。
+- **现状不 live**：内置 guide 锚定规则 G06/G13/G15/G17 各 1 个 delete op（G05 双 op 不在 anchors 内）；锚定规则在新指引下获第 2 个 delete op 即错挂 → claim replay 覆盖与 ledger 误判。
+- **处置**：逐 op 建句池并携带 `_rule_operation_key(rule, idx)`；验证用例=双 delete-op 假指引断言 `:1`。
+- **状态**：发现登记，修法明确，待实施（随 FL-D921 治理批次或单独小修）。
+
+## FL-D923 derive_fact_statuses 对缺失 polarity 映射 fail-open 返回 VERIFIED（2026-11-01，EN1 审计 F3）
+
+- **发现**：recall.py `fee_group_status`（719-728）：`fee_polarities is None` 时短路跳过 UNKNOWN 检查直返 VERIFIED；`family_conflict`（702-712）同把 None 当无冲突；参数默认 None（680）。（主 agent 亲核属实。）
+- **现状不 live**：仅 1230/1252 两调用点，均传 `Facts.fee_polarities`（default_factory=dict 非 None）。
+- **处置**：None→UNKNOWN 或改必填参数。
+- **状态**：发现登记，低优先级，随下批小修。
+
+## FL-D924 resolve_quote 尾分隔符容差回退无唯一性校验（2026-11-01，EN1 审计 F4）
+
+- **发现**：recall.py（413-422）：引句末标点差异时 `find_normalized(cleaned, body)` 取**首个**命中即返回；上方 `resolve_source_quote`（378-379）对同类问题严格要求唯一候选（非唯一→None）。（主 agent 亲核属实。）
+- **影响**：同段两个仅末标点不同的相同句串会绑错副本；段落已定位故低危，属守卫不对称降级。
+- **处置**：回退路径同样收集候选、非唯一→None。
+- **状态**：发现登记，低优先级。
+
+## FL-D925 span_slice broad except 吞掉 location 不存在（2026-11-01，EN1 审计 F5-1）
+
+- **发现**：recall.py（8464-8469）：`except Exception: return ""`，location 不存在返回空串，调用方可能把空串当已取证据。（主 agent 亲核属实。）同文件另 4 处 broad except（8985-8993/6778-6783/9148-9158/9328-9332）经核为诚实留存或降级路径，排除级留档。
+- **处置**：收窄为 KeyError/DocxError。
+- **状态**：发现登记，低优先级。
+
+## FL-D926 edit_summary.verdict_text 把未知审计判定显示为「通过」（2026-11-01，EN1 审计 F-es1，展示层诚实性）
+
+- **发现**：edit_summary.py `verdict_text`（约 :121）：`.get(verdict or "", "通过（规则校验＋独立复核）" if verdict else "—")`——verdict 为非空但**不在映射内**的新值（未来 audit 新增判定）时落入默认分支，向用户显示「通过（规则校验＋独立复核）」。未知判定应回显原文或「未识别」，不得默认成通过。（主 agent 亲读发现。）
+- **影响**：展示层假阳性；不影响引擎判定只影响工作台文案。
+- **处置**：default 分支返回 `str(verdict)`（一行修）。
+- **状态**：发现登记，修法明确，待实施。
+
+## FL-D927 目标归因污染：inventory 目标被 setdefault 误标为 T3_open_rule（2026-11-01，EN1 审计 E2-F1，中）
+
+- **发现**：recall_pipeline.py 5256 `for target in targets: origins.setdefault(target.target_id, "T3_open_rule")` 在首个 `_target_ledger`（5289）之前，把所有尚无 origin 的目标——即全部 `_inventory` 产生目标（该函数从不写 origins）——批量标为 `T3_open_rule`；`_target_ledger` 886 行 `origins.get(target.target_id, "inventory")` 的 inventory 默认因此永不触发。对照：survey（1468/1474）/rebind（1633/1711）/audit_missed（3215）/sweep 族（3297/3339/3360）/variant 族（4978/4994/5006/5029）均有显式 origin，仅 inventory 无。（子会话发现，主 agent 亲核 5256/886 及 origins 写入点全表属实。）
+- **影响**：报告层 origin 字段系统性失真，inventory 覆盖账算到 T3 头上；不影响交付门禁（origin 仅展示/账本），但违反目标归因完整性纪律。
+- **处置（建议，未实施）**：setdefault 仅对 locator 本批新增目标生效，或在 `_inventory`/`_collect_targets` 处显式登记 `origins="inventory"`。
+- **状态**：发现登记，修法明确，待实施。
+
+## FL-D928 recall_pipeline 死代码族五项（2026-11-01，EN1 审计 E2-F2~F6，低，合并治理）
+
+- **发现**（子会话发现，主 agent 逐项亲核属实）：
+  1. 2903-2912 重复死分支：`elif code in {"AUDIT_VERDICT_MISSING","REVIEW_UNPROVEN"}: VERIFICATION` 与首支同条件永不可达（演进残留）。
+  2. findings 空转 5561/5607-5610/6098：`findings=[]` 初始化后，pending_findings 追加与 `_apply_artifact_proof_to_findings(findings,...)` 均作用在恒空列表（终扫 6144 才重新初始化），误导读者以为 sweep 成果参与 claim-replay 前投影。
+  3. `recovery_sweep_unverified`（5721）永为 False → 6082 分支 SWEEP_RECOVERY_UNVERIFIED 不可达（claim recovery 后必有终扫 6144+，旧顺序残留）。
+  4. `no_progress_rounds`（5723/6003/6016）只增/清零、从不读取（死计数器；真正防死循环走 snapshot 比较 6002 与 audit 侧 5343）。
+  5. `if True:` 残迹门 5614（注释自认 intentional，缩进层应消除）。
+- **处置**：一次小修清理；删除前确认无测试引用上述标识。
+- **状态**：发现登记，待实施。
+
+## FL-D921 附录（2026-11-01 补）：编排层同族证据 10+ 处（E2-F7）
+
+- recall_pipeline.py 同族硬编码（新指引静默降级为质量损失，同 E3 性质，主 agent 亲核 1067/1221/1922/2161/4004/5035 等属实）：`_FEE_SCOPE_RULES={"G15","G16","G17"}`+「销售服务费」锚词（1067/1100）；摘要复制仅 {"G18","G22"}（1221）；G22 scope 豁免（1285）；G01/G03 append-rebind（1287-1300）；satisfied 整段绑定仅 G02/G04（1453-1456）；G16 partial-clause 放行（1922）；G14 veto（1941）；「A类基金份额」字面量↔固定事实名（2161-2166）；class 等价仲裁仅 {"G02","G04","G08","G11","G18"}（2292-2333）；NO_GUIDE_SITE 关闭仅 G22/G08/G01（3764-3800）；`_BUSINESS_PENDING_RULES={"G14","G18"}`（4004）；`FUNDLEX_SEMANTIC_V2_RULES` 默认 "G09"（5035）；required terms 仅 G02/G04（5641）；`_quote_confirms_class_facts` 内置中文正则（2427-2432）。处置并入 FL-D921 主条目治理方向。
+
+## FL-D929 recall_pipeline 并发/身份/观测四项（2026-11-01，EN1 审计 E2-F8~F11，低，合并治理）
+
+- **发现**（子会话发现，主 agent 亲核 2660/4649 属实，6318/3553 证据行随审计文档留档）：
+  1. 审计并发 2660-2664：ThreadPoolExecutor 共享同一 model 网关，本层无锁，正确性依赖 ModelGateway 线程安全契约（未文档化）；模块级 `_DOCUMENT_COMPACT_CACHE`（3592）跨任务共享（id() 键，GIL 下基本安全但属跨运行状态）。
+  2. 增量复扫身份键 6318-6319/6179：以 chunk 文本为已扫身份，文本同位置集不同的第二窗不复扫（低风险；键应含 `chunk.locations`）。
+  3. business_unresolved 等值过滤 4649：两侧 dict 形态不同，`item not in notices` 恒真（将来形态意外相等会静默漏报一项，仅报告展示）。
+  4. SWEEP_CHUNK_LIMIT gap 只记一次（3553-3557，注释自认），多轮 cap 后续次数不可见，观测损失。
+- **处置**：网关卡明确线程安全契约；扫窗键补 locations；等值过滤显式化；gap 改为计数聚合。低优先级，随小修批次。
+- **状态**：发现登记，待实施。
