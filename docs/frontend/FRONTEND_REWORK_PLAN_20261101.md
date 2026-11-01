@@ -190,6 +190,10 @@
 - 不改 review 双栏主交互、不改下载 kind 集合（只重组呈现）。
 - 不新增颜色/字号档，全部用令牌源。
 
+### 6. 实施变更记录（2026-11-01 批4 收口）
+- V2 DocumentDetailPage L0-L3 全量重写已完成（结论一句+双栏+三分组+条件依据）；V1 renderReport 同构（resultCounts/「还要人工核」单块/三分组下载区/「为什么不能处理」条件段）；#detail-overlay 本源正名为 role=region（compare.html 删除 aria-modal）；review 词典「修订清单→改动清单」（V1 V2 双侧+锚同步）；FL-D813 合同组 details 去壳常显。
+- 验收证据：浏览器实证 V2 12/12 + V1 10/10 全过，截图 design-b4-result/v1-result-l0123.png、v2-result-l0123.png、异常态 v2-result-l3inelligible.png；tsc+vitest 24/24+build+CSS 平衡全绿；FL-D818 收口后批4 回归全绿。
+
 ### 5. 验收（随末批终验）
 
 - 真数据截图对照 before(design-audit-20261101)/after：同一测试合同的结果页，四核心问题在 **首屏无滚动** 可答①②③、④一键可达。

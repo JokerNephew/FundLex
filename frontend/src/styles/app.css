@@ -394,6 +394,15 @@ input[type="file"]::file-selector-button { margin-right: 10px; border: 1px solid
 .fundlex-download-list { display: flex; gap: 8px; flex-wrap: wrap; }
 .fundlex-download-empty { padding: 10px 0; }
 .fundlex-download-empty p { margin: 0 0 5px; }
+/* FL-D818 批4：结果页 L1 双栏（改了哪些条款 / 还要人工核）+ L2 产物分组 */
+.fundlex-detail-columns { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 16px; align-items: start; }
+@media (max-width: 900px) { .fundlex-detail-columns { grid-template-columns: 1fr; } }
+.fundlex-target-heading { display: grid; gap: 2px; min-width: 0; overflow-wrap: anywhere; }
+.fundlex-target-preview, .fundlex-target-location { color: var(--muted); font-weight: 400; }
+.fundlex-exception-title { margin: 0 0 6px; }
+.fundlex-exception-title small { color: var(--muted); font-weight: 500; }
+.fundlex-artifact-group { margin-top: 14px; }
+.fundlex-artifact-group h3 { margin: 0 0 8px; font-size: 14px; color: var(--muted); font-weight: 600; }
 .fundlex-detail-warning { margin: 14px 0 0; padding: 10px; background: var(--warning-soft); color: var(--warning); border-radius: 6px; }
 .fundlex-detail-error, .fundlex-error { padding: var(--space-4); border: 1px solid var(--danger-soft); border-radius: var(--radius-sm); background: var(--danger-soft); color: var(--danger); }
 .fundlex-detail-error p, .fundlex-error p { margin: 6px 0 12px; }

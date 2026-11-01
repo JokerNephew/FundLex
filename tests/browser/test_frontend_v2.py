@@ -322,10 +322,10 @@ def test_review_renders_void_document_tags_without_page_error(browser, live_app)
         assert metrics["documentWidth"] <= metrics["viewport"]
         assert metrics["bodyWidth"] <= metrics["viewport"]
         left_tab = page.get_by_role("tab", name="合同呈现")
-        right_tab = page.get_by_role("tab", name="修订清单")
+        right_tab = page.get_by_role("tab", name="改动清单")
         assert left_tab.get_attribute("aria-selected") == "true"
         right_tab.click()
-        page.get_by_role("heading", name="修订清单").wait_for(state="visible")
+        page.get_by_role("heading", name="改动清单").wait_for(state="visible")
         assert right_tab.get_attribute("aria-selected") == "true"
         left_tab.click()
         assert left_tab.get_attribute("aria-selected") == "true"

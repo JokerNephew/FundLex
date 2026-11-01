@@ -8269,11 +8269,19 @@ H＝E×…
 - **变更记录 2026-11-01（批3a 施工，裁决修正）**：实证 app.js:270 触发条件——仅 `tasksLoaded && !tasksFailed && !dismissed && tasks.length===0 && 无筛选词` 才显，**非"常驻"**，空态用户唯一引导、有真实用户价值；裁决由"删卡"改为**保卡删重复尾注**（compare.html 引导卡内 `<div class="guide-note">处理结束后…证据与报告。</div>` 复述正文，已删）。原"删卡并入空态"裁决作废。
 - **状态**：批3a 部分已解决（尾注删）；卡片本体保留，不再施工。
 
+## FL-D831 V2 页脚「隐私政策·服务条款」伪链接（批4 截图实证捕获，2026-11-01）
+
+- **问题与影响**：批4 v2-result-l0123.png 截图实证：V2 AppShell 页脚挂「隐私政策·服务条款」两组 `footer-link is-disabled` 伪链接（无目标页面、不可点）——与批3a V1 compare.html 已删页脚同源问题，V2 侧漏删。三禁令「删不需要的信息/禁废话」；V1/V2 体验不一致。
+- **处理方法**：AppShell.tsx 页脚删「隐私政策」「服务条款」两段 span 与分隔符，保留版权/版本/帮助中心。连带实证捕获两处过期引用：帮助弹层「状态说明」引用改前徽章名「结果不完整」→「未改完」（与 StatusBadge 词典一致）；「查看结果」步骤仍写「分别查看资格、处理和交付状态」（批4 结果页已收敛为单交付徽章）→改为按批4 L0-L1 动线描述「看清改了哪些条款、哪些地方要人工核对」。
+- **验证**：grep 全仓无「隐私政策」「服务条款」「结果不完整」残留；tsc+vitest 24/24+build 全过。
+- **状态**：已解决（随批4 commit）。
+
 ## FL-D813 三禁令·compare 合同组折叠藏信息（2026-11-01，qa-frontend 第三轮）
 
 - **问题与影响**：compare.html:582 `.compare-groups-disclosure` 把核心操作对象藏折叠栏——用户明令禁止折叠栏藏信息充数。
 - **处理方法**：折叠废除、平铺直呈（联动 FL-D805 行化）。
-- **状态**：已登记，随批4 施工。
+- **变更记录 2026-11-01（批4 施工）**：compare.html「查看与切换全部合同组」details 去壳，`.compare-pair-list` 常显+「合同组」小标题；compare.js 中 disclosure 死引用（`document.querySelector('.compare-groups-disclosure').open=...`）删；test_frontend_fixes.py:281 断言对象改 `.compare-pair-list`、test_v1_frontend_remediation.py:116 删 `details.compare-groups-disclosure summary` click 改 wait_for_selector；CSS 未删类（.compare-groups-disclosure 已无元素引用，保守留待样式全面扫）。
+- **状态**：已解决（批4 代码，回归随批4 整批复跑）。
 
 ## FL-D814 三禁令·全站解释性废话小字逐条裁决（2026-11-01，qa-frontend 第三轮）
 
@@ -8310,7 +8318,14 @@ H＝E×…
 
 - **问题与影响**：用户原话"各种字密密麻麻堆在一起很不直观也很不方便看，好好想想怎么优化，而不是只是在原来的基础上进行微调"——结果页须重构不是微调。
 - **处理方法**：先定义结果页要回答的问题（我的合同改了什么/还有哪些没改完要人工核/产物在哪/怎么下载），再做信息架构级重构：分层呈现、视觉动线、产物区/核对区/报告区空间关系，**允许推翻现有 DOM 结构**。重构方案（线框描述+理由）写入 `docs/frontend/FRONTEND_REWORK_PLAN_20261101.md` 增补节，随批交付。
-- **状态**：已登记，独立批（批4）施工，方案先行。
+- **变更记录 2026-11-01（批4 施工，收口）**：
+  - **V2 DocumentDetailPage L0-L3 重写**。L0 结论带=一句结构话「改完 N/N · 待人工核 M」+单徽章+主下载按钮（final→selected_final→working_final 优先链）+「逐条审阅修改」副按钮；「交付概览」6 字段卡删；验证中断卡并入 L0 警示行。L1 双栏（`.fundlex-detail-columns`）：左「改了哪些条款 N 处」常态标题行（条款名+「改为：」（前 40 字预览）+位置+徽标+行内 details 展开前后对照；restEdits 同列表去 rule_id 行首）；右「还要人工核 M 处」常态条目（位置/原因/引文；「诊断来源」dl 删；「查看指引要求」折叠删并入段落）。L2 下载区按目的三分组（最终用的合同/对照与审阅/报告与数据）；原「高级详情（SHA-256/版本 ID）」删；report_json/评测版不再折叠。L3 判定依据仅 ineligible/diagnosed 时显示「为什么不能处理/判定依据」。浏览器 12/12 实证+截图 `v2-result-l0123.png`。CSS 新增 `.fundlex-detail-columns`、`.fundlex-artifact-group`、`.fundlex-target-heading` 等。
+  - **V1 renderReport 同构**。`resultCounts()` 新计；结论带一句「改完 N/N · 待人工核 M」（fallback 旧 verdict）；「仍需人工核对」+「未自动修改的条款」双块合并为「还要人工核 · N 处」单块（「查看指引要求」折叠删并入段落；「高级详情（内部规则编号）」删除；exceptions 并入卡片）；L1 双栏 `.result-l1-columns` 新 CSS；`downloadSection` 三分组+词典同 V2（删 DOCX 后缀与「按人工选择的」修饰）；「处理依据与详细状态」大折叠整体删；toc/可直接使用 dl 删；验证中断 `result-warning` 并入 L0。**#detail-overlay 正名化**：`compare.html` 本源改 `role="region"` + 「返回任务」按钮；`app.js` 运行时 patch 三行删（dialog→region/aria-modal 移除），「消除弹层补丁」。
+  - **review 词典统一**：「修订清单」→「改动清单」——V1 app.js aside h3/splitter aria-label/空态加载（3 处），V2 ReviewPage tab + RevisionPanel h2；锚 test_frontend_v2.py:324-329（tab+heading）连带改。「合同呈现」按钮与快捷键 A/R 保留。
+  - **FL-D813 合同组折叠平铺**：compare.html「查看与切换全部合同组」details 去壳，`.compare-pair-list` 常显+「合同组」小标题。
+  - **测试锚同步（test_workbench.py，FL-D733 语义锚口径）**：业务结论→结论（2 处）、「最终版 DOCX」→「最终版」（count==0 语义保留）、「工作文件（未完成）」→「选择版」、「仍需人工核对 · 1 项」→「还要人工核 · 1 处」。
+  - **验证**：tsc+vitest 24/24+build 全过；V1 浏览器实证 10/10（detail overlay 打开/L0 一句+无三徽章/L1 合并+指引直露/L2 三分组+无诊断折叠/L3 隐藏）+截图 `v1-result-l0123.png`；V1/V2 四套件回归随批4 整批复跑。
+- **状态**：批4 施工完成（等回归全绿后随批4 commit）。
 
 ## FL-D819 删除「报告与诊断文件不作为最终合同」小字（用户令·追加，2026-11-01，qa-frontend 第三轮）
 

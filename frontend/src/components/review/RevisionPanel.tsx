@@ -40,7 +40,7 @@ export function RevisionPanel({
   }, [activeRevisionId])
   return <div className="fundlex-revision-panel">
     <div className="fundlex-revision-panel__heading">
-      <div><h2>修订清单</h2><p className="fundlex-muted">共 {revisions.length} 处改动 · {counts.pending} 待决定 · {counts.accept} 接受 · {counts.reject} 拒绝</p></div>
+      <div><h2>改动清单</h2><p className="fundlex-muted">共 {revisions.length} 处改动 · {counts.pending} 待决定 · {counts.accept} 接受 · {counts.reject} 拒绝</p></div>
       <div className="fundlex-revision-panel__bulk">
         <Button type="button" disabled={busy || previousDisabled} onClick={onPrevious}>上一条</Button>
         <Button type="button" disabled={busy || nextDisabled} onClick={onNext}>下一条</Button>

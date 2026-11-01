@@ -201,7 +201,7 @@ export function ReviewPage() {
        left={<><div className="fundlex-review-toolbar"><strong>合同原文与修订</strong><span className="fundlex-muted">点击高亮内容可定位右侧修订</span></div><DocumentViewer ref={viewerRef} html={html} activeRevisionId={activeRevisionId} activeRevisionIds={activeRevisionIds} decisions={markerDecisions} onRevisionClick={(id) => { setMobilePane('right'); selectRevision(id) }} /></>}
         right={<RevisionPanel revisions={revisionData as RevisionItem[]} decisions={decisions} activeRevisionId={activeRevisionId} busy={busy} onFocus={(id) => { setMobilePane('left'); selectRevision(id) }} onDecision={setRevisionDecision} onPrevious={() => moveRevision(-1)} onNext={() => moveRevision(1)} previousDisabled={activeRevisionIndex <= 0} nextDisabled={activeRevisionIndex < 0 || activeRevisionIndex >= items.length - 1} onBulkDecision={(decision) => updateDecisions(Object.fromEntries(items.map((item) => [String(item.del_id), decision])))} />}
        leftLabel="合同呈现"
-       rightLabel="修订清单"
+       rightLabel="改动清单"
        mobilePane={mobilePane}
        onMobilePaneChange={setMobilePane}
      />

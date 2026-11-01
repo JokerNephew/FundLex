@@ -58,7 +58,6 @@
     state.task=task; state.pairs=task.pairs||[]; $('compare-detail').hidden=false; $('compare-task-name').textContent=task.name||'未命名任务';api.setObjectTitle?.('compare',task.name); $('compare-task-status').textContent=`${taskMetrics(task).status} · ${state.pairs.length} 组`;
     state.tasks=state.tasks.map(t=>t.id===task.id?task:t); renderTasks(); renderPairs();
     const hasResult=state.pairs.some(p=>['succeeded','incomplete'].includes(p.status));
-    const disclosure=document.querySelector('.compare-groups-disclosure'); if(disclosure)disclosure.open=!hasResult;
     const pendingNote=$('compare-pending-note'); if(pendingNote)pendingNote.hidden=hasResult;
   }
   function failureStageLabel(v) { return ({claim_setup:'开始处理',input_integrity:'文件检查',compare:'文本比对',heartbeat:'处理中',finish:'保存结果'} [v] || v || '未知阶段'); }

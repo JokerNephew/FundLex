@@ -413,7 +413,8 @@ def test_compare_word_style_reader_renders_merged_redline_and_display_modes(brow
         page.locator("#compare-close-viewer").click()
         assert page.locator("#compare-viewer").is_hidden()
         assert page.evaluate("document.body.classList.contains('compare-fullscreen-open')") is False
-        page.locator("details.compare-groups-disclosure summary").click()
+        # FL-D813：compare-pair-list 常显（details 已删）无需展开
+        page.wait_for_selector('#compare-pair-list > *', state='attached')
         page.locator('[data-compare-pair="0"]').click()
         page.locator("#compare-viewer").wait_for(state="visible")
 

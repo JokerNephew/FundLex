@@ -183,8 +183,10 @@ def test_paused_task_shows_paused_rows_download_hint_and_verdict(browser, live_d
         page.locator("#doc-rows [data-detail]").first.click()
         page.locator("#detail-body .result-summary").wait_for()
         assert page.locator(".result-verdict strong").inner_text() == "已暂停"
+        # 批4 FL-D818：status-grid 收敛为单徽章（交付），「已暂停」由上方 verdict 断言承担
         grid = page.locator(".result-status-grid")
-        assert "已暂停" in grid.inner_text()
+        assert grid.locator("> div").count() == 1
+        assert "交付" in grid.inner_text()
         assert not errors, errors
     finally:
         context.close()
@@ -278,7 +280,7 @@ def test_compare_queued_detail_shows_pair_files_and_pending_note(browser, live_d
         open_dev(page, base, "#compare?mode=detail&id=T")
         page.locator("#compare-pair-list").get_by_text("A-募集合同.docx").wait_for()
         assert page.locator("#compare-pending-note").is_visible()
-        assert page.locator(".compare-groups-disclosure").evaluate("n => n.open")
+        assert page.locator("#compare-pair-list").get_by_text("A-募集合同.docx").count() > 0
         assert page.locator("#compare-viewer").is_hidden(), "无结果的合同组不应打开空白比对窗"
         assert not errors, errors
     finally:

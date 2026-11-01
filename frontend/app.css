@@ -338,6 +338,11 @@ button.footer-link:hover{color:var(--accent-dark);text-decoration:underline}
 .result-status-grid>div{display:flex;align-items:center;flex-wrap:wrap;gap:6px 10px;min-width:0}.result-status-grid dt{font-size:12px;color:var(--muted)}.result-status-grid dd{margin:0}
 .result-warning{margin:10px 0 0;font-size:13px;color:#875c25;line-height:1.6}
 .result-action-grid{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:14px;margin-bottom:20px}
+.result-l1-columns{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,2fr);gap:14px;margin-bottom:20px;align-items:start}
+.result-l1-columns>.detail-section{min-width:0;margin:0;padding:16px;border:1px solid var(--line);border-radius:8px}
+@media (max-width:900px){.result-l1-columns{grid-template-columns:1fr}}
+.result-artifact-group{margin-top:14px}
+.result-artifact-group h4{margin:0 0 8px;font-size:14px;color:var(--muted,#666);font-weight:600}
 .result-action-grid:empty{display:none}.result-action-grid>.detail-section{min-width:0;margin:0;padding:16px;border:1px solid var(--line);border-radius:8px}.result-action-grid>.detail-section:only-child{grid-column:1/-1}
 .result-action-grid h3{margin:0 0 12px;font-size:14px}.result-action-grid .detail-actions{gap:8px}.result-review-entry #review-status:empty{display:none}
 .result-issues>p{font-size:14px;line-height:1.65}.result-pending{margin:14px 0;color:var(--muted);font-size:14px}

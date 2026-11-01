@@ -747,7 +747,7 @@
     }}finally{if(current(t))rows.removeAttribute('aria-busy');}
   }
   async function selectTask(id,navigate=true) {if(!id)return;state.tasksFailed=false;const t=ticket('selection');state.selected=id;state.task=null;state.docPage=1;state.taskDocs=[];state.review=null;state.reviewDecisions=new Map();state.reviewDocs=null;state.reviewDocsTask=null;state.reviewDocsKey='';$('doc-pagination').replaceChildren();$('doc-reason-filter').innerHTML='<option value="">全部原因</option>';closeDetail();state.tokens.doc=(state.tokens.doc || 0)+1;$('doc-rows').innerHTML=emptyRow(7,'正在加载任务');renderTask();try{const task=await json(pathTask(id));if(!current(t)||state.selected!==id)return;state.task=task;renderBreadcrumb();renderTask();if(navigate)go('task');else if(state.view==='task')loadDocuments();}catch(e){if(current(t))errorNotice(e);}}
-   function docReason(d) {if(d.upload_status==='rejected')return reason(d.error_code)||'接收校验未通过，请检查源文件后补传';if(d.upload_status==='pending')return '尚未上传，请选择本地文件补传';if(d.eligibility==='excluded_by_fund_type')return '基金类型不在本流程范围，已整份排除';if(d.error_code)return reason(d.error_code);if(d.reason_codes?.length)return reason(d.reason_codes[0]);if(displayJobStatus(d)==='paused')return '任务已暂停，恢复任务后将继续处理';if(['running','leased'].includes(d.job_status))return '正在处理，尚无结论';if(d.job_status==='queued')return '排队等待处理';if(d.job_status==='retry_wait')return '暂时异常，等待自动重试';if(d.delivery_status==='diagnosed')return '只读诊断已完成，仅提供诊断报告，未交付修改后的合同';if(d.delivery_status==='evaluation_modified')return '合同修订（评测）已完成，可下载评测修改版核对';if(d.delivery_status==='evaluation_modified_with_exceptions')return '合同修订（评测）已经完成；有条款未自动修改，按例外清单人工核对后使用';if(d.delivery_status==='evaluation_unmodified')return '原合同已符合当前规则，无需修改';if(d.delivery_status==='complete_with_exceptions')return '合同已修订并校验通过；有条款未自动修改，按例外清单人工核对后使用';if(d.delivery_status==='incomplete')return '部分条款未自动修改，不能直接使用；请在「仍需人工核对」中按章节和原文检查（修订版不会标出未修改位置）';if(d.delivery_status==='complete')return '合同已修改完成，可查看报告并下载';if(d.job_status==='succeeded')return '处理已结束，未生成可交付合同文件';return '尚未生成修改后的合同';}
+   function docReason(d) {if(d.upload_status==='rejected')return reason(d.error_code)||'接收校验未通过，请检查源文件后补传';if(d.upload_status==='pending')return '尚未上传，请选择本地文件补传';if(d.eligibility==='excluded_by_fund_type')return '基金类型不在本流程范围，已整份排除';if(d.error_code)return reason(d.error_code);if(d.reason_codes?.length)return reason(d.reason_codes[0]);if(displayJobStatus(d)==='paused')return '任务已暂停，恢复任务后将继续处理';if(['running','leased'].includes(d.job_status))return '正在处理，尚无结论';if(d.job_status==='queued')return '排队等待处理';if(d.job_status==='retry_wait')return '暂时异常，等待自动重试';if(d.delivery_status==='diagnosed')return '只读诊断已完成，仅提供诊断报告，未交付修改后的合同';if(d.delivery_status==='evaluation_modified')return '合同修订（评测）已完成，可下载评测修改版核对';if(d.delivery_status==='evaluation_modified_with_exceptions')return '合同修订（评测）已经完成；有条款未自动修改，按例外清单人工核对后使用';if(d.delivery_status==='evaluation_unmodified')return '原合同已符合当前规则，无需修改';if(d.delivery_status==='complete_with_exceptions')return '合同已修订并校验通过；有条款未自动修改，按例外清单人工核对后使用';if(d.delivery_status==='incomplete')return '部分条款未自动修改，不能直接使用；请在「还要人工核」中按章节和原文检查（修订版不会标出未修改位置）';if(d.delivery_status==='complete')return '合同已修改完成，可查看报告并下载';if(d.job_status==='succeeded')return '处理已结束，未生成可交付合同文件';return '尚未生成修改后的合同';}
   function targetChip(doc) {const counts=doc&&doc.target_counts;if(!counts||!Number.isFinite(counts.total))return '';return `<span class="chip-target" title="目标条款完成情况">目标 ${counts.total} · 已完成 ${counts.completed || 0} · 未完成 ${counts.unresolved || 0}</span>`;}
   function docRowClass(d){const clean=d.job_status==='succeeded'&&d.delivery_status==='complete'&&d.eligibility==='eligible';if(d.job_status==='failed'||d.upload_status==='rejected'||d.eligibility==='failed'||d.delivery_status==='incomplete'||(d.job_status==='succeeded'&&d.delivery_status==='not_generated'&&d.eligibility!=='excluded_by_fund_type'))return 'row-exception';return clean?'row-muted':'';}
   async function loadDocuments(quiet=false) {
@@ -876,9 +876,12 @@
     for(const t of targets){if(!t||seen.has(t.target_id))continue;if(!['needs_edit','satisfied'].includes(t.state))continue;rows.push({rule:t.rule_id,section:sectionOf(t.rule_id),state:t.state,reason:t.reason || '',before:t.quote || '',after:''});}
     return rows;
   }
+  function resultCounts(report,doc){const tc=(doc&&doc.target_counts)||{};const targets=Array.isArray(report?.targets)?report.targets:[];const DONE=['modified_verified','planned','satisfied','not_applicable','superseded'],UNRES=['unresolved','unsupported','needs_edit'];const total=tc.total??targets.length;const completed=tc.completed??targets.filter(i=>i&&(DONE.includes(i.status||i.state)||i.out_of_scope)).length;const unresolved=tc.unresolved??targets.filter(i=>i&&!i.out_of_scope&&UNRES.includes(i.status||i.state)).length;return {total,completed,unresolved};}
   function unresolvedIssuesHTML(report, summary) {
     const issues=Array.isArray(summary?.issues)?summary.issues:[];
-    if(!issues.length)return '';
+    const exceptions=Array.isArray(report?.exceptions)?report.exceptions:[];
+    const total=issues.length+exceptions.length;
+    if(!total)return '';
     const groups=Array.isArray(report?.guide?.groups)?report.guide.groups:[];
     const targets=Array.isArray(report?.targets)?report.targets:[];
     const groupOf=id=>groups.find(g=>g&&String(g.rule_id)===String(id))||null;
@@ -900,15 +903,16 @@
       return `<div class="candidate manual-review-item">
         <p><strong>${index+1}. ${esc(title)}</strong>${section?` <span class="chip">${esc(section)}</span>`:''}</p>
         <p>${esc(reason)}</p>
-        ${requirement?`<details class="action-evidence"><summary>查看指引要求</summary><p>${esc(requirement)}</p></details>`:''}
+        ${requirement?`<p class="subnote">指引要求：${esc(requirement)}</p>`:''}
         ${found?quoteBox(found.exact?'合同中对应原文':'同规则参考原文（非本处）',found.text):''}
         <p class="subnote">${esc(note)}</p>
-        <details class="action-evidence"><summary>高级详情</summary><p>内部规则编号：${esc(item.rule_id||'—')}${item.location?` · 文档位置：${esc(item.location)}`:''}${item.obligation_id?` · 义务标识：${esc(item.obligation_id)}`:''}</p></details>
+
       </div>`;
     }).join('');
-    return `<div class="detail-section result-issues"><h3>仍需人工核对 · ${issues.length} 项</h3>
-      <p>请按章节与原文核对以下事项；未写入的内容不会显示在修订痕迹中。${['complete','complete_with_exceptions'].includes(report.delivery_status)?'请结合例外清单确认后使用。':'当前合同仍为未完成的工作文件。'}</p>
-      ${cards}</div>`;
+    const exceptionCards=exceptions.map((e,index)=>`<div class="candidate manual-review-item"><p><strong>${issues.length+index+1}. ${esc(e.description || e.title || e.action_id || '条款')}</strong></p><p>${esc(reason(e.reason)||'该条款未能自动修改，需要人工核对。')}</p></div>`).join('');
+    return `<div class="detail-section result-issues"><h3>还要人工核 · ${total} 处</h3>
+      <p>未写入的内容不会显示在修订痕迹中，请逐条确认后再使用。${['complete','complete_with_exceptions'].includes(report.delivery_status)?'':'当前合同仍为未完成的工作文件。'}</p>
+      ${cards}${exceptionCards}</div>`;
   }
   function clauseRow(row) {
     const op=row.operation||'';
@@ -965,8 +969,8 @@
           <button class="btn btn-sm" data-action="review-accept-all">全部接受</button>
           <button class="btn btn-sm" data-action="review-reject-all">全部拒绝</button></div>
           <div class="review-doc" id="review-doc">${review.html}</div></div>
-        <div class="review-splitter" id="review-splitter" role="separator" aria-label="调整修订清单宽度" aria-orientation="vertical" aria-valuemin="280" aria-valuemax="680" aria-valuenow="360" tabindex="0" title="拖动调整修订清单宽度，双击恢复默认"></div>
-        <aside class="review-list"><h3>修订清单 · ${review.revisions.length} 条 <span class="review-kbd">A 接受 · R 拒绝</span></h3>
+        <div class="review-splitter" id="review-splitter" role="separator" aria-label="调整改动清单宽度" aria-orientation="vertical" aria-valuemin="280" aria-valuemax="680" aria-valuenow="360" tabindex="0" title="拖动调整修订清单宽度，双击恢复默认"></div>
+        <aside class="review-list"><h3>改动清单 · ${review.revisions.length} 条 <span class="review-kbd">A 接受 · R 拒绝</span></h3>
           <ol class="rev-list">${items||'<li class="subnote">本合同没有可选择的修订。</li>'}</ol></aside>
       </div>
       <div class="review-actions"><button class="btn btn-primary" data-action="generate-selected">生成选择版合同</button>
@@ -1067,7 +1071,7 @@
     if(state.view==='document'&&state.route?.tab!=='review'){go('document',{id:state.selected,document:doc.document_id,tab:'review'});return;}
     const t=ticket('review');state.review=null;
     const body=$('detail-body');
-    body.innerHTML='<div class="empty">正在生成合同呈现与修订清单…</div>';
+    body.innerHTML='<div class="empty">正在生成合同呈现与改动清单…</div>';
     try{
       const docs=await reviewDocumentList(doc);
       if(!current(t)||state.detail!==doc || $('detail-overlay').hidden) return;
@@ -1147,28 +1151,30 @@
     const displayedJob=displayJobStatus(doc);
     const processing=['queued','running','leased','retry_wait'].includes(displayedJob);
     const verdict=evaluation?'评测结果，非正式合同':usable?'已完成，可下载':withExceptions?'已交付，需核对例外':eligibility==='excluded_by_fund_type'?'不适用，已排除':displayedJob==='paused'?'已暂停':processing?'正在处理':delivery==='incomplete'?'结果不完整':'尚未交付';
-    const toc=report?.has_toc_field===true?'请在 Word 中更新目录':report?.has_toc_field===false?'无目录域':'未确认';
-     const reasonText=docReason({...doc,delivery_status:delivery,eligibility});let html=`<section class="result-summary" aria-label="业务结论"><div class="result-verdict"><h2>业务结论</h2><strong>${verdict}</strong></div>${reasonText?`<p class="result-reason">${esc(reasonText)}</p>`:''}<dl class="result-status-grid"><div><dt>合同资格</dt><dd>${badge(eligibility || 'pending')}</dd></div><div><dt>处理状态</dt><dd>${badge(displayedJob)}</dd></div><div><dt>交付结果</dt><dd>${badge(delivery)}</dd></div></dl>${evaluation?'<p class="result-warning">评测文件不能作为正式合同。</p>':''}${report?.has_toc_field===true?'<p class="result-warning">下载后请在 Word 中更新目录。</p>':''}${state.task?.legacy?'<p class="result-warning">遗留任务只读，不能补传或重新修订。</p>':''}</section>`;
+     const reasonText=docReason({...doc,delivery_status:delivery,eligibility});
+    const rc=resultCounts(report,doc);
+    const headline=rc.total?`改完 ${rc.completed}/${rc.total} 处 · 待人工核 ${rc.unresolved} 处`:verdict;
+    let html=`<section class="result-summary" aria-label="结论"><div class="result-verdict"><h2>结论</h2><strong>${headline}</strong></div>${reasonText?`<p class="result-reason">${esc(reasonText)}</p>`:''}<dl class="result-status-grid"><div><dt>交付</dt><dd>${badge(delivery)}</dd></div></dl>${evaluation?'<p class="result-warning">评测文件不能作为正式合同。</p>':''}${report?.has_toc_field===true?'<p class="result-warning">下载后请在 Word 中更新目录。</p>':''}${state.task?.legacy?'<p class="result-warning">遗留任务只读，不能补传或重新修订。</p>':''}${report?.verification_status==='verification_blocked'?'<p class="result-warning" role="status">验证暂未完成，恢复任务后将继续校验；当前文件尚未通过最终交付核验。</p>':''}</section>`;
     html+=`<div class="result-action-grid">${downloadSection(doc,delivery,usable||withExceptions)}${report?revisionSection(doc,report):''}</div>`;
     if(report){
-      if(report.verification_status==='verification_blocked'){html+=`<div class="detail-section" role="status"><h3>验证暂未完成，等待恢复处理</h3><p>处理所需的验证记录或模型额度暂不可用。恢复任务后将继续验证；当前文件尚未通过最终交付校验。</p></div>`;}
       const summary=report.user_summary;
-      if(summary&&Array.isArray(summary.issues)&&summary.issues.length)html+=unresolvedIssuesHTML(report,summary);
-      const exceptions=Array.isArray(report.exceptions)?report.exceptions:[];
-      if(exceptions.length)html+=`<section class="detail-section result-issues"><h3>未自动修改的条款 · ${exceptions.length} 项</h3>${exceptions.map(e=>`<p><strong>${esc(e.description || e.title || e.action_id || '条款')}</strong> · ${esc(reason(e.reason))}</p>`).join('')}</section>`;
+      const issuesHTML=unresolvedIssuesHTML(report,summary);
       const rows=changedClauses(report,doc);
-      if(rows.length)html+=`<section class="detail-section"><h3>条款改动对照 · ${rows.length} 处</h3>${rows.map(clauseRow).join('')}</section>`;
+      const clausesHTML=rows.length?`<section class="detail-section"><h3>改了哪些条款 · ${rows.length} 处</h3>${rows.map(clauseRow).join('')}</section>`:'';
+      if(clausesHTML&&issuesHTML)html+=`<div class="result-l1-columns">${clausesHTML}${issuesHTML}</div>`;else html+=clausesHTML+issuesHTML;
     }else html+='<p class="result-pending">报告尚未生成，处理完成后可查看。</p>';
-    html+=`<details class="result-evidence"><summary>处理依据与详细状态</summary><div class="result-evidence-body"><dl class="detail-grid"><dt>上传状态</dt><dd>${badge(doc.upload_status,doc.upload_status==='pending'?'待上传':null)}</dd><dt>目录状态</dt><dd>${esc(toc)}</dd><dt>可直接使用</dt><dd>${usable?'已通过交付校验':'不可认定，需结合交付结果核对'}</dd></dl>${report?`<h3>资格证据</h3>${eligibilityEvidenceHTML(report)||'<p>报告未提供资格证据。</p>'}`:''}${actions.length?`<h3>规则动作与条款证据 · ${actions.length} 项</h3>${actions.map(a=>`<details class="action-evidence"><summary>${esc(a.description || a.title || a.name || '规则动作')} ${badge(a.status)}</summary>${a.failure_reason?`<p>${esc(reason(a.failure_reason))}</p>`:''}${(a.candidates || []).map(c=>`<div class="candidate"><p>${badge(c.status)} ${esc(reason(c.failure_reason || c.reason))}</p>${proof(c)}</div>`).join('')}</details>`).join('')}`:''}</div></details>`;
+    const showBasis=report&&(delivery==='diagnosed'||(eligibility&&!['eligible','pending'].includes(String(eligibility))));
+    if(showBasis){html+=`<section class="detail-section"><h3>${eligibility==='excluded_by_fund_type'?'为什么不能处理':'判定依据'}</h3>${eligibilityEvidenceHTML(report)||`<p>${esc(reasonText||'报告未提供判定说明。')}</p>`}</section>`;}
     $('detail-body').innerHTML=html;
   }
   function downloadSection(doc,delivery,usable){
     const downloads=doc.downloads || {};
-    const kinds=[['final','最终版 DOCX'],['redline','修订版 DOCX'],['selected_final',`按人工选择的${selectedContractLabel({...doc,delivery_status:delivery})} DOCX`],['selected_redline','选择修订版 DOCX'],['working_final','工作文件（未完成）· 合同'],['working_redline','工作文件（未完成）· 修订痕迹'],['evaluation_final','评测修改版 DOCX'],['evaluation_redline','评测修订痕迹 DOCX'],['report_md','Markdown 报告'],['report_json','JSON 报告']].filter(([kind])=>downloads[kind]&&!(kind==='final'&&!usable));
-    if(!kinds.length)return '';
-    const buttons=list=>list.map(([kind,title])=>`<button class="btn ${['final','working_final','evaluation_final'].includes(kind)?'btn-primary':''} btn-sm" data-download="${kind}">${title}</button>`).join('');
-    const advanced=kinds.filter(([kind])=>['report_json'].includes(kind));
-    return '<section class="detail-section result-files"><h3>结果文件</h3><div class="detail-actions">'+buttons(kinds.filter(([kind])=>!['report_json'].includes(kind)))+'</div>'+(advanced.length?`<details class="action-evidence"><summary>高级详情（诊断文件，非合同）</summary><div class="detail-actions">${buttons(advanced)}</div></details>`:'')+'</section>';
+    const labels={final:'最终版',redline:'带修改标记版',selected_final:'选择版',selected_redline:'选择版-带修改标记',working_final:'修改版（未完成）',working_redline:'修改版-带修改标记（未完成）',report_md:'文本报告',report_json:'原始数据（JSON）',evaluation_final:'评测版（非正式）',evaluation_redline:'评测版-带修改标记'};
+    const available=kind=>downloads[kind]&&!(kind==='final'&&!usable);
+    const groups=[['最终用的合同',['final','selected_final','working_final']],['对照与审阅',['redline','selected_redline','working_redline']],['报告与数据',['report_md','report_json','evaluation_final','evaluation_redline']]];
+    const rendered=groups.map(([title,names])=>{const list=names.filter(available);if(!list.length)return '';const buttons=list.map(kind=>`<button class="btn ${['final','working_final','evaluation_final'].includes(kind)?'btn-primary':''} btn-sm" data-download="${kind}">${labels[kind]}</button>`).join('');return `<div class="result-artifact-group"><h4>${title}</h4><div class="detail-actions">${buttons}</div></div>`;}).join('');
+    if(!rendered)return '';
+    return '<section class="detail-section result-files"><h3>下载区</h3>'+rendered+'</section>';
   }
   function eligibilityEvidenceHTML(report) {const src=report.qualification || report.eligibility || {};const items=[];const quote=src.fund_type_quote;if(quote)items.push(proof(quote));if(src.fund_type_basis)items.push(`<p class="subnote">${esc(src.fund_type_basis)}</p>`);else if(src.basis)items.push(`<p class="subnote">依据：${esc(src.basis)}</p>`);const extra=report.qualification?.evidence || report.eligibility?.evidence || report.qualification_evidence || [];const list=Array.isArray(extra)?extra:[extra];for(const item of list)items.push(proof(item));return items.join('');}
   async function showDetail(doc) {
@@ -1355,8 +1361,6 @@
   document.addEventListener('change',e=>{if(e.target.id==='model-review-inherits'){const fields=$('model-review-fields');if(fields)fields.hidden=e.target.checked;return;}if(e.target.id==='import-mode'){state.importMode=e.target.value;renderImport();return;}const revToggle=e.target.dataset.revToggle;if(revToggle!==undefined&&state.review){setRevision(Number(revToggle),e.target.checked?'accept':'reject');return;}const name=e.target.dataset.pagesize;if(name){state[`${name}Size`]=Number(e.target.value);changed(name);}});$('dev-user').addEventListener('input',identityChanged);$('task-name').addEventListener('input',()=>{state.createKey=null;if(!$('task-name-error').hidden)nameError(true);});$('detail-body').addEventListener('click',e=>{const quote=e.target.closest('.evidence.quote');if(quote&&!e.target.closest('a,button'))quote.classList.toggle('expanded');});function closeContractDetail(){closeDetail();if(state.view==='document')go('task',{id:state.selected});}$('close-detail').addEventListener('click',closeContractDetail);$('detail-overlay').addEventListener('click',e=>{if(e.target===$('detail-overlay'))closeContractDetail();});document.addEventListener('keydown',e=>{if(e.key==='Escape'&&state.view==='document'&&!$('detail-overlay').hidden)closeContractDetail();});$('guide-file').addEventListener('change',e=>{const file=e.target.files?e.target.files[0]:null;$('guide-file-name').textContent=file?`已选择：${file.name}`:'尚未选择文件';$('guide-upload-btn').disabled=!file||state.guideUploading;});$('guide-overlay-close').addEventListener('click',closeGuidePanel);$('guide-overlay').addEventListener('click',e=>{if(e.target===$('guide-overlay'))closeGuidePanel();});$('help-close').addEventListener('click',closeHelp);$('help-overlay').addEventListener('click',e=>{if(e.target===$('help-overlay'))closeHelp();});document.addEventListener('keydown',e=>{if(!$('help-overlay').hidden&&e.key==='Escape'){closeHelp();}});document.addEventListener('keydown',e=>{if($('guide-overlay').hidden)return;if(e.key==='Escape'){closeGuidePanel();return;}if(e.key==='Tab'){const nodes=[...$('guide-overlay').querySelectorAll('button,summary,a[href],input,select')].filter(n=>!n.disabled&&n.offsetParent!==null),first=nodes[0],last=nodes.at(-1);if(!first)return;if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();}}});document.addEventListener('keydown',e=>{if(!state.review||$('detail-overlay').hidden||e.defaultPrevented||e.isComposing||e.ctrlKey||e.metaKey||e.altKey)return;const tag=(e.target&&e.target.tagName||'').toLowerCase();if((tag==='input'&&e.target.type!=='checkbox')||tag==='textarea'||tag==='select'||(e.target&&e.target.isContentEditable)||e.target?.closest?.('[role="separator"]'))return;const key=String(e.key||'').toLowerCase();if(key!=='a'&&key!=='r')return;const review=state.review;if(!review.revisions.length)return;const current=review.revisions.find(r=>String(r.del_id)===String(review.active))||review.revisions[0];e.preventDefault();setRevision(current.del_id,key==='a'?'accept':'reject');focusRevision(current.del_id);});document.addEventListener('keydown',e=>{if($('detail-overlay').hidden)return;if(e.key==='Escape'){closeDetail();return;}if(e.key==='Tab'){const nodes=[...$('detail-overlay').querySelectorAll('button,summary,a[href],input,select')].filter(n=>!n.disabled&&n.offsetParent!==null),first=nodes[0],last=nodes.at(-1);if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();}}});
   $('document-host').append($('detail-overlay'));
   $('detail-overlay').classList.add('inline-contract-detail');
-  $('detail-panel').removeAttribute('aria-modal');$('detail-panel').setAttribute('role','region');
-  $('close-detail').textContent='返回任务';$('close-detail').setAttribute('aria-label','返回修改任务');
   // A9-F04：所有分栏共用一个 resize 监听；句柄失连（面板重渲染）时自动移除，避免监听器泄漏。
   const columnSplitterRegistry = new Set();
   let columnSplitterResizeBound = false;
