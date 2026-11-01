@@ -207,10 +207,16 @@ class RoleGateway:
                         "estimated_cost_usd"):
                 base[key] = base.get(key, 0) + other.get(key, 0)
             base["events"] = list(self.primary.events) + list(self.review.events)
+        annotated: list[dict] = []
         for event in base.get("events") or []:
             task = event.get("task_type")
             if task:
+                # Copy before annotating: metrics() is a read API and must not
+                # mutate the gateway's internal event records (FL-D936(4)).
+                event = dict(event)
                 event["role"] = role_for_task(task, self.task_roles)
+            annotated.append(event)
+        base["events"] = annotated
         base["roles"] = {
             role: {"model": gateway.model,
                    "calls": sum(1 for item in self.calls if item.role == role),
