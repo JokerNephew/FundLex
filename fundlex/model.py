@@ -7,6 +7,7 @@ import time
 import sqlite3
 import threading
 from pathlib import Path
+from .user_agent import USER_AGENT
 from dataclasses import dataclass
 from typing import Any
 import httpx
@@ -150,7 +151,7 @@ class ModelGateway:
                  max_completion_tokens: int = 1500, timeout_s: float = 45.0,
                  retries: int = 1, client: httpx.Client | None = None,
                  budget: ModelBudget | None = None, provider: str = '', request_options: dict | None = None,
-                 extra_headers: dict | None = None, user_agent: str = 'fundlex/0.3.0',
+                 extra_headers: dict | None = None, user_agent: str = USER_AGENT,
                  mode: str | None = None, cassette_dir: str | Path | None = None,
                  enforce_calls: bool = False):
         if isinstance(max_calls, bool) or not isinstance(max_calls, int) or max_calls < 0:
@@ -183,7 +184,7 @@ class ModelGateway:
                     and key.lower() not in {'authorization', 'content-type'}
                     for key, value in self.extra_headers.items())):
             raise ModelError('MODEL_EXTRA_HEADERS_INVALID')
-        self.user_agent = user_agent or 'fundlex/0.3.0'
+        self.user_agent = user_agent or USER_AGENT
         self.max_context_chars,self.max_calls = max_context_chars,max_calls
         self.enforce_calls = bool(enforce_calls)
         self.max_completion_tokens,self.timeout_s,self.retries = max_completion_tokens,timeout_s,retries
@@ -241,7 +242,7 @@ class ModelGateway:
             retries=int(os.environ.get('FUNDLEX_MODEL_RETRIES','1')),
             request_options=json.loads(os.environ.get('FUNDLEX_MODEL_REQUEST_OPTIONS_JSON','{}')),
             extra_headers=extra_headers,
-            user_agent=os.environ.get('FUNDLEX_MODEL_USER_AGENT','fundlex/0.3.0'),
+            user_agent=os.environ.get('FUNDLEX_MODEL_USER_AGENT',USER_AGENT),
             enforce_calls=_env_flag('FUNDLEX_MODEL_ENFORCE_LIMITS'))
     def metrics(self) -> dict:
         with self._state_lock:

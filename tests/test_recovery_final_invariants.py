@@ -133,7 +133,7 @@ def test_true_completion_invariant_across_target_and_scope_states(scope, target_
               "plan": {"ledger": []}, "artifact_claim_replay": {}}
     if scope is not None:
         report["scope_mapping"] = {"mappings": {"G01": scope}}
-    project(ledger, report, artifact_text="no old text")
+    project(ledger, report)
     assert ledger.records[0].applicability.status == "TRUE"
     assert ledger.records[0].completion in {"ARTIFACT_VERIFIED", "ALREADY_SATISFIED", "UNRESOLVED"}
 

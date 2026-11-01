@@ -66,10 +66,14 @@ def _fact_assignments() -> list[_CanaryFacts]:
             for floating in (False, True)]
 
 
-def _declared_key(rule_id: str, index: int, operation: Mapping[str, Any]) -> str:
-    """Mirror ``fundlex.recall._declared_operation_key`` (admission parity)."""
-    declared = str(operation.get("operation_id") or "").strip().upper()
-    return declared or f"{rule_id}:{index}"
+def _declared_key(rule_id: str, index: int, operation: Mapping[str, Any] | None) -> str:
+    """Mirror ``fundlex.recall._declared_operation_key`` (admission parity).
+
+    Parity is pinned by tests/test_fl_d930_predicate_parity.py — keep the two
+    implementations behaviourally identical at every input edge (FL-D930).
+    """
+    declared = str((operation or {}).get("operation_id") or "").strip().upper()
+    return declared or f"{str(rule_id).strip().upper()}:{index}"
 
 
 def _rules(document: Mapping[str, Any]) -> list[Mapping[str, Any]]:

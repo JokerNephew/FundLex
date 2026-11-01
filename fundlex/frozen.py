@@ -1,6 +1,7 @@
 """Immutable model cassettes and integrity-checked run inputs for offline replay."""
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import os
@@ -46,6 +47,7 @@ class FrozenError(ValueError):
 class ModelCassette:
     _locks_guard = threading.Lock()
     _locks: dict[str, Any] = {}
+    _locks_users: dict[str, int] = {}
 
     def __init__(self, directory: Path):
         self.directory = Path(directory)
@@ -56,10 +58,29 @@ class ModelCassette:
             raise FrozenError("MODEL_CASSETTE_TASK_INVALID")
         return self.directory / task / (digest(request) + ".json")
 
+    @contextlib.contextmanager
     def request_lock(self, request: dict) -> Any:
+        """Exclusive lock for one logical request, released and reaped on exit.
+
+        The lock map used to grow unboundedly for every distinct request
+        (FL-D936(3)): entries are reference-counted and dropped the moment the
+        last active user releases, so long-lived workers do not accumulate.
+        """
         key = str(self.directory.resolve()) + ":" + digest(request)
         with self._locks_guard:
-            return self._locks.setdefault(key, threading.RLock())
+            lock = self._locks.setdefault(key, threading.RLock())
+            self._locks_users[key] = self._locks_users.get(key, 0) + 1
+        try:
+            with lock:
+                yield lock
+        finally:
+            with self._locks_guard:
+                users = self._locks_users.get(key, 1) - 1
+                if users <= 0 and lock is self._locks.get(key):
+                    self._locks_users.pop(key, None)
+                    self._locks.pop(key, None)
+                else:
+                    self._locks_users[key] = users
 
     def load(self, request: dict[str, Any], schema: dict) -> tuple[dict, dict]:
         path = self._path(request)

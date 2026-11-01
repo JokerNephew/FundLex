@@ -6463,7 +6463,6 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
             blocking_evidence = list(unresolved)
             project(obligation_ledger, report,
                     scope_gaps={str(item.get("rule_id")) for item in scope_gaps},
-                    rules_by_id=rules_by_id, artifact_text=_document_compact(actual),
                     blocking_evidence=blocking_evidence)
             report["obligations"] = obligation_ledger.as_dict()
             from .generation.coverage import build_coverage_view
@@ -6509,8 +6508,6 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                 blocking_evidence.extend(final_omission_evidence)
                 project(obligation_ledger, report,
                         scope_gaps={str(item.get("rule_id")) for item in scope_gaps},
-                        rules_by_id=rules_by_id,
-                        artifact_text=_document_compact(actual),
                         blocking_evidence=blocking_evidence)
                 report["obligations"] = obligation_ledger.as_dict()
                 unresolved[:] = project_unresolved(obligation_ledger,

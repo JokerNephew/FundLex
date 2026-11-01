@@ -20,7 +20,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Iterable, Mapping, Sequence
 
-from .applicability import ApplicabilityDecision, branch_key, describe_condition, evaluate
+from .applicability import (ApplicabilityDecision, branch_key, describe_condition,
+                            evaluate, resolve)
 
 
 class GroupKind(str, Enum):
@@ -375,7 +376,7 @@ def apply_facts(ledger: ObligationLedger, facts: Any, *,
                 operation_id=item.spec.operation_id,
                 reason="FACT_PREREQUISITE_UNVERIFIED:" + ",".join(missing))
         elif resolve_unknown and gateway is not None and inspection is not None:
-            decision = __import__("fundlex.applicability", fromlist=["resolve"]).resolve(
+            decision = resolve(
                 item.spec.condition, facts, gateway=gateway, evidence=evidence,
                 inspection=inspection, rule_id=item.spec.rule_id,
                 operation_id=item.spec.operation_id)
@@ -456,12 +457,13 @@ def _evidence_matches_record(item: Mapping[str, Any], record: ObligationRecord) 
 
 
 def project(ledger: ObligationLedger, report: Mapping[str, Any], *,
-            rules_by_id: Mapping[str, Mapping[str, Any]] | None = None,
             scoped_rules: set[str] | None = None,
             scope_gaps: set[str] | None = None,
-            artifact_text: str | None = None,
             blocking_evidence: Iterable[Mapping[str, Any]] = ()) -> None:
     """Project only per-obligation artifact proof; scope/target absence never waives TRUE."""
+
+    # FL-D935(3): the old ``rules_by_id``/``artifact_text`` parameters were
+    # accepted but never consumed; the signature now matches reality.
     from .generation.effects import effect_proof_passed
     targets = _iter_targets(report)
     plans = _plan_by_target(report)

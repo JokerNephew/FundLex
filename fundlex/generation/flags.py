@@ -18,3 +18,20 @@ def strategy_mode() -> str:
     """Current strategy mode; unknown values fall back to the safe default."""
     value = os.environ.get(_ENV_VAR, "registry").strip().lower()
     return value if value in STRATEGY_MODES else "registry"
+
+
+def observe_registry_shadow(facet: str, decision: str, *, operation_key: str = "") -> None:
+    """Emit one registry-shadow observation through the local trace sink.
+
+    ``registry_shadow`` keeps the legacy/production path but records what the
+    registry-tier-1 decision *would have been* (FL-D934): the flag's docstring
+    promised exactly this observation channel.  Failure of the observation must
+    never change the shadow outcome, so every sink interaction is a no-op path
+    when the sink is off.
+    """
+    try:
+        from ..trace_sink import record_event
+        record_event("registry_shadow", facet=facet, decision=decision,
+                     operation_key=operation_key)
+    except Exception:  # pragma: no cover - observation must never affect routing
+        pass

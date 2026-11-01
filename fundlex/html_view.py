@@ -351,8 +351,8 @@ class HtmlProjection:
         if body is None:
             raise DocxError("BODY_MISSING")
         html = self._render_block_children(body)
-        manifest_map = self._manifest_index(report)
-        revisions = self._pair_revisions(manifest_map)
+        manifest_map, manifest_pairs = self._manifest_index(report)
+        revisions = self._pair_revisions(manifest_map, manifest_pairs)
         return {
             "html": html,
             "revisions": revisions,
@@ -364,8 +364,9 @@ class HtmlProjection:
             },
         }
 
-    def _manifest_index(self, report: Mapping[str, Any] | None) -> dict[int, dict[str, Any]]:
-        """Map ins_id/del_id → business edit info.
+    def _manifest_index(self, report: Mapping[str, Any] | None
+                        ) -> tuple[dict[int, dict[str, Any]], list[tuple[int, int]]]:
+        """Map ins_id/del_id → business edit info, plus explicit manifest pairs.
 
         ``generate_artifacts`` assigns revision ids deterministically: after
         sorting edits by ``(location, -start)`` the n-th edit gets
@@ -373,25 +374,33 @@ class HtmlProjection:
         ``rule_id``/``location``/``start``) but not the manifest, so we rebuild
         the same numbering here. If a manifest is present (evaluation reports
         may carry one) it wins, because it is the authoritative record.
+
+        The manifest is also the only reliable pairing source: foreign revision
+        ids carry no odd/even guarantee (FL-D924), so pairing must come from the
+        manifest's ``(del_id, ins_id)`` tuples rather than id parity.
         """
         index: dict[int, dict[str, Any]] = {}
+        pairs: list[tuple[int, int]] = []
         if not report:
-            return index
+            return index, pairs
         manifest = report.get("revision_manifest") if isinstance(report, Mapping) else None
         if isinstance(manifest, list) and manifest:
             for item in manifest:
                 if not isinstance(item, Mapping):
                     continue
                 info = _edit_info(item)
-                for key in ("ins_id", "del_id"):
-                    number = _as_int(item.get(key))
+                del_id = _as_int(item.get("del_id"))
+                ins_id = _as_int(item.get("ins_id"))
+                for number in (del_id, ins_id):
                     if number is not None:
                         index[number] = info
-            return index
+                if del_id is not None and ins_id is not None:
+                    pairs.append((del_id, ins_id))
+            return index, pairs
         plan = report.get("plan") if isinstance(report, Mapping) else None
         edits = plan.get("edits") if isinstance(plan, Mapping) else None
         if not isinstance(edits, list):
-            return index
+            return index, pairs
         ordered = [e for e in edits if isinstance(e, Mapping)]
         try:
             ordered.sort(key=lambda e: (str(e.get("location", "")), -int(e.get("start") or 0)))
@@ -400,32 +409,34 @@ class HtmlProjection:
         for number, edit in enumerate(ordered, start=1):
             index[2 * number - 1] = dict(_edit_info(edit), del_id=2 * number - 1, ins_id=2 * number)
             index[2 * number] = index[2 * number - 1]
-        return index
+        return index, pairs
 
-    def _pair_revisions(self, manifest: Mapping[int, Mapping[str, Any]]) -> list[dict[str, Any]]:
+    def _pair_revisions(self, manifest: Mapping[int, Mapping[str, Any]],
+                        manifest_pairs: list[tuple[int, int]] | None = None
+                        ) -> list[dict[str, Any]]:
         by_id = {int(k): v for k, v in self.revisions.items() if str(k).isdigit()}
         result: list[dict[str, Any]] = []
-        for rid in sorted(by_id):
-            if rid % 2 == 0 and (rid - 1) in by_id:
-                continue  # already emitted as part of the odd/even pair
-            entry = by_id.get(rid, {})
-            ins_entry = by_id.get(rid + 1, {}) if rid % 2 == 1 else {}
-            del_entry = entry if rid % 2 == 1 else by_id.get(rid - 1, {})
-            pair_ids = sorted({i for i in (rid, rid + 1) if i in by_id})
-            info: Mapping[str, Any] = {}
-            for candidate in pair_ids:
-                if candidate in manifest:
-                    info = manifest[candidate]
-                    break
+
+        def emit(del_rid: int | None, ins_rid: int | None, info: Mapping[str, Any],
+                 pair_ids: list[int]) -> None:
+            # Read each entry's own del/ins content: a standalone foreign
+            # revision carries its text on its own side (FL-D924), so content
+            # joins must not assume "del text lives in the del entry only".
+            del_entry = by_id.get(del_rid, {}) if del_rid is not None else {}
+            ins_entry = by_id.get(ins_rid, {}) if ins_rid is not None else {}
             before = "".join(del_entry.get("del", []))
             after = "".join(ins_entry.get("ins", []))
+            if ins_rid is None and not before and not after:
+                after = "".join(del_entry.get("ins", []))
+            if del_rid is None and not before and not after:
+                before = "".join(ins_entry.get("del", []))
             operation = info.get("operation") or ""
             if not operation:
                 operation = "delete" if not after else ("insert" if not before else "replace")
             result.append({
                 "index": len(result) + 1,
-                "del_id": rid,
-                "ins_id": rid + 1,
+                "del_id": del_rid,
+                "ins_id": ins_rid,
                 "revision_ids": pair_ids,
                 "before": before,
                 "after": after,
@@ -438,6 +449,40 @@ class HtmlProjection:
                 "replacement": info.get("replacement", ""),
                 "mapped": bool(info),
             })
+
+        covered: set[int] = set()
+        if manifest_pairs:
+            # Authoritative pairing from the manifest (FL-D924): never derive
+            # pairs from id parity when an explicit record exists.
+            for del_rid, ins_rid in manifest_pairs:
+                if del_rid not in by_id and ins_rid not in by_id:
+                    continue
+                info: Mapping[str, Any] = {}
+                for candidate in (del_rid, ins_rid):
+                    if candidate in manifest:
+                        info = manifest[candidate]
+                        break
+                emit(del_rid, ins_rid, info,
+                     sorted({i for i in (del_rid, ins_rid) if i in by_id}))
+                covered.update((del_rid, ins_rid))
+
+        for rid in sorted(by_id):
+            if rid in covered:
+                continue
+            if rid % 2 == 0 and (rid - 1) in by_id and (rid - 1) not in covered:
+                continue  # already emitted as part of the odd/even pair
+            if (rid + 1) in covered:
+                # The neighbour belongs to an authoritative manifest pair; a
+                # foreign id must never borrow it into a parity pair (FL-D924).
+                pair_ids = [rid]
+            else:
+                pair_ids = sorted({i for i in (rid, rid + 1) if i in by_id})
+            info2: Mapping[str, Any] = {}
+            for candidate in pair_ids:
+                if candidate in manifest:
+                    info2 = manifest[candidate]
+                    break
+            emit(rid, rid + 1 if len(pair_ids) > 1 else None, info2, pair_ids)
         return result
 
 

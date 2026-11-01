@@ -175,8 +175,7 @@ def test_absent_target_without_site_proof_stays_open():
     ledger = compile_obligations(guide(rule(rule_id="G15", operations=[
         {"op": "delete", "old_text": "销售服务费按月支付", "condition": {"kind": "none"}}])))
     apply_facts(ledger, FakeFacts())
-    project(ledger, report_with(targets=[target("G15", state="absent")]),
-            artifact_text="本基金合同。")
+    project(ledger, report_with(targets=[target("G15", state="absent")]))
     assert ledger.records[0].completion == "UNRESOLVED"
     assert open_obligations(ledger)
 
@@ -231,8 +230,7 @@ def test_artifact_replay_failure_reopens_the_obligation():
 def test_delivery_closed_states_are_exhaustive_and_fail_closed():
     ledger = compile_obligations(guide(rule()))
     apply_facts(ledger, FakeFacts(service=False))
-    project(ledger, report_with(targets=[target("G05", state="absent")]),
-            artifact_text="本基金合同。")
+    project(ledger, report_with(targets=[target("G05", state="absent")]))
     # FALSE closes only its own branches. An absent target is not site proof.
     assert ledger.records[0].closed and ledger.records[1].closed
     assert ledger.records[2].completion == "UNRESOLVED"
@@ -339,7 +337,7 @@ def test_one_of_variant_closure_requires_the_other_variant_to_be_gone():
         replay={"verified": True, "obligations": {
             "G11:B1:O1": site_proof(ledger, "G11:0", "旧写法一", "统一的新政策", planned=True),
             "G11:B1:O2": site_proof(ledger, "G11:1", "条款仍写旧写法二。", "条款仍写旧写法二。", location="p2")}},
-    ), artifact_text="条款仍写旧写法二。")
+    ))
     assert ledger.records[0].completion == "ARTIFACT_VERIFIED"
     assert ledger.records[1].completion == "UNRESOLVED"
     assert ledger.records[1].completion_evidence == "CLAIM_OPERATION_NOT_PLANNED"
@@ -350,7 +348,7 @@ def test_global_delete_absence_without_site_proof_stays_open():
         {"op": "delete", "old_text": "本基金不同基金份额类别之间不得互相转换。",
          "condition": {"kind": "none", "value": None}}])))
     apply_facts(ledger, FakeFacts())
-    project(ledger, report_with(), artifact_text="本基金合同经中国证监会核准。")
+    project(ledger, report_with())
     assert ledger.records[0].completion == "UNRESOLVED"
     assert open_obligations(ledger)
 
@@ -358,8 +356,7 @@ def test_global_delete_absence_without_site_proof_stays_open():
 def test_satisfied_unkeyed_target_cannot_hide_a_residual_delete():
     ledger = compile_obligations(guide(rule()))
     apply_facts(ledger, FakeFacts(service=False))
-    project(ledger, report_with(targets=[target("G05", state="satisfied")]),
-            artifact_text="基金份额类别调整并报中国证监会备案。")
+    project(ledger, report_with(targets=[target("G05", state="satisfied")]))
     b2 = ledger.record("G05:B2:O1")
     assert b2.completion == "UNRESOLVED"
     assert b2.completion_evidence == "OPEN_OBLIGATION:applicable_without_site_proof"
@@ -382,7 +379,7 @@ def test_one_of_variant_present_inside_the_authorized_new_text_closes():
         replay={"verified": True, "obligations": {
             "G11:B1:O1": site_proof(ledger, "G11:0", new_policy, new_policy),
             "G11:B1:O2": site_proof(ledger, "G11:1", new_policy, new_policy)}},
-    ), artifact_text=new_policy)
+    ))
     assert {item.completion for item in ledger.records} <= {"ARTIFACT_VERIFIED", "ALREADY_SATISFIED"}
     assert not open_obligations(ledger)
 
@@ -431,7 +428,7 @@ def test_explicit_empty_scope_cannot_close_an_append_obligation():
     apply_facts(ledger, FakeFacts())
     report = report_with()
     report["scope_mapping"] = {"mappings": {"G01": []}}
-    project(ledger, report, artifact_text="本基金合同。")
+    project(ledger, report)
     assert ledger.records[0].completion == "UNRESOLVED"
     assert ledger.records[0].completion_evidence == "TARGET_COVERAGE_GAP"
 
@@ -442,7 +439,7 @@ def test_survey_satisfied_delete_cannot_hide_a_residual_sentence():
     report = report_with()
     report["survey"] = [{"records": [{"operation": "satisfied",
                                       "operation_keys": ["G05:2"]}]}]
-    project(ledger, report, artifact_text="并报中国证监会备案。")
+    project(ledger, report)
     record = ledger.record("G05:B2:O1")
     assert record.completion == "UNRESOLVED"
     assert record.completion_evidence == "OPEN_OBLIGATION:applicable_without_site_proof"

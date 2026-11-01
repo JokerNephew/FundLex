@@ -77,11 +77,12 @@ def test_release_requires_actual_results_not_threshold_presence():
     action["evaluation_metrics"] = {"tested_context": tested_context, "action_id": action["action_id"], "evaluation_report_id": "fixture-eval", "threshold_registration_id": gates["registration_id"], "metrics": values(gates["metrics"]), "profile_metrics": {f: values(g) for f, g in gates["profile_metrics"].items()}}
     validate_release_gate(action, policy)
     action["evaluation_metrics"]["metrics"]["location_precision"] = 0.98
-    with pytest.raises(ValueError, match="below threshold"):
+    # FL-D937(1)：发布门禁失败码走 RuleError taxonomy。
+    with pytest.raises(ValueError, match="RELEASE_METRIC_BELOW_THRESHOLD"):
         validate_release_gate(action, policy)
     action["evaluation_metrics"]["metrics"]["location_precision"] = 0.99
     del action["evaluation_metrics"]["profile_metrics"]["share_classes"]["accuracy"]
-    with pytest.raises(ValueError, match="missing or invalid"):
+    with pytest.raises(ValueError, match="RELEASE_METRIC_INVALID"):
         validate_release_gate(action, policy)
 
 

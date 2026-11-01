@@ -246,13 +246,13 @@ def discover_candidates(operation: Mapping[str, Any], text: str
     return candidates
 
 
-def authorized_variant_sentences(rule: Mapping[str, Any],
-                                 operation: Mapping[str, Any],
+def authorized_variant_sentences(operation: Mapping[str, Any],
                                  before: str) -> list[str]:
     """Certified variant sentences of ``before`` for one routed operation.
 
     Consumed by ``_validate_routed_policy`` as removal authorisation — the
-    generalisation of the FL-D588 G08 sentence gate.
+    generalisation of the FL-D588 G08 sentence gate.  FL-D935(7): the unused
+    ``rule`` parameter was dropped with its sole call site.
     """
     certified: list[str] = []
     for item in discover_candidates(operation, before):

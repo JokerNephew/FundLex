@@ -5,11 +5,9 @@ import re
 from dataclasses import replace
 from typing import Any, Sequence
 
-from .recall_prompts import FUND_TYPES
-
-SCHEMA = {"type": "object", "required": ["fund_type", "quote", "reason"], "properties": {
-    "fund_type": {"enum": list(FUND_TYPES)}, "quote": {"type": "string"},
-    "reason": {"type": "string"}}}
+from .recall_prompts import (QUALIFICATION_REVIEW_INSTRUCTION,
+                             QUALIFICATION_REVIEW_PROMPT_VERSION,
+                             QUALIFICATION_REVIEW_SCHEMA as SCHEMA)
 
 _SIGNATURES = {
     "etf": r"交易型开放式|ETF",
@@ -39,11 +37,8 @@ def certify_exclusion(inspection: Any, facts: Any, gateway: Any,
         context = facts_context(inspection, limit=max(1, gateway.max_context_chars - 1500))
         try:
             response = gateway.call(task_type="recall_qualification_review", bounded_context=context,
-                response_schema=SCHEMA, prompt_version="recall_qualification_review_v1",
-                instruction="Independently classify THIS fund contract's current product type. "
-                "A mention of another fund or future conversion is not its current type. "
-                "An ETF feeder (联接基金) is open_regular. Return an exact contiguous source "
-                "quote proving the current type; return other with empty quote if uncertain.")
+                response_schema=SCHEMA, prompt_version=QUALIFICATION_REVIEW_PROMPT_VERSION,
+                instruction=QUALIFICATION_REVIEW_INSTRUCTION)
         except Exception as exc:
             from .model import ModelError
             if isinstance(exc, ModelError):

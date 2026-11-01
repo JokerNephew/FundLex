@@ -84,7 +84,7 @@ def test_already_satisfied_wording_is_exempt():
 
 
 def test_authorized_variant_sentences_feeds_the_policy_gate():
-    sentences = authorized_variant_sentences(_rule(), _rule()["operations"][0],
+    sentences = authorized_variant_sentences(_rule()["operations"][0],
                                              QUALIFIED + "其他句子。")
     assert QUALIFIED in sentences
 

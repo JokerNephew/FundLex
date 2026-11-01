@@ -230,8 +230,15 @@ def _parse_enrichment(store: RunStore, version_id: str | None,
                                                    **review_dimensions(canary_report)},
                                     "evaluated_at": datetime.now(timezone.utc)
                                     .isoformat(timespec="seconds")}
-        except Exception:  # noqa: BLE001
-            pass
+        except Exception as exc:  # noqa: BLE001
+            # A crashing canary must never read as a clean pass (FL-D923): the
+            # finish step derives qualification from this report's ``passed``
+            # flag, so record the crash as a failed report instead of swallowing
+            # it (which previously certified the version silently).
+            canary_report = {"passed": False,
+                             "error": {"type": type(exc).__name__,
+                                       "note": "executability canary crashed"}}
+            extras["canary"] = canary_report
     if source is not None:
         try:
             from .guide_report import block_report

@@ -434,11 +434,16 @@ def build_coverage_view(report: Mapping[str, Any]) -> CoverageLedgerView:
         verdict = verdicts.get(target_id, "")
         status = plan_status.get(target_id, "")
         operation_keys = tuple(str(key) for key in (target.get("operations") or []))
-        if state == "satisfied" or str(target.get("reason") or "").startswith("survey_new_text_present"):
+        if state == "satisfied" or status == "satisfied" or \
+                str(target.get("reason") or "").startswith("survey_new_text_present"):
+            # ``status`` is the plan-ledger verdict from the build run (the
+            # engine proved the text already honoured the rule); it must rate
+            # ALREADY_SATISFIED, not NOT_APPLICABLE (FL-D932). Display layers
+            # keep mapping historical NOT_APPLICABLE rows for readability.
             entries.append(CoverageEntry(rule_id, location, "ALREADY_SATISFIED",
                                          "engine_satisfied", target_id, operation_keys))
         elif state in ("absent", "out_of_scope", "not_applicable") or \
-                status in ("satisfied", "not_applicable"):
+                status in ("not_applicable",):
             entries.append(CoverageEntry(rule_id, location, "NOT_APPLICABLE",
                                          f"engine_{state or status}", target_id,
                                          operation_keys))

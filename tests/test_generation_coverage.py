@@ -101,7 +101,8 @@ def test_plan_level_not_applicable_or_satisfied_closes_the_target():
     }
     view = build_coverage_view(report)
     assert view.state_of("G20", "p1") == "NOT_APPLICABLE"
-    assert view.state_of("G02", "p2") == "NOT_APPLICABLE"
+    # FL-D932：plan-ledger satisfied 表示引擎已证原样合规，不再错标不适用。
+    assert view.state_of("G02", "p2") == "ALREADY_SATISFIED"
     assert not view.unresolved
 
 
