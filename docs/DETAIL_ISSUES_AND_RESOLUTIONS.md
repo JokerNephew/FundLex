@@ -7644,7 +7644,8 @@ H＝E×…
 - **旁证（审查闭环为何没兜住）**：`_reconcile_candidate_targets` 对 plan status=planned 的 target 直接跳过（T013 经合并编辑 planned），replay 终局证明不抵审计缺判——该优先级本身合理（审计是独立语义闸），洞在上一轮的身份匹配。
 - **处理（本树已实施，待提交）**：`_run_audit` 结果落账前加 `_canonical_echoed_target_id` 规范化——收缩 scope 前缀**连续重复段**（合法 id 的 scope 列表从不连续重复，故对合法 id 零扰动）；规范化后唯一候选命中才采纳（歧义 fail-closed 维持丢弃）；采纳留 `identity_repaired_from` 落账痕迹。mutation 3 例：笔误回显采纳+留痕 / 外域 id 仍 AUDIT_TARGET_UNKNOWN / 合法 id 零扰动。
 - **回归**：全量 2564 passed / 0 failed / 139 skipped（基线 2561 + 新增 3）。
-- **状态**：修复已实施，BH01 真实病灶复验在途（bh01-v4）。
+- **真实复验已闭环（bh01-v4，07a4c37）**：delivery=**complete**，unresolved=0 / blockers=0；audit 1 round / 0 issues；G13:0 ARTIFACT_VERIFIED(claim_replay:VERIFIED_ABSENT)、G12 双 op 正常；ledger UNRESOLVED=0（16 ARTIFACT_VERIFIED/8 ALREADY_SATISFIED/10 NOT_APPLICABLE）；产物 final/redline/report 齐备；账本 25 calls / $0.0278。本轮模型回显无笔误（修复兜底就位未触发）；笔误形态由 3 例 mutation 锁死（采纳/拒收/零扰动），病灶形态「缺判→连坐」判定为消除。
+- **状态**：已解决并验证（适用版本 07a4c37；mutation+全量回归 2564 绿+真实病灶复验三路闭环）。
 
 ## FL-D982 留出 r2 BH07 恢复通道复核：FL-D869 对症实证，G14 天花板交代（2026-11-01，qa-recall-miss，第三轮修复令）
 
