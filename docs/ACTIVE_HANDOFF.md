@@ -1686,3 +1686,10 @@ dev20 v2 闭环：修复循环直到 §7 门槛（无已确证严重错误、无
 ## 2026-11-01 breakpoint-4（loop-7 残存单因子修复完成，HEAD 686f080）
 - FL-D699：容器内恒等类替换 satisfied-noop（plan composite 分支即时转换，逐操作粒度+VERIFIED 事实守卫）；mutation 3 例累计 11 绿；全量回归 2543/0/139。
 - 真实矩阵 loop8-fix-matrix：B05/B12/B15 全 complete 0-hold。登记+报主线段已更新。下一步：主线合并→feat-recall loop-8。
+
+---
+## 2026-11-01 breakpoint-5（留出三家族修复并入主线 + 失效模式总图交付，HEAD a5bad78）
+- 已提交 a5bad78：FL-D862/863/864 修复（guide 条件承载+重认证、summary facts 接线、G18 缺位证书、G06 双 scope 回退、极性三补环）；mutation 11 例；全量回归 2554/0/139。主线已并入 05c3ef1（回归中）。
+- 真实复验 holdout-fix-matrix：BH02/BH04/BH05 全 complete 0-hold；BH07 一阶 22 连发全消、残余二阶 4 holds（G02/G04）OPEN。
+- 本次新增：docs/engine/REVISION_FAILURE_MODES.md（FL-D897 总图，FM-01~36+原则+R1~R6）；DETAIL 登记 FL-D866~869/897（865 让位主线 BH06）。
+- 未提交：上述 docs。下一步：①BH07 二阶机制（空组 satisfied-noop+枚举句缺位证书，设计见 FL-D869）实施+mutation+BH07 复跑+dev 回归；②等主线 500+ 语料剖析产物后回填总图 R6 覆盖面交叉验证；③留出二轮由 feat-recall 跑（引擎冻结令之外不自跑）。

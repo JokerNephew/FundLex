@@ -235,8 +235,16 @@ _SEMANTIC_DELETE_PROBES: dict[str, re.Pattern[str]] = {
 }
 
 
-_ABSENT_COVERAGE_KINDS = frozenset({"scoped_site_scan", "rule_scope_scan",
-                                    "document_site_scan"})
+_ABSENT_COVERAGE_KINDS = frozenset({
+    "scoped_site_scan", "rule_scope_scan", "document_site_scan",
+    # FL-D869 third-order wiring (BH07-v2 real re-run): the per-operation
+    # class-grouping completion verdicts produced by absent_delete_coverage
+    # must also be recognised here; otherwise the certificate is manufactured
+    # upstream and silently rejected downstream (the consumer still fell
+    # through to "verified site missing").  Fail-closed stays with the verdict
+    # itself: this whitelist only accepts the identity of an explicit record,
+    # never invents one.
+    "empty_group_noop", "identity_noop", "enumerated_absence"})
 
 
 def _absent_coverage_evidence(value: Mapping[str, Any] | None, *, operation_id: str,
