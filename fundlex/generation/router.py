@@ -17,6 +17,10 @@ from .registry import operation_for
 from .types import GenerationTier as T, RouteDecision, StrategySpec
 
 
+class RouterError(ValueError):
+    """Illegal routing surface (config-level disagreement)."""
+
+
 class FailureTaxonomy(str, Enum):
     """Stable root-cause names for generation failures.
 
@@ -334,6 +338,13 @@ def route_operation(operation_key: str, *,
         T.SPLICE: "splice",
         T.COMPOSE: "compose",
     }[tier]
+    if spec.executor and spec.executor != executor:
+        # Observation-first guard (FL-D933): the tier table must never silently
+        # rewrite an explicit registry executor; disagreement is a config bug,
+        # not a routing choice.
+        raise RouterError(
+            f"executor mismatch for {operation_key}: registry={spec.executor!r} "
+            f"tier-table={executor!r}")
     return RouteDecision(
         operation_key, spec.default_tier, tier, fallback_reason=reason,
         blocked=False, selected_executor=executor,
