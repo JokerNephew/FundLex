@@ -4050,9 +4050,24 @@ def _final_omission_issue_blocks(issue: Mapping[str, Any]) -> bool:
     reason = str(issue.get("reason") or "")
     if code in _FINAL_OMISSION_BLOCKER_CODES:
         return True
-    # A coverage row that says a Claim Replay failure left an operation unresolved is
-    # a proof failure, not an unfinished review.  Audit/sweep-cap rows stay reviewable.
-    return code == "FINAL_COVERAGE_UNRESOLVED" and "CLAIM_" in reason
+    if code != "FINAL_COVERAGE_UNRESOLVED":
+        return False
+    # A coverage row blocks only when its reason is a CONCRETE proof gap
+    # (claim replay fail, site evidence missing, source mismatch, miss class) —
+    # W2H04's site_evidence_missing exactly.  Capability/unfinished families stay
+    # reviewable per review_assisted semantics: unfinished audit
+    # (AUDIT_*/unresolved:AUDIT_*), applicability unknown
+    # (applicability_unknown:FACT_PREREQUISITE_UNVERIFIED …), sweep budget caps
+    # (SWEEP_CHUNK_LIMIT) and generic target-level holds (unresolved:target).
+    reason_upper = reason.upper()
+    return any(marker in reason or marker in reason_upper for marker in _COVERAGE_PROOF_GAP_MARKERS)
+
+
+#: Reason markers proving a coverage row is a concrete missing evidence gap, not
+#: an unfinished review (see _final_omission_issue_blocks).
+_COVERAGE_PROOF_GAP_MARKERS = (
+    "CLAIM_", "site_evidence_missing", "TARGET_SOURCE_MISMATCH", "MISS_",
+)
 
 
 def _delivery_policy() -> str:

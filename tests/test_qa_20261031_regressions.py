@@ -1560,3 +1560,36 @@ def test_non_approved_delete_still_trusts_recorded_expected_old_text():
         content_source="sentence_delete",
         expected_old_text=_D573_P87_TAIL)
     assert "CLAIM_OPERATION_SPAN_UNAUTHORIZED" not in errors
+
+
+# --- FL-D1002-W2H04: 适用性 TRUE 的未决义务必须阻断（gate 旁路根治）---------
+
+def test_business_pending_obligation_keeps_business_bucket():
+    """事实未知挂起（含 marker 的原因）与 G14/G18 业务待定仍走 business 桶——
+    修复只抓「可证明缺失」，不改既有 business 语义。"""
+    from fundlex.recall_pipeline import _classify_delivery_items
+    unknown_fact = {"kind": "obligation", "code": "OPEN_OBLIGATION", "rule_id": "G08",
+                    "applicability": "TRUE",
+                    "reason": "CLAIM_REPLAY_FAILED FACT_PREREQUISITE_UNVERIFIED:x"}
+    _b, _r, business_unknown = _classify_delivery_items([unknown_fact])
+    # CLAIM_ 前缀本身即 blocker（既有行为不动）
+    g14_item = {"kind": "obligation", "code": "OPEN_OBLIGATION", "rule_id": "G14",
+                "applicability": "TRUE", "reason": "MISS_TARGET_RESOLUTION"}
+    pure_unknown = {"kind": "obligation", "code": "OPEN_OBLIGATION", "rule_id": "G08",
+                    "applicability": "TRUE",
+                    "reason": "FACT_PREREQUISITE_UNVERIFIED:service_fee_group"}
+    _b14, _r14, business14 = _classify_delivery_items([g14_item])
+    _bp, _rp, business_pure = _classify_delivery_items([pure_unknown])
+    assert business14 == [g14_item]
+    assert business_pure == [pure_unknown]
+
+
+def test_unknown_applicability_obligation_not_promoted_to_blocker():
+    """applicability 非 TRUE（事实不可能知时）维持 review 语义，不误伤挂起形态。"""
+    from fundlex.recall_pipeline import _classify_delivery_items
+    item = {"kind": "obligation", "code": "OPEN_OBLIGATION", "rule_id": "G05",
+            "applicability": "UNKNOWN",
+            "reason": "FACT_PREREQUISITE_UNVERIFIED:service_fee_group"}
+    _b, review, business = _classify_delivery_items([item])
+    assert not _b
+    assert business or review

@@ -349,3 +349,81 @@ def test_explicit_class_summary_copy_key_matches_only_the_real_copy(copy_key):
     assert explicit.zone == "body+summary"
     assert {"p10", "p11"} <= explicit.locations
     assert "p13" not in explicit.locations  # unrelated holders'-meeting leaf
+
+
+
+
+# ---------------------------------------------------------------------------
+# FL-D1002-W2H12：摘要副本标题不合规键时靠 op 锚文自救（audit 盲区根治）
+# ---------------------------------------------------------------------------
+
+_G22_ANCHOR = ("基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，"
+               "按基金份额持有人持有的基金份额比例进行分配")
+
+
+def _g22_like_rule(old_text: str) -> dict:
+    return {"rule_id": "G22", "title": "清算-剩余财产分配表述", "section_hint": "清算",
+            "operations": [{"op": "replace", "old_text": old_text, "new_text": "新文",
+                            "condition": {"kind": "none", "value": None},
+                            "operation_id": "G22:0", "group_kind": "INDEPENDENT",
+                            "one_of_group": ""}]}
+
+
+def _w2h12_fixture(old_text: str, summary_extra: str = ""):
+    spans = (
+        _span("p1072", "第十九部分 基金合同的变更、终止与基金财产的清算"),
+        _span("p1073", "五、基金财产清算剩余资产的分配"),
+        _span("p1074", "基金财产清算后的全部剩余资产扣除费用后按比例分配。"),
+        _span("p1450", "第二十四部分 基金合同内容摘要"),
+        _span("p1455", "（三）基金财产的清算"),
+        _span("p1456", old_text + summary_extra),
+    )
+    sections = [
+        _section("S19", "第十九部分 基金合同的变更、终止与基金财产的清算",
+                 ("p1072", "p1073", "p1074")),
+        _section("S26", "第二十四部分 基金合同内容摘要",
+                 ("p1450", "p1455", "p1456"), zone="summary"),
+    ]
+    return _inspection(spans), sections
+
+
+def test_g22_summary_site_rescued_by_operation_anchor():
+    """摘要子条款名（（三）基金财产的清算）产不出 copy_key 时，op 自身 old_text
+    在场即把该摘要叶纳入 scope——不再盲区放行。"""
+    inspection, sections = _w2h12_fixture(_G22_ANCHOR)
+    scope = resolve_rule_scopes([_g22_like_rule(_G22_ANCHOR)], sections, inspection,
+                                {"G22": ["S19", "S26"]})["G22"]
+    assert "p1074" in scope.locations
+    assert "p1456" in scope.locations, scope.locations
+    assert scope.include_summary_copies is True
+    assert any("summary_content_anchors" in item for item in scope.evidence)
+
+
+def test_g22_summary_without_anchor_stays_out():
+    """锚文不在摘要叶 → 不纳入（不误扩）。"""
+    inspection, sections = _w2h12_fixture("收益分配条款无关文本。")
+    scope = resolve_rule_scopes([_g22_like_rule(_G22_ANCHOR)], sections, inspection,
+                                {"G22": ["S19", "S26"]})["G22"]
+    assert "p1456" not in scope.locations
+
+
+def test_g22_summary_title_keyed_copy_still_matched():
+    """旧契约：题键命中（copy_key=清算剩余资产）的摘要副本照常纳入。"""
+    spans = (
+        _span("p1072", "第十九部分 基金合同的变更、终止与基金财产的清算"),
+        _span("p1073", "五、基金财产清算剩余资产的分配"),
+        _span("p1074", "基金财产清算后的全部剩余资产扣除费用后按比例分配。"),
+        _span("p1450", "第二十四部分 基金合同内容摘要"),
+        _span("p1455", "（三）基金财产清算剩余资产的分配"),
+        _span("p1456", "任意摘要正文。"),
+    )
+    sections = [
+        _section("S19", "第十九部分 基金合同的变更、终止与基金财产的清算",
+                 ("p1072", "p1073", "p1074")),
+        _section("S26", "第二十四部分 基金合同内容摘要",
+                 ("p1450", "p1455", "p1456"), zone="summary"),
+    ]
+    rule = _g22_like_rule(_G22_ANCHOR)
+    scope = resolve_rule_scopes([rule], sections, _inspection(spans),
+                                {"G22": ["S19", "S26"]})["G22"]
+    assert "p1456" in scope.locations

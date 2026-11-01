@@ -9008,3 +9008,33 @@ H＝E×…
 ## FL-D1008 引擎拒编族：labels eligible 但引擎 excluded（2026-11-02，第二波收官，open）
 - 货币分层三案 25 目标 0 完成且引擎交付轴落 excluded。裁定：不构成赦免通道，如实计 0/25 留分母；根因派 EN1（excluded 判定路径）。
 - 同册更正：主线 GO 令「修复已在主线」前提不实（EVAL merge-base 实证戳破）——派单引用主线状态必须现验，教训登记。
+## FL-D1002 fc 硬门首破：gate 旁路（W2H04）+audit 盲区（W2H12）（2026-11-02，qa-recall-miss）
+
+- **发现（EV AL 第二波 holdout25 初读，fc=2，七波 fc=0 首破）**：
+  1. **gate 旁路族（W2H04）**：obligation 行 applicability=TRUE reason=TARGET_SOURCE_MISMATCH
+     不沾阻断谓词的 `CLAIM_*`/code 集 → 落 review 桶 → review_assisted publish complete；
+     产物可证缺失 G16 必做 append。根因=阻断判定的**字符串彩票**（完备性洞），分类器
+     未用「适用已证+效果未交付=缺失变更」这一语义谓词。
+  2. **audit 盲区族（W2H12）**：G22 摘要副本「（三）基金财产的清算」产不出 copy_key
+     「清算剩余资产」（题键词缺+heading_level<3 内容兜底守卫双保险反噬）→ scope 排除
+     （实证 locations 仅 [p1073,p1074]）→ 摘要点旧文 kept 仍 complete。
+- **处理（①终版 b3af9f3、②4b878e6，均机制级、无样本特判）**：
+  - ①**谓词=`FINAL_COVERAGE_UNRESOLVED` 且 reason 含具体证明缺口标记**（CLAIM_/
+    site_evidence_missing/TARGET_SOURCE_MISMATCH/MISS_）才阻断；能力未完家族（审计未竟
+    AUDIT_*/事实未知 FACT_PREREQUISITE/sweep 封顶/unresolved:target）保留评审或 business
+    语义。**初版 4b878e6「obligation appl-TRUE 一律阻断」过度收紧被回归回敬 4 失败**
+    （持久审计败/缺席站点/class-set 事实未知/sweep 封顶），如实回退并按真实行字段重写
+    ——obligation 主体行保留评审可见性，唯覆盖缺证_rows 阻断。
+  - ②`_resolve_liquidation` 题键失配时以 op 自身 old_text（≥12 字）锚摘要叶内容兜底纳入。
+  mutation 各 3 例+能力族反例 3 例。
+- **真实病灶复验（已闭环）**：
+  - W2H04 重跑×2：**incomplete**（修复前 complete）。初版谓词实证后；精化谓词
+    复验（fl-d1002-v2）：blocker=final_omission site_evidence_missing（谓词靶心），
+    obligation 主体行保留在 review_items——阻断与评审可见性各就其位。
+  - W2H12 重跑：**complete 且双臂落锤**——scope 纳 [p1073,p1074,p1454,p1455,p1456]，
+    G22 双 target planned，读实际产物 final.docx：正文 p1074 与摘要 p1456 双双附加
+    「并加上返还基金份额持有人的销售服务费（如有）」；coverage G22:0 ×2 ARTIFACT_VERIFIED。
+    盲区→可见→落改，非「可见即拦放」。
+- **账本**：fl-d1002-lesion/ledger.sqlite（29c/$0.0352 + 29c/$0.0355）。
+- **状态**：已解决并验证（适用 b3af9f3①+4b878e6②；mutation/关联套件 298+127/真实病灶双案复验/**全量回归 2589 passed/0 failed** 四路闭环）。
+  推广注记：其余 resolver 摘要纳入同法（B4-N10 族）已登记，本令不展开。

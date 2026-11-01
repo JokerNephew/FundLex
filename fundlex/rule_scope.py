@@ -1045,7 +1045,8 @@ def _resolve_income(rule_id: str, sections: Sequence[Any], leaves: Sequence[Leaf
 
 def _resolve_liquidation(rule_id: str, sections: Sequence[Any], leaves: Sequence[LeafSection],
                          mapping: Mapping[str, Any], *,
-                         summary_overrides: Mapping[str, Any] | Iterable[str] | None) -> RuleScope:
+                         summary_overrides: Mapping[str, Any] | Iterable[str] | None,
+                         rule: Any = None, span_map: Mapping[str, Any] | None = None) -> RuleScope:
     base = _valid_sections(sections, _mapping_ids(mapping, rule_id))
     base_ids = [str(section.id) for section in base]
     body_ids = [str(section.id) for section in base
@@ -1068,6 +1069,28 @@ def _resolve_liquidation(rule_id: str, sections: Sequence[Any], leaves: Sequence
     enabled = _summary_enabled(summary_overrides, rule_id, True)
     summary_leaves = ([leaf for leaf in _leaves_for(leaves, summary_ids, zone="summary")
                        if leaf.copy_key == "清算剩余资产"] if enabled else [])
+    if enabled and rule is not None and span_map:
+        # FL-D1002-W2H12 audit blind spot: a summary sub-clause titled e.g.
+        # （三）基金财产的清算 never yields copy_key "清算剩余资产" (title token
+        # miss + heading-level content-fallback guard), so the rule's summary
+        # site sat outside the scope and the old liquidation wording survived
+        # with delivery=complete.  Match the operation's OWN old_text against
+        # the leaf content — the rule-declared site wording is the definitive
+        # copy anchor, generic over any title shape.
+        anchors = [anchor for anchor in (
+            _compact(str(operation.get("old_text") or ""))
+            for operation in (rule.get("operations") or []) if isinstance(operation, Mapping))
+                   if len(anchor) >= 12]
+        if anchors:
+            known = {leaf.id for leaf in summary_leaves}
+            extra = [leaf for leaf in _leaves_for(leaves, summary_ids, zone="summary")
+                     if leaf.id not in known
+                     and any(anchor in _compact(_leaf_text(leaf.locations, span_map))
+                             for anchor in anchors)]
+            if extra:
+                summary_leaves = [*summary_leaves, *extra]
+                evidence.append("summary_content_anchors="
+                                + ",".join(_leaf_label(leaf) for leaf in extra))
     selected.extend(summary_leaves)
     evidence.extend(_leaf_label(leaf) for leaf in selected)
     if summary_leaves:
@@ -1199,7 +1222,8 @@ def resolve_rule_scopes(
                                         summary_overrides=include_summary_copies)
             elif rule_id in {"G19", "G20", "G21", "G22"}:
                 scope = _resolve_liquidation(rule_id, sections, leaves, mapping,
-                                             summary_overrides=include_summary_copies)
+                                             summary_overrides=include_summary_copies,
+                                             rule=rule, span_map=span_map)
             elif rule_id in {f"G{number:02d}" for number in range(7, 15)}:
                 scope = _resolve_purchase(rule_id, sections, leaves, mapping)
             else:
