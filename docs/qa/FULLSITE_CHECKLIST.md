@@ -55,11 +55,15 @@
 - 长任务（提交上传、真实模型处理、生成产物、下载大文件）不套 P-CLICK 硬阈值，但**进度反馈必须在 500ms 内出现**（按钮变「正在上传…」/进度条/Toast），超时即 ❌。
 - 轮询页（任务详情/生成详情）测量首屏，不测轮询间隔。
 - 任一采样点 3 次中位数 >fail ⇒ 该页「卡顿」成立（A3 ❌）；warn~fail 之间 ⇒ 记 ⚠ 并截图留档。
+- 缓存口径：默认 warm（同 URL 预载一次后测第二次）；--cold 场景分开记录（records 带 cache_mode）。
+- 环境口径：**阈值判定以生产公网采集为准**；本地 dev 采集仅作对照、不进 A3 判定（results.json 记 base_url 可追溯）。
+- P-CLICK 超时按超时值记录（必然超 fail → ❌），不以异常中断该行。
+- LCP/INP 列入阶段二增强项（采集链路验证后再入冻结表）。
 - 阈值冻结前若需调整：改本表+tools/qa/fullsite/perf_budget.json 同步，commit 注明「待主线审定」。
 
 ## 3. V1 检查单（生产主战场；hash SPA，11 顶层视图 + 弹层族）
 
-通用截图要求：每行桌面 1440 + 移动 390 各 ≥1 张；弹层行再补弹层开启特写；命名 `<编号>-<状态>-<视口>.png`。前置图例：seed:task=已有修改任务；seed:doc=任务内有已处理合同；seed:cmp=已有比对任务（含完成态）；seed:gg=已有指引生成 run（含多版本）；seed:guide=已上传自定义指引≥2 版；seed:admin=admin 身份；seed:empty=全新空账号/清筛选。
+通用截图要求：每行桌面 1440 + 移动 390 各 ≥1 张；弹层行再补弹层开启特写；命名 `<编号>-<视口>-s<样本>.png`（staged 条目阶段二加状态后缀 `<编号>-<状态>-<视口>.png`）。就绪选择器支持 ready_any：**行级优先、容器回落**（防空容器偷跑，shots.py 记录命中的是哪一支）。前置图例：seed:task=已有修改任务；seed:doc=任务内有已处理合同；seed:cmp=已有比对任务（含完成态）；seed:gg=已有指引生成 run（含多版本）；seed:guide=已上传自定义指引≥2 版；seed:admin=admin 身份；seed:empty=全新空账号/清筛选。
 
 ### 3.1 工作台与修改主线
 
@@ -124,7 +128,7 @@
 | FS-V1-42 | 修订审阅 tab=review | `…&tab=review` | seed:doc(有修订) | `.rev-item` | C | 修订列表（#/规则号/操作类型/接受勾选，reject 划线）；文档呈现区原文/修改引用框；A/R 快捷键 | ☐ | | |
 | FS-V1-43 | 修订审阅-批量与生成 | 同上 | 同上 | `data-action=generate-selected` | C | 全选接受/全拒/生成所选/全部接受（过程文案→完成「接受 N 条，拒绝 M 条」）；下载所选；跨合同上一份/下一份；决定草稿 sessionStorage 还原；生成反馈 ≤500ms | ☐ | | |
 | FS-V1-44 | 审阅-加载/失败 | 同上 | 断网等 | — | C | 「正在生成合同呈现与改动清单…」/「无法生成合同呈现，请稍后重试。」 | ☐ | | |
-| FS-V1-45 | document-无参空态/深链失效/加载 | `#document` 无参；伪造 id | — | — | C | 「请先从修改任务中选择一份合同。[返回修改任务]」；「该合同不存在、无权访问或暂时不可用…」；加载「正在读取合同…」 | ☐ | | |
+| FS-V1-45 | document-无参空态/深链失效/加载 | `#document` 无参；伪造 id | — | `#document-host` | C | 「请先从修改任务中选择一份合同。[返回修改任务]」；「该合同不存在、无权访问或暂时不可用…」；加载「正在读取合同…」 | ☐ | | |
 | FS-V1-46 | document-关闭交互 | `#close-detail`/遮罩/Esc | seed:doc | — | C | 三种关闭均回 `#task?id=`；离开视图自动 closeDetail | ☐ | | |
 
 ### 3.5 指引/模型/设置/用户
@@ -134,7 +138,7 @@
 | FS-V1-47 | 指引-versions 页签 | `#guide` | seed:guide | `#guide-rows` | A | 当前指引卡（读取中/未确定/已确定三态+flags）；版本表操作（启用/重新解析/下载原件/查看问题/规则开关）；解析中 4s 轮询；恢复内置 #guide-reset-btn | ☐ | | |
 | FS-V1-48 | 指引-versions 空/失败 | `#guide` | seed:empty/断网 | — | A | 「还没有可用指引」；失败两档（「当前环境未提供指引配置接口」/「指引列表暂未加载…」） | ☐ | | |
 | FS-V1-49 | 指引-diff 版本对比 | `#guide` → diff 页签 | seed:guide(≥2版) | `#guide-diff-card` | B | 基准/对比下拉；规则差异（新增/删除/改动三组+字段级 old→new）；原文比对；视图 merged/side 互切 P-CLICK≤800/2000 | ☐ | | |
-| FS-V1-50 | 指引-diff 空态×2+上传卡 | 同上 | seed:empty | 上传卡 | B | 「至少需要两个指引版本才能对比…」；「内置指引没有上传的原文文件…」；上传卡 #guide-file/#guide-upload-btn/#guide-upload-message 全流程 | ☐ | | |
+| FS-V1-50 | 指引-diff 空态×2+上传卡可及 | 同上 | seed:empty | 上传卡 | B | 「至少需要两个指引版本才能对比…」；「内置指引没有上传的原文文件…」；上传卡 #guide-file/#guide-upload-btn/#guide-upload-message 元素在场可交互（真实上传全流程挂 FS-LC-06/FS-V1-47 启用链） | ☐ | | |
 | FS-V1-51 | 指引-rules 规则开关 | `#guide` → rules 页签 | seed:guide | `#guide-rules-inline` | B | 版本下拉→在版本变化时加载；批量全选/全不选；保存成功；「至少保留一条启用规则。」拒绝路径 | ☐ | | |
 | FS-V1-52 | 指引-rules 四异常态 | 同上 | 分场景 | — | B | 占位「选择一个版本…」/加载中/404「规则尚未生成…」/未解析「指引解析完成后才能配置…」+读取错误文案 | ☐ | | |
 | FS-V1-53 | 指引-详情弹层 #guide-overlay | 「查看问题」/「规则开关」 | seed:guide | `#guide-overlay[open]`(visible) | B | issues/rules 两 mode；Esc/遮罩关+焦点圈定；加载/错误/404 文案；弹层内重新解析按钮 | ☐ | | |
@@ -197,6 +201,7 @@ V1 合计：**73 行**（11 顶层视图全覆盖：workspace 3 / overview 3 / i
 | 编号 | 页面/子页面/状态 | 路由 | 前置 | 就绪选择器 | 页级 | 状态分支与必查点 | 走查结论 | 性能实测 | 证据 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | FS-V2-13 | 指引列表 GuidesPage | `/guides` | seed:guide | 列表区 | A | 当前指引空/我的指引空（双 Spinner）；行内 form-error；上传 input | ☐ | | |
+| FS-V2-21 | 指引版本对比卡 CompareCard（GuidesPage 内嵌） | `/guides` | seed:guide(≥2版) | 对比卡 | B | 两版本选择联动；规则差异（useGuideDiff）与原文差异（useGuideTextDiff）两内容；加载/错误分支；与 V1 FS-V1-49 同族对照（Guides/index.tsx:147, CompareCard.tsx） | ☐ | | |
 | FS-V2-14 | 指引详情 GuideDetailPage | `/guides/:guideId` | seed:guide | 详情区 | B | 「指引不存在。」；LoadingCard；无规则/不可编辑两态 | ☐ | | |
 | FS-V2-15 | 设置 SettingsPage | `/settings` | 登录 | 设置区 | A | capabilities ErrorState；绑定错误/密码 message 条 | ☐ | | |
 | FS-V2-16 | 模型配置 ModelSettingsPage | `/models` | 登录 | 配置区 | A | 「正在读取模型配置…」；ErrorState；验证连接成功/失败；3× window.confirm（恢复默认等） | ☐ | | |
@@ -208,9 +213,10 @@ V1 合计：**73 行**（11 顶层视图全覆盖：workspace 3 / overview 3 / i
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | FS-V2-18 | 比对列表 CompareListPage | `/compare` | seed:cmp | 列表 | A | 「还没有合同对比任务」空态；Spinner；ErrorState；Suspense fallback「正在加载合同对比」 | ☐ | | |
 | FS-V2-19 | 新建比对 CompareNewPage | `/compare/new` | 登录 | 表单 | A | 文件夹×2 选择；message 条；提交反馈 | ☐ | | |
-| FS-V2-20 | 比对工作台 CompareTaskPage | `/compare/:taskId` | seed:cmp | 工作区 | C | 处理中提示(L185)；组未就绪(L192)；「两份合同没有文字差异。」/「暂无可呈现内容。」；notice/warning 条；覆盖率 popover（<details>） | ☐ | | |
+| FS-V2-20 | 比对工作台 CompareTaskPage | `/compare/:taskId` | seed:cmp | 工作区 | C | 处理中提示(L185)；组未就绪(L192)；「两份合同没有文字差异。」/「暂无可呈现内容。」；notice/warning 条；覆盖率 popover；**CompareReader 子态与 V1 同粒度**：word/classic 双视图、markup 三档、diff 筛选+上下处导航、移动端窗格切换 | ☐ | | |
+| FS-V2-22 | 新建任务-补传模式 | `/tasks/new?taskId=<taskId>` | seed:task | 补传标题 | A | 标题切「补传合同」；「待补传 N 份」徽标；待补传 CSV 导出（saveBlob）；文件替换输入；提交回任务（NewTask/index.tsx:50-54,190,196；与 V1 FS-V1-09 同族对照） | ☐ | | |
 
-V2 合计：**20 行**（20 条 Route 声明 100% 覆盖：17 有效路由 + 3 重定向并入 FS-V2-04；15 页面组件全覆盖；弹层族并入 FS-V2-05/16/20）。
+V2 合计：**22 行**（20 条 Route 声明 100% 覆盖：17 有效路由 + 3 重定向并入 FS-V2-04；16 页面组件全覆盖；弹层族并入 FS-V2-05/16/20；`?taskId=` 查询串深链=FS-V2-22）。
 
 ## 5. 全生命周期链路（LC；任务全生命周期=用户原话 A2）
 
@@ -233,7 +239,7 @@ V2 合计：**20 行**（20 条 Route 声明 100% 覆盖：17 有效路由 + 3 �
 4. 每行必须有结论：✅ / ⚠（可复现瑕疵+证据）/ ❌（bug/卡顿超标）/ ⛔（阻塞+原因）。❌/⛔ 项须先向主线申请 FL 号段再登记 docs/DETAIL_APPEND_FULLSITE_QA.md。
 5. 种子数据缺口（seed:*）阶段二开场 30min 内造齐并记录造数脚本路径；造不出来的状态行标 ⛔ 并说明。
 6. 同类清零：任何 ❌ 修复后，对其同族状态行全部重打截图验证无同类残留。
-7. 覆盖自证：阶段二交付物含「manifest 条目数 == 截图组数 == results.json 记录数」三数相等校验输出。
+7. 覆盖自证：三数相等=**manifest 条目数 == 检查单编号数（103 行）== results.json covered_ids**（每 id 至少一条记录，含 staged 的 ⛔skipped 记录）；截图数按 id×视口×样本另计并在 run 末尾输出 counts.coverage_ok（!=true 即未完工）。
 
 ## 7. 不确定项登记（明示，不许静默丢弃）
 
@@ -245,4 +251,6 @@ V2 合计：**20 行**（20 条 Route 声明 100% 覆盖：17 有效路由 + 3 �
 | U4 | 生产 V2 未上线；阶段二 V2 基线（本地 dist vs 届时生产）取决于开发合并进度 | §1 环境矩阵 | 听主线令定基线，本单两案兼容 |
 | U5 | V1 verdict 9 分支中「评测/遗留任务只读/verification_blocked」等低频分支需特定任务状态 | FS-V1-38 | 种子阶段刻意构造；缺失标 ⛔ |
 
-—— v1.0 草案（qa-fullsite-qa，2026-11-01），随 perf_budget.json/manifest.json 一并交主线审定冻结。
+| U6 | V2 Suspense fallback 截图时机不可保证（加载过快） | §4.4 三页 | 阶段二用 Playwright route 延迟注入稳定捕获 |
+
+—— v1.1 草案（qa-fullsite-qa，2026-11-01）：v1.0 经双盲质检（P0×1+P1×9+P2 若干）后整改——登录死代码接上 bootstrap+登录墙判定（未登录=⛔）、verdict 改按中位数重算、P-READY 超时=显式❌、ready_any 行级优先防偷跑、warm/cold 缓存分口径、307 断言、token 不再发请求头（防第三方泄露）、新增 FS-V2-21/22 两处覆盖漏洞、B 类 P-CLICK-HEAVY 补格。随 perf_budget.json/manifest.json 一并**报主线审定冻结**。
