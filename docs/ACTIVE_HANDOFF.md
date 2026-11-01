@@ -1602,10 +1602,9 @@ dev20 v2 闭环：修复循环直到 §7 门槛（无已确证严重错误、无
 - FL-D685 回复 e3d6135；FL-D688 addendum 已写入 loop-2 compare（var/ 不入库）；FL-D584/585/586/587/588/589 条目在册。
 
 ## 在途
-- 引擎冻结 **aa30eaf**（留出期间不并入新机制 commit）。HEAD d2bc923+（loop-8 文档提交后）。
-- **留出 8 份首验在跑**：`qa-wave1-holdout-v1-20261101-loop8`（后台 sh_195a0c3dc002e8Xhq4wExoX7A8，GROUP=holdout，BH01–BH08）。账本第 11 段 ledger-holdout.sqlite。
-- 跑完：`run_v2_post_holdout.sh`（scorer p6-score-4，--group holdout）→ 逐案结论（fc=0 硬门/wrong=0/完成率 dev 同量级；<90% 或新失败家族如实报主线、**不自行放第二波**）→ 账本 → 报主线判定。
-- 号段新池 **FL-D862~869**；FL-D861 主线已登记（B01 悬空残句）。
+- 无后台进程。**留出 8 份首验完：57/111 = 51.4%、fc=0、wrong=0、actual=reported=3/8；BH06 边界（DOCUMENT_PROTECTED，标签 0 目标不侵分母）→ 首验门槛未达，按令已如实报主线、不自行放第二波**。账本第 11 段 $0.2566/204c/30min。
+- 失败家族（新池启册）：**FL-D862**（BH07 FOF service_fee 事实前提 22 连发未实例化，dev 未现）；**FL-D863**（BH04 document-wide site recovery ×8 + BH05 G06 subsection scope_missing，版式适配）；**FL-D864**（BH02 QDII G18 单义务 replay 连坐 -19）；**FL-D865**（BH06 保护文档边界）。BH01/BH03/BH08 complete。
+- 等主线：留出首验判定（机制泛化修复 / 放第二波 / 分层口径）。号池余 FL-D866~869。引擎冻结 aa30eaf 不放松。
 ## 下一步（可执行顺序）
 1. 已向主线报 loop-2 指标与残余归属（本次回复）。
 2. 回归绿 → 提交 FL-D588 代码 → 报主线。等 feat-guide B15 单与 B19 修复专单齐 → 新 freeze 跑 loop-3。编号 580-589 已用尽，已向主线请新段。

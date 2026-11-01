@@ -8308,3 +8308,29 @@ H＝E×…
 - **观察项**：FL-D794 G11 抖动全波 0 次维持销案；**B01 新现非阻塞复核项**——G12/G13@p207 替换后原句残留「其中，」悬空残句（AUDIT_NOT_COMPLETED `incomplete` ×2 + FINAL_COVERAGE_UNRESOLVED），交付形态=review_assisted + review_required（blocking=0，review_items 6）带标交付。**该非阻塞复核语义自 loop-6 起即在树**（loop-6 B01 同形 6 项、loop-7 B12/B15/B18 均带标交付），非 loop-8 新规；量具 T012/T013 目标级判 completed 与引擎「残句未清理」质量项不矛盾（目标语义无谎报、质量提示如实上报）。建议主线评估登记为一般质量观察项（本线无号可用，未立号）。
 - **账本第 10 段**：$0.5874/509 calls/63min。
 - **变更记录**：2026-11-01 新增（验收侧证据块）。
+
+## FL-D862 留出 BH07 适配面失效家族：applicability_unknown:FACT_PREREQUISITE_UNVERIFIED(service_fee) 22 连发 → 全案诚实扣件（2026-11-01，qa-feat-recall，留出首验）
+
+- **发现**：留出首验（aa30eaf，与 dev loop-8 同引擎）BH07（稳健养老 FOF）incomplete 无产物；unresolved 主因 `applicability_unknown:FACT_PREREQUISITE_UNVERIFIED:service_fee…` ×22 跨 G01/G02/G03/G04/G05/G08/G11/G14/G15/G16/G17/G18/G22 共 12 规 + RECALL_FACT_UNVERIFIED + AUDIT_VERDICT_MISSING——**销售服务费事实前提在 FOF 合同表述形态下未能实例化**，义务全军覆没于准入判定。
+- **影响**：BH07 8 目标全 not_executed（-8）。为留出完成率最大单因子之一，且为 dev20 未现的**新失败家族**（合同类型分布外：FOF/养老）。
+- **状态**：open，归主线机制判定（事实前提实例化的类型泛化）。不自行放第二波。
+- **变更记录**：2026-11-01 新增。
+
+## FL-D863 留出 BH04+BH05 站点/作用域解析失效家族：document-wide site recovery unresolved ×8 + g06_subsection_scope_missing（2026-11-01，qa-feat-recall，留出首验）
+
+- **发现**：BH04（景荣纯债，7 目标全丢）unresolved 主因「rule scope is unresolved or empty; document-wide site recovery …」×8 + CLAIM_REPLAY_FAILED ×10（跨 G01/02/03/04/15/16/17/18 八规）；BH05（港股通恒生 LOF，20 目标全丢）G06 `g06_subsection_scope_missing` + CLAIM_REPLAY_FAILED。**规则作用域/子节定位在留出合同版式（纯债短版式、LOF 特殊章节）下解析不了**。
+- **影响**：-7 / -20，合计 -27，为留出最大失分家族。
+- **状态**：open，归主线机制判定。
+- **变更记录**：2026-11-01 新增。
+
+## FL-D864 留出 BH02 单义务 replay 未闭：G18 CLAIM_REPLAY_FAILED + verified site missing（2026-11-01，qa-feat-recall，留出首验）
+
+- **发现**：BH02（全球稳健配置 QDII）仅 G18:0 一支未闭（QDII 特殊章节版式下站点证据未绑定）→ 交付门诚实扣全案，**-19 为「单义务连坐」形态统计放大**（与 dev 线 FL-D652~659 诚实扣件门同一设计语义：宁扣勿谎）。
+- **状态**：open，归主线评估连坐口径或 QDII 版式适配。
+- **变更记录**：2026-11-01 新增。
+
+## FL-D865 留出 BH06 DOCUMENT_PROTECTED（边界案）：inspect 阶段保护文档拒入，标签 0 目标不侵分母（2026-11-01，qa-feat-recall，留出首验）
+
+- **发现**：BH06（稳信六个月持有）运行时报 `DOCUMENT_PROTECTED`（stage=inspect）→ not_generated 无产物。标签库 BH06 本就 0 目标，**不侵占 111 分母**；按边界口径单列登记，不计失败家族。
+- **状态**：open（边界处理口径归主线：是否支持保护文档只读管线）。
+- **变更记录**：2026-11-01 新增。
