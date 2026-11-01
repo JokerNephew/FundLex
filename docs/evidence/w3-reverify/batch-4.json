@@ -1,0 +1,42 @@
+{
+ "script": "tools/evaluation/w3_reverify_second_batch_labels_20261101.py",
+ "batch": 4,
+ "cases": [
+  "W2D61",
+  "W2D62",
+  "W2D63",
+  "W2D64",
+  "W2D65",
+  "W2D66",
+  "W2D67",
+  "W2D68",
+  "W2D69",
+  "W2D70",
+  "W2D71",
+  "W2D72",
+  "W2D73",
+  "W2D74",
+  "W2D75",
+  "W2H01",
+  "W2H02",
+  "W2H03",
+  "W2H04",
+  "W2H05"
+ ],
+ "labels_sha256": "423c6944687a6006d493d3f8dff4b4cb32593cc6acc26c2e2b3fb423622a88f5",
+ "selection_sha256": "32b36f02a9c6cafebee7a73fcda0791c707ac62d07fe67bb57e91daafc6187d9",
+ "envelope_problems": [],
+ "problems": [
+  "W2D66: rule_coverage[8] evidence_quote CONTENT not in source (G09/target): '赎回金额为按实际确认的有效赎回份额乘以当日对应份额类别的基金份额净值并扣除相应的'",
+  "W2D74: rule_coverage[4] evidence_quote CONTENT not in source (G05/target): '在符合法律法规、基金合同的约定且不损害已有基金份额持有人权益的情况下，经与基金托'"
+ ],
+ "warnings": [],
+ "counts": {
+  "cases": 20,
+  "targets": 269,
+  "coverage_entries": 836,
+  "cases_with_targets": 18,
+  "uncertain_entries": 13,
+  "ineligible_cases": []
+ }
+}
