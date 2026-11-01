@@ -8547,3 +8547,11 @@ H＝E×…
 - **变更记录**：2026-11-01 新增。
 
 - **2026-11-01 语料剖析补充证据**：全语料 542 唯一份中仅 2 份带 `documentProtection` 标签；BH06 文件实际标签为 `w:edit="trackedChanges" w:enforcement="0"`（**未启用**）——引擎 inspect 判定疑似「在场即拒」过宽；同合同另有 `_20260821` 无保护副本在库。另发现物理 578 vs 唯一 542（18 名 ×3 副本），第二波/500+ 分母须按唯一名+sha256 去重（详见 docs/engine/CORPUS_TYPOLOGY_20261101.md §4-6/§5）。
+
+## FL-D866 留出二轮冻结附带规则工件语义变更（12 操作 condition 落地）——透明披露登记，非静默；round-2 与 round-1 非严格同 guide（2026-11-01，qa-feat-recall）
+
+- **发现**：主线 FL-D862/863/864 修复（a5bad78，merge 05c3ef1）将适用性词表机制**落到规则工件**：`guides/builtin_guide_v1.json` 12 个操作的 condition 从 `"kind":"none"` 改为 `class_count:multiple`（×7）、`has_service_fee`（×4）、`compound`（×1），±77 行。guide sha `e40e630d…`（loop-2b 起八连一致）→ `5e3bf31a…`。labels/selection sha 不变。
+- **口径影响（如实）**：留出 round-2 与 round-1 **非严格同 guide**——两轮并排呈现时须标注此差异（round-1 的 FL-D862 失败形态正是「前提无词表」，round-2 修复本身即含工件条件化，属**机制修复的载体**，非规避测试的特调）；同时提示主线：dev20 若复跑 05c3ef1，单类/无服务费合同的相关义务会转 NOT_APPLICABLE（类型学：批内仅 1 份零字母类，dev20 影响面≈1 案量级），不排除完成率分子/分母口径变动。
+- **历史教训对照**：同 08cb0e6（loop2→2b 规则工件改动致 loop2→3 增量混淆）已圈界的披露标准——本次在冻结时即显著披露，不事后追认。
+- **状态**：已披露（生效中）；第二轮报告强制并排标注。
+- **变更记录**：2026-11-01 新增。
