@@ -8230,3 +8230,10 @@ H＝E×…
 - **验证结果**：同款沙箱 `systemd-run` 内实测：新路径 glob=514+读文件 OK；旧路径复现出与生产**逐字一致**的 Errno 13（根因 100% 确认）。
 - **遗留/下一步**：①「对指引生成功能全面检查开发测试优化」专项线已开（用户第 4 点），含：部署形态样例运行冒烟（发布守门加跑一跑 PILOT run 断此回归类）、`pipeline.py` 默认 corpus 回退 `<repo>/funds_word` 在发布树无此目录时的行为策略（应显式报配置缺失而非静默空语料/GE 误导）、cron/健康检查。②ACL 层（/home/opencode 对 fundlex --x）保留作纵深但不再承载功能。③同形态隐患排查：其他服务若引用 /home 路径须同查（已知 compare 语料在树内 var/，未见引用 /home）。
 - **状态**：主体已解决（待全面检查线收尾复验一次真实 run 端到端）。
+
+## FL-D830 预算类错误码用户文案与 FL-D445 政策一致性裁决（2026-11-01，主线）
+
+- **背景**：前端批3 文案审查挂起——`MODEL_GLOBAL_CALL_BUDGET_EXCEEDED`/`MODEL_COST_BUDGET_EXCEEDED` 的"预算已用尽"用户文案与 FL-D445（真实模型无预算门槛）冲突。
+- **主线实查**：两码仅在 `enforce_limits=True` 时触发（model_budget.py reserve）；生产 `/etc/fundlex-recall.env` 未设 `FUNDLEX_MODEL_ENFORCE_LIMITS`（model.py/roles.py 读该 flag 默认关）→ 生产为纯账本观测模式，两码不可达，政策一致。
+- **裁决**：①用户文案改为中性系统错误（不出现"预算/额度/已用尽"），政策下该状态不应存在，真出现=配置事故不给用户政策冲突解释——前端 FL-D830 执行；②`enforce_limits` 死路径及入口的政策一致性深层清理挂引擎侧待办（`jobs.py`/`model_router.py`/`delivery.py`/`recovery/types.py` 的旁路名单保留属容错合理，不拆）。
+- **状态**：裁决已下，前端执行中；深层清理保持 open（低优先，不阻塞）。
