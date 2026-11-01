@@ -7630,3 +7630,10 @@ H＝E×…
 - **处理（877383b 已实施）**：kind 白名单接入三态（通用机制，对任意产此记录的规则生效；fail-closed 判定本体不变）；新增两条消费端测试（records 在场→四 op PASS/VERIFIED_ABSENT；费义素句在场→无 record→仍 CLAIM_OPERATION_UNPROVEN），29/29 绿。
 - **真实验证已闭环（BH07-v3，877383b）**：delivery_status=**complete**，unresolved=[]；G02:0/G02:1/G04:0/G04:1 四 op 经 claim_replay:VERIFIED_ABSENT 关闭为 ALREADY_SATISFIED（enumerated_absence×2+empty_group_noop×2 证据链与离线探针一致）；7 项真实编辑照常通过 ARTIFACT_VERIFIED；G14:3 SEMANTIC_VERIFIED、G14:4/5 alternative_wording_absent —— **G14 v1→v2 flap 未复现**（维持观察判定：模型面抽样波动，非机制缺陷，不单列条目）。账本 bh07-v3-ledger.sqlite，cost 0.0227/17 calls。
 - **状态**：已解决并验证（适用版本 ad70cd6+877383b；dev/mutation/真实三路闭环）。全量回归守门在途回执后封板。
+
+## 总图 v2 语料交叉验证挂图登记（2026-11-01，主线令：总图×CORPUS_TYPOLOGY 两线对照，R6 收口）
+
+- **交付**：REVISION_FAILURE_MODES.md v2 §6（38 旧 FM 逐条语料映射 + 4 新 FM 追加）。口径：唯一名 542、批内 28（selection d89f40b5 名单切分，实测与语料剖析全数一致）/批外 514；数源 corpus_typology.json 可复跑。
+- **新追加 FM**：FM-37 带宽定义（零或单类 426/425=NOT_APPLICABLE 宇宙，资格分流主战场）；FM-39 字母集合二元假设（非 A/C 47/42、≥3 字母 25/21，引擎实证=FL-D921，处置=R7）；FM-40 未见类型×结构复合资格面（股票/货币/其他 38 批内 0 + ETF 149，处置=R8 分层门槛）；FM-41 直销渠道极性链（候选观察：直销 149/141、∩零类 86，BH07 实跑 UNKNOWN 经仲裁完结未败——**不当作已证缺陷**，r2/r3 数据定死活）。
+- **结论（报主线裁决口径）**：批外 514 中 461 份（89.7%）落在批内未测形态并集——第二波必过未测区，属分母/分层设计项非恐慌项；已修四家族确定罩量 ≈79 + ETF 结构面 149 待 R4。
+- **FL 编号说明**：FM-37/40/41 现仅挂图（候选/治理项），未占 FL-D 新号段以防与他线冲突，待主线按实证转正式登记。
