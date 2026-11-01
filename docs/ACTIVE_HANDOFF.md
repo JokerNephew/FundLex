@@ -1602,10 +1602,9 @@ dev20 v2 闭环：修复循环直到 §7 门槛（无已确证严重错误、无
 - FL-D685 回复 e3d6135；FL-D688 addendum 已写入 loop-2 compare（var/ 不入库）；FL-D584/585/586/587/588/589 条目在册。
 
 ## 在途
-- HEAD c1b5709（merge aa30eaf；DETAIL 冲突按规程解；loop6_repairs 11+plan_rejected 4+fl_d791 6 = 21 绿）。
-- **loop-8 冻结 `qa-wave1-dev-v2-20261101-loop8` dev20 在跑**（后台 sh_1954eb825002kSPevMnqZ5Y7bv）。八段对比脚本已备。
-- 跑完：评分 → 八段表 → 门槛（fc=0 五连/B02 保/B05 恢复 complete（FL-D699；satisfied 直达不负分；复合 rebind 兜住无永久 hold）/B12/B15 不回摆/wrong=0/kept 不新增/≥96%）；观察 FL-D794、absent 兜住率。
-- 全达=冻结门槛达成→主线放留出 8 份首验+第二波 100 份准备；B05 同族顽固（单例+诚实+-13）→退出条款主线带证据报用户建议带观察项放行。号段用尽（FL-D699 已主线占用），新缺口并入既有条目。
+- 无后台进程。**loop-8（aa30eaf）评完：390/390 = 100.0% 八波首达、fc=0 五连、wrong=0、kept=0、actual=reported=20/20 → 门槛全达，冻结门槛达成**。账本第 10 段 $0.5874/509c/63min。
+- FL-D699 实证：B05 satisfied 直达 complete（0 blocking hold、恒等/复合 rebind 全波兜住）；B12/B15 不回摆。观察项：FL-D794 销案维持；absent 66/14 案 100% 兜住；B01 悬空残句非阻塞带标交付（review_assisted 语义自 loop-6 在树，已报主线建议登记）。
+- **等主线放行令：留出 8 份首验 + 第二波 100 份准备（标签线 kvvQwuiB 待命激活）**。本线号段用尽；新缺口并入既有条目或报主线立号。
 ## 下一步（可执行顺序）
 1. 已向主线报 loop-2 指标与残余归属（本次回复）。
 2. 回归绿 → 提交 FL-D588 代码 → 报主线。等 feat-guide B15 单与 B19 修复专单齐 → 新 freeze 跑 loop-3。编号 580-589 已用尽，已向主线请新段。

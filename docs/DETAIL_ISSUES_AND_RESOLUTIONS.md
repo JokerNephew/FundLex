@@ -8298,3 +8298,13 @@ H＝E×…
 - **FL-D695（残余修复）**：B15 complete（15/15）；T001（G03 append@基金份额类别）双实证——内部 replay 闭合过交付门 + 量具 p6-score-4 读实际 final.docx 判「appended policy text present at its declared site (p215)」。
 - 两机制无损邻案：全波 wrong=0、kept=0、fc=0；69 处 absent 单发判定均被变体反证兜住未致扣件（详见 FL-D695 登记与 loop-7 报告）。
 - **状态**：dev20 口径实证收口；留出验收待主线放行。
+
+## FL-D699 关联说明（loop-8 dev20 验收侧证据）：恒等坍缩生效，B05 satisfied 直达 complete；全波 390/390 首达 100%（2026-11-01，qa-feat-recall）
+
+> 机制条目归主线登记（FL-D699）。本块为 qa-feat-recall 线八段同量具验收证据，不重复立号（本线号段已用尽）。
+
+- **实证**：loop-8 B05 complete（13/13）；G02 两目标 `satisfied@p118/p119`（模型直接判已满足，符合冻结令「satisfied 直达不负分」口径），0 blocking hold、无永久 hold。全波 blocking_unresolved=0 案例 20/20，复合 rebind/恒等形态全部兜住（absent 66 处/14 案 100% 被变体反证兜住）。
+- **量级**：390/390 = **100.0%**（八波首达）；actual 20/20、reported 20/20、fc=0（五连：loop4~loop8）、wrong=0、kept=0、not_executed=0。B02 保 complete（FL-D690 五连无回摆）、B12/B15 不回摆（FL-D698/695 无回摆实证）。
+- **观察项**：FL-D794 G11 抖动全波 0 次维持销案；**B01 新现非阻塞复核项**——G12/G13@p207 替换后原句残留「其中，」悬空残句（AUDIT_NOT_COMPLETED `incomplete` ×2 + FINAL_COVERAGE_UNRESOLVED），交付形态=review_assisted + review_required（blocking=0，review_items 6）带标交付。**该非阻塞复核语义自 loop-6 起即在树**（loop-6 B01 同形 6 项、loop-7 B12/B15/B18 均带标交付），非 loop-8 新规；量具 T012/T013 目标级判 completed 与引擎「残句未清理」质量项不矛盾（目标语义无谎报、质量提示如实上报）。建议主线评估登记为一般质量观察项（本线无号可用，未立号）。
+- **账本第 10 段**：$0.5874/509 calls/63min。
+- **变更记录**：2026-11-01 新增（验收侧证据块）。
