@@ -8481,13 +8481,17 @@ H＝E×…
 - **状态**：已登记，待修复（低风险）。
 - **下一步**：同 guide_store 下次改动一并补日志。
 
-## FL-D903 飞书建卡成功后 discard_draft_files 清理失败静默无日志
+## FL-D903 飞书线 4 处持久化/清理失败静默无日志（原 discard_draft_files 扩展）
 
-- **发现日期**：2026-11-01（后端普查，service.py 吞错现场复核）。
-- **问题与影响**：`fundlex/integrations/feishu/service.py:834` 任务创建、状态卡已发出后，`self.integrations.discard_draft_files(...)` 的 `except Exception: pass` 无日志。失败后果仅是草稿文件孤儿（retention 兜底，无功能损害）；但 DB/文件清理持续失败（如磁盘满、锁）时无任何痕迹，只有孤儿文件堆积这一滞后信号。
-- **处理方法**：建议补 `_LOGGER.warning("draft files discard failed draft_id=%s", ..., exc_info=True)`。
-- **状态**：已登记，待修复（低风险）。
-- **下一步**：随飞书线下次改动补日志。
+- **发现日期**：2026-11-01（后端普查 service.py 吞错现场复核；2026-11-01 全覆盖矩阵签认轮扩展定案）。
+- **问题与影响**：飞书线共有 4 处「持久化/清理失败静默」同族问题，集中修复时一并处理：
+  1. `fundlex/integrations/feishu/service.py:834/899/942`（共 3 处）任务/对比/指引建卡成功后 `discard_draft_files(...)` 的 `except Exception: pass` 无日志。失败后果仅是草稿文件孤儿（retention 兜底，无功能损害）；但 DB/文件清理持续失败（如磁盘满、锁）时无任何痕迹，只有孤儿文件堆积这一滞后信号。
+  2. `fundlex/integrations/store.py:449` `add_draft_file` 与 `:606` `add_outbox` 的 `except Exception: return False` 无日志。调用方不检查返回值：draft 文件行丢失时用户在卡片上看不到已传文件可重发自愈；outbox 行丢失时通知少发，凭借指纹/dedupe 机制下轮 sync 自愈——功能可自愈，但持续故障（如磁盘满）无日志早晚变成用户工单。
+  另：`service.py:sync_tasks:1271` 的 `except Exception: continue`（5 秒轮询循环）对单条 channel 异常无日志，若某 channel 持续坏（如 task 行损坏）会每 5 秒静默重试一次，同属该族可观测性缺口。
+- **处理方法**：建议 4+1 处统一补 `_LOGGER.warning(..., exc_info=True)`（outbox/add_draft_file 处带 dedupe_key/draft_id，sync_tasks 处带 channel id），不改吞错语义本身。
+- **状态**：已登记，待修复（低风险，可观测性专项）。
+- **变更记录**：2026-11-01 全覆盖矩阵签认轮由「834 单点」扩展为「service.py 3 处 + store.py 2 处」并附记 sync_tasks 1 处，行号以当日 HEAD(3cab25b) 为准。
+- **下一步**：随飞书线下次改动补日志；修复后逐处 grep 确认无 `except Exception` 无日志残留，再关档。
 
 ## FL-D904 feishu_health 路由用 __import__ 动态探测 worker 存活（脆弱异味）
 
@@ -8502,3 +8506,11 @@ H＝E×…
 - **发现日期**：2026-11-01（第七轮饱和式普查后端非引擎域收口）。
 - **结论**：对 api 路由（71 个端点）、tasks 生命周期、五 worker plumbing（recall/compare/guide/feishu unit 模板+jobs 租约接管）、鉴权会话（scrypt/时序燃烧/throttle/事务化 last-admin）、静态托管（catch-all 仅重定向不拼路径）、部署脚本（tools/deploy 全部）逐文件走查+AST 扫描 38 处吞错全部现场复核：**无注入面**（SQL 全参数化，f-string 仅白名单标识符/占位符）、**无路径穿越面**（下载三件套白名单+读字节回响应、上传名 Path().name 归一、guide source 库 ID 解析）、**无越权面**（owner 全链路、admin 404 防枚举）、**无硬编码密钥**（部署脚本凭据全经 env/文件引用）。除 FL-D900~904 五项低风险登记外无中高严重度发现。CSP 缺失为既有在册项（api.py:619 注释自引），不重复登记。
 - **状态**：普查完成，结论归档（详见 docs/backend/BACKEND_AUDIT_20261101.md 及附录）。
+
+## FL-D906 飞书 runtime 移除应用依赖 lark 私有 `_disconnect`，无公开断连兜底
+
+- **发现日期**：2026-11-01（全覆盖矩阵 PL1 签认轮，runtime.py/events.py 逐行复核）。
+- **问题与影响**：`fundlex/integrations/feishu/runtime.py:146` `_close_socket` 用 `getattr(ws, "_disconnect", None)` 调 lark-oapi **私有成员**停止长连接。若 SDK 版本改名或移除该私有属性，`disconnect is None` 时静默跳过——`ws.start()` 曾在 `auto_reconnect=True` 下运行，线程不会自然退出。配合 `events.py:91` `build_event_handler` 的 `on_message` 主派发闭包**不查** `entry["active"]`（只有 `on_event`/`_seen` 钩查 active，且仅影响 record_event 计数），后果是：用户在设置页「移除应用」后，若私有断连落空，该应用的长连接仍可继续收发消息并以该应用身份回复，「移除即断连」的删除语义落空（无越权——凭据是用户自己的 app，但删除不生效是产品诚信问题）。当前部署所用 lark-oapi 版本实测含 `_disconnect`（生产在线运行中，第⑤节盘点验证过移除路径代码），属**低概率触发 + 依赖私有 API 的脆弱点**，非已知缺陷。
+- **处理方法**：建议双保险：①`_close_socket` 找不到 `_disconnect` 时 `log.warning` 并改为抛/记录（目前默默跳过）；②`runtime` 给 hash 的 `handler` 闭包加 `lambda data: entry["active"] and <dispatch>` 活跃位检查，使「标记 inactive 后立即停止派发」成为断连之外的第二道闸（active 已在 `_apps.pop` 后由关闭方置 False，检查成本为零）；③如 SDK 提供公开 `stop`/`close` 则优先使用并锁版本。
+- **状态**：已登记，待修复（低风险，产品删除语义 + 私有 API 依赖）。
+- **下一步**：确认锁定 lark-oapi 版本号（requirements）；随 FL-D903 一轮修复时加活跃位检查与日志。

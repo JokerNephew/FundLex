@@ -61,3 +61,46 @@
 
 - 共有：User=fundlex、EnvironmentFile=/etc/fundlex-recall.env、Restart=always、NoNewPrivileges/PrivateTmp/ProtectHome/ProtectSystem=strict、ReadWritePaths=/var/lib/fundlex、UMask=0077。
 - 差异：recall-api uvicorn --workers 2（throttle 跨 worker 共享表已配套，R2-F01 在码）；feishu 晚启依赖（service_main 挂载 onboarding+runtime，生产核实 active）。
+
+## F. 全覆盖矩阵 PL1 飞书线 23 文件逐行签认表（2026-11-01 签认令收口）
+
+方法：基线差核对（`git diff 8b5467b..3cab25b` 仅新增矩阵文档本身，23 个代码文件零变化）后，对 23 个文件 **100% 行覆盖通读**（含首轮已读部分的二次复核），不以抽样代替。行数以 HEAD(3cab25b) 为准。
+
+| # | 文件（行数） | 结论 | 关联编号 |
+|---|---|---|---|
+| 1 | fundlex/api.py (1838) | ✅ 本轮补读 1-610/930-975/1103-1255/1440-1551/1660-1838 全部区段，无新发现 | FL-D900/D901/D904（在册） |
+| 2 | fundlex/api_content.py (54) | ✅ 无发现（纯静态文案常量，无逻辑面） | — |
+| 3 | fundlex/api_errors.py (86) | ✅ 无发现（稳定信封/关联 ID；FL-D901 契约核对在册） | FL-D901 |
+| 4 | fundlex/auth.py (469) | ✅ 无发现（scrypt n=2^14、恒时比较、时序燃烧、throttle 落库、事务化 last-admin；`_fetch` f-string 仅 3 处字面量列名调用，无注入面） | — |
+| 5 | fundlex/config.py (26) | ✅ 无发现（数据目录/库目标解析，env 优先） | — |
+| 6 | fundlex/db.py (426) | ✅ 无发现（SQLite/MySQL 翻译白名单内，`INSERT OR IGNORE` 全库零命中——附录 D 旧记忆更正；PRAGMA/占位符映射正确） | — |
+| 7 | fundlex/jobs.py (735) | ✅ 无发现（租约/接管/评估与诊断产物收口/工作区收割 PID+fencing 双证/瞬时 DB 故障退避限次均自洽） | — |
+| 8 | fundlex/tasks.py (1044) | ✅ 无发现（观察 O-06：`report()` 以 page_size=100000 拉全量，单任务超 10 万份时总览截断，实用无碍） | — |
+| 9 | fundlex/store.py (1400) | ✅ 无发现（fencing/租约/产物门/epoch 并发/选择件溯源全链路再次确认；warden/收口分支各 CASE 无误置） | — |
+| 10 | fundlex/model.py (613) | ✅ 无发现（HTTPS 强制、响应 1MB 上限、JSON-Schema 自校验、quote 回读账、氮 trace 尽力而为） | — |
+| 11 | fundlex/model_budget.py (133) | ✅ 无发现（观测默认、硬闸仅剩并发/熔断/租约，FL-D445 语义逐行落实） | FL-D445 |
+| 12 | fundlex/model_settings.py (210) | ✅ 无发现（偏好只读不落库变更、extra=forbid+strict、越界即拒绝） | — |
+| 13 | fundlex/integrations/__init__.py (5) | ✅ 无发现 | — |
+| 14 | fundlex/integrations/store.py (670) | ✅ 发现：add_draft_file:449/add_outbox:606 `except: return False` 无日志 | FL-D903（扩展） |
+| 15 | fundlex/integrations/feishu/__init__.py (6) | ✅ 无发现 | — |
+| 16 | fundlex/integrations/feishu/cards.py (598) | ✅ 无发现（用户文本全 html/markdown 结构字段组装，无富文本注入面） | — |
+| 17 | fundlex/integrations/feishu/client.py (150) | ✅ 无发现（SDK 惰性导入、缺依赖明确报错、无凭据日志） | — |
+| 18 | fundlex/integrations/feishu/events.py (122) | ✅ 发现：主 handler 派发不查 runtime 活跃位 | FL-D906 |
+| 19 | fundlex/integrations/feishu/oauth.py (159) | ✅ 无发现（state 仅 SHA-256 落库、一次性、catalog 不回显 code/token、日志脱敏声明逐行核实） | — |
+| 20 | fundlex/integrations/feishu/onboarding.py (521) | ✅ 无新编号发现（Fernet 加密、真实 OpenAPI 校验、checklist 诚实「待验证」；观察 O-01/O-02 见下） | — |
+| 21 | fundlex/integrations/feishu/runtime.py (170) | ✅ 发现：移除应用断连依赖 lark 私有 `_disconnect` 无兜底 | FL-D906 |
+| 22 | fundlex/integrations/feishu/service.py (1359) | ✅ 发现：discard_draft_files×3 静默；观察 O-03/O-04 见下 | FL-D903（扩展） |
+| 23 | fundlex/integrations/feishu/service_main.py (44) | ✅ 无发现（独立进程装配、fail-closed 配置检查） | — |
+
+### 观察项（未达登记门槛，留档备查，不新建编号）
+
+- **O-01**：`onboarding.py` `save()` 的 UPDATE→INSERT 路径在**两个请求同 app_id 并发**时存在窄竞态：UPDATE 0 行后双 INSERT 落 UNIQUE 冲突 → 500 而非人读 409。窗口为单 SQL 语句间，生产概率极低；如触发用户重试即可成功。
+- **O-02**：绑定码为 secrets 生成的 12 位随机字符（≈62bit 熵）+600s TTL + verify 恒时比较，**无独立尝试限速**；实际尝试须经飞书侧消息送达（绑定码经机器人私聊提交），平台级限速已然存在，风险低。
+- **O-03**：`service.py.send_outbox`（≈1282 起）逐条 outbox 项重新扫描 `channels()` 全表，为 O(items×channels)；当前单部署 channel 数量为个位数，无实际影响。若未来 channel 过百需加缓存。
+- **O-04**：`service.py` 绑定成功提示回显 owner 前 8 位（`owner[:8]`）用于操作确认，属最小化暴露，仅发给本人私聊，无碍。
+- **O-05**：`service.py:sync_tasks:1271` `except Exception: continue` 无日志（5 秒轮询），已并入 FL-D903 附记，不单列。
+- **O-06**：`tasks.report()` 用 page_size=100000 拉全量清单，单任务超 10 万份时「结果总览」截断；单任务上限（ManifestFile max 10000）远低于此，仅理论影响。
+
+### 签认收尾声明
+
+PL1 飞书线 23 项全部逐行签认完毕；矩阵对应行已标 ✅。本支线有效发现：FL-D903（扩展定案，4+1 处）、FL-D906（新登记）；观察 6 项留档；其余文件「无发现」均以上表行级覆盖为依据。
