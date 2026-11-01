@@ -1190,6 +1190,39 @@ def _filter_scoped_targets(targets: Sequence[Mapping[str, Any]],
     return result
 
 
+#: Failure codes that attest the *physical* integrity of the written artifact.
+#: A semantic audit flipping an obligation to PASS may retire effect doubts, but
+#: it can never legalize an unauthorized span, a broken occurrence identity or
+#: a changed outside span — those stay recorded forever (FL-D921).
+_STRUCTURAL_INTEGRITY_CODES = frozenset({
+    "CLAIM_OPERATION_SPAN_UNAUTHORIZED",
+    "CLAIM_OCCURRENCE_MISMATCH",
+    "CLAIM_SITE_OCCURRENCE_UNRESOLVED",
+    "CLAIM_OUTSIDE_SPAN_CHANGED",
+    "CLAIM_UNEXPECTED_PARAGRAPH",
+    "CLAIM_DUPLICATE_EFFECT",
+    "DUPLICATE_SITE_UNEDITED",
+    "DUPLICATE_SITE_DIVERGED",
+    "RESIDUAL_OLD_TEXT",
+    "CLAIM_JOINT_VALIDATION_FAILED",
+    "CLAIM_JOINT_UNEXPLAINED_TEXT",
+    "CLAIM_REPLACEMENT_MISSING",
+    "CLAIM_NO_CHANGE_APPLIED",
+    "CLAIM_LOCATION_MISSING",
+})
+
+
+def _purge_audited_failures(failures: list[Mapping[str, Any]],
+                            obligation_state: Mapping[str, Any]) -> None:
+    """Drop failures superseded by an audit-passed obligation; keep structural ones."""
+    failures[:] = [failure for failure in failures
+                   if str(failure.get("code") or failure.get("failure_code") or "")
+                   in _STRUCTURAL_INTEGRITY_CODES
+                   or str((obligation_state.get(
+                       str(failure.get("obligation_id") or "")) or {}
+                           ).get("state") or "") != "PASS"]
+
+
 def _approval_target(target: Mapping[str, Any]) -> Any:
     """Adapt a serialized target for ``ApprovalBook.allows``.
 
@@ -2339,11 +2372,11 @@ def replay_claims(edits: Sequence[Mapping[str, Any]], before_inspection: Any,
                     "site_effects": site_effects, "evidence": evidence,
                 }
         # A failure recorded before the audit proof arrived must not outlive the
-        # obligation it describes.
-        failures[:] = [failure for failure in failures
-                       if str((obligation_state.get(
-                           str(failure.get("obligation_id") or "")) or {}
-                               ).get("state") or "") != "PASS"]
+        # obligation it describes — unless it attests the artifact's structural
+        # integrity: a semantic audit can overturn an *effect* doubt, it can
+        # never legalize an unauthorized span or a broken occurrence identity
+        # (FL-D921).
+        _purge_audited_failures(failures, obligation_state)
 
 
     # Explicit ONE_OF wording alternatives share only their verified BUSINESS SITE.
