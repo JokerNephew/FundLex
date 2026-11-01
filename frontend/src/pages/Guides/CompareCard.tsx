@@ -99,7 +99,7 @@ function RulesDiffView({ result }: { result: GuideDiffResult }) {
     <p className="muted">
       分组变化：新增 {summary.groups_added} / 删除 {summary.groups_removed}{summary.groups_order_changed ? ' / 顺序有变化' : ''}；
       元信息变化 {summary.meta_fields_changed} 项{summary.meta_fields_changed ? `（${Object.keys(diff.meta).map(fieldLabel).join('、')}）` : ''}；
-      校验：{diff.validation.before.clean ? '干净' : '有遗留'}→{diff.validation.after.clean ? '干净' : '有遗留'}（发现 {diff.validation.before.findings}→{diff.validation.after.findings}）。
+      校验结果：修改前{diff.validation.before.clean ? '无遗留问题' : `有 ${diff.validation.before.findings} 项待处理`} → 修改后{diff.validation.after.clean ? '无遗留问题' : `有 ${diff.validation.after.findings} 项待处理`}。
     </p>
     <div className="guide-diff-grid">
       <section className="guide-diff-group">

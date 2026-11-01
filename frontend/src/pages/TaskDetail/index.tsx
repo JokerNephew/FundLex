@@ -5,10 +5,19 @@ import { saveBlob } from '../../api/client'
 import { useTask, useTaskControlMutation, useTaskDocuments } from '../../api/hooks'
 import { Button, Card, Select, Spinner, StatusBadge } from '../../components/ui'
 import type { TaskDocument } from '../../types'
+import { issueCodeText, reasonCodesText } from '../../lib/issueText'
 import { ErrorState, formatDate, LoadingCard, Pagination } from '../Tasks'
 
+// 引擎阶段名 → 用户可读进度（FL-D899 D1）；未知阶段不原文外泄，回退「处理中」。
+const phaseLabels: Record<string, string> = {
+  survey: '梳理合同内容', inspect: '梳理合同内容', inventory: '梳理合同内容', scope: '确定修改范围',
+  facts: '读取合同事实', plan: '规划修改', sweep: '逐项修改', primary: '逐项修改', claim_replay: '逐项修改',
+  audit: '复核修改结果', review: '复核修改结果', record: '整理处理记录', report: '整理处理记录', deliver: '生成交付文件',
+}
+
 function phaseLabel(phase?: string) {
-  return phase ? String(phase).replace(/_/g, ' ') : '等待开始'
+  if (!phase) return '等待开始'
+  return phaseLabels[String(phase)] || '处理中'
 }
 
 function DownloadButton({ action, label, disabled }: { action: () => Promise<void>; label: string; disabled?: boolean }) {
@@ -19,24 +28,6 @@ function DownloadButton({ action, label, disabled }: { action: () => Promise<voi
 
 function artifactExtension(kind: string) { return kind === 'report_json' ? 'json' : kind === 'report_md' ? 'md' : 'docx' }
 
-const issueCodeLabels: Record<string, string> = {
-  UPLOAD_SIZE_LIMIT: '文件超过大小上限',
-  UPLOAD_HASH_MISMATCH: '文件内容与登记信息不一致',
-  DOCUMENT_PROTECTED: '文档受密码保护',
-  EMPTY_DOCUMENT: '文档内容为空',
-  INVALID_DOCX: '不是有效的 DOCX 文件',
-  UNSUPPORTED_FORMAT: '文件格式不支持',
-  DUPLICATE_NAME: '任务中已存在同名文件',
-  PROCESS_LIMIT: '处理资源超限',
-}
-function issueCodeText(code?: string | null): string {
-  if (!code) return ''
-  return issueCodeLabels[code] || '这份文件没处理成功，打开看详情'
-}
-function reasonCodesText(codes?: string[]): string {
-  if (!codes?.length) return ''
-  return codes.map((code) => issueCodeText(code) || '详见报告').join('；')
-}
 
 function taskDeliveryStatus(task: { delivery_counts?: Record<string, number> }) {
   const counts = task.delivery_counts || {}
@@ -61,10 +52,10 @@ function primaryArtifact(document: TaskDocument): { kind: string; label: string 
 
 function DocumentRow({ taskId, document }: { taskId: string; document: TaskDocument }) {
   const documentId = document.document_id
-  if (!documentId) return <tr><td>{document.name}</td><td><StatusBadge value={document.upload_status || document.job_status} /></td><td>—</td><td>{issueCodeText(document.error_code) || '还没传上来'}</td></tr>
+  if (!documentId) return <tr><td>{document.name}</td><td><StatusBadge value={document.upload_status || document.job_status} /></td><td>—</td><td>{issueCodeText(document.error_code) || '还没传上来'}</td><td /></tr>
   const download = (kind: string) => async () => { const blob = await api.downloadDocument(taskId, documentId, kind); saveBlob(blob, `${document.name.replace(/\.docx$/i, '')}_${kind}.${artifactExtension(kind)}`) }
   const primary = primaryArtifact(document)
-  return <tr><td><Link to={`/tasks/${taskId}/documents/${documentId}/detail`}>{document.name}</Link></td><td><StatusBadge value={document.job_status} />{Boolean(issueCodeText(document.error_code)) && <div className="form-error">{issueCodeText(document.error_code)}</div>}</td><td><StatusBadge value={document.eligibility || 'pending'} /><div className="muted">{reasonCodesText(document.reason_codes) || '—'}</div></td><td><StatusBadge value={document.delivery_status} /><div className="muted">目标 {document.target_counts?.completed ?? 0}/{document.target_counts?.total ?? '—'}，未完成 {document.target_counts?.unresolved ?? 0}</div>{document.delivery_status === 'incomplete' && <div className="form-error">部分条款未完成，按例外清单人工核对</div>}</td><td className="action-row"><Link to={`/tasks/${taskId}/documents/${documentId}/review`}><Button type="button" variant="primary">逐条复核</Button></Link>{primary && <DownloadButton action={download(primary.kind)} label={primary.label} />}{<DownloadButton action={download('report_json')} label="报告" disabled={!document.downloads?.report_json} />}</td></tr>
+  return <tr><td><Link to={`/tasks/${taskId}/documents/${documentId}/detail`}>{document.name}</Link></td><td><StatusBadge value={document.job_status} />{Boolean(issueCodeText(document.error_code)) && <div className="form-error">{issueCodeText(document.error_code)}</div>}</td><td><StatusBadge value={document.eligibility || 'pending'} /><div className="muted">{reasonCodesText(document.reason_codes) || '—'}</div></td><td><StatusBadge value={document.delivery_status} /><div className="muted">已改 {document.target_counts?.completed ?? 0}/{document.target_counts?.total ?? '—'} 项，未完成 {document.target_counts?.unresolved ?? 0} 项</div>{document.delivery_status === 'incomplete' && <div className="form-error">部分内容未完成，请打开报告逐项核对</div>}</td><td className="action-row"><Link to={`/tasks/${taskId}/documents/${documentId}/review`}><Button type="button" variant="primary">逐条复核</Button></Link>{primary && <DownloadButton action={download(primary.kind)} label={primary.label} />}{<DownloadButton action={download('report_json')} label="报告" disabled={!document.downloads?.report_json} />}</td></tr>
 }
 
 function StatusDimension({ title, value, detail }: { title: string; value?: string; detail: string }) {
@@ -89,6 +80,6 @@ export function TaskDetailPage() {
     {controlError && <ErrorState error={controlError} />}
        <Card><h2>任务状态</h2><div className="stats-grid"><StatusDimension title="任务" value={current.status} detail={current.pause_reason || '当前状态'} /><StatusDimension title="处理阶段" value={terminal ? 'completed' : 'running'} detail={phaseLabel(currentPhase)} /><StatusDimension title="交付" value={taskDeliveryStatus(current)} detail={`已完成 ${done}/${total}，需人工核对 ${current.exceptions ?? 0}`} /><StatusDimension title="上传" value={current.upload_status} detail={`已接收 ${current.uploaded ?? 0}/${total}`} /></div></Card>
       <Card><div className="page-heading"><div><h2>结果与交付</h2><p>整包下载入口；单份合同的修改情况请在下方列表打开。</p></div><div className="action-row"><DownloadButton action={downloadSummary} label="下载汇总" /><DownloadButton action={exportResults} label={downloadBusy ? '导出中…' : '导出结果 CSV'} disabled={downloadBusy} /><DownloadButton action={downloadAll} label="下载全部 ZIP" disabled={!current.downloadable_count} /><Button type="button" onClick={() => navigate(`/tasks/new?taskId=${encodeURIComponent(taskId || '')}`)} disabled={!current.pending_upload}>补传没传成功的文件</Button></div></div><div className="action-row">{[['', '全部'], ['processing', '处理中'], ['eligible', '可以处理'], ['delivered', '已交付'], ['incomplete', '未改完'], ['not_generated', '未生成']].map(([value, label]) => <Button key={value} variant={tab === value ? 'primary' : 'secondary'} onClick={() => { setTab(value); setPage(1) }}>{label}</Button>)}</div></Card>
-    <Card><div className="page-heading"><div><h2>合同列表</h2><p>点击合同名称查看修改情况与下载文件。</p></div></div><form className="action-row" onSubmit={submitSearch}><label className="muted">搜索合同<input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="合同名称" /></label><label className="muted">排序<Select value={sort} onChange={(event) => { setSort(event.target.value); setPage(1) }}><option value="oldest">最早加入</option><option value="newest">最新加入</option><option value="exceptions">异常优先</option><option value="status">状态</option></Select></label><Button type="submit" variant="primary">筛选</Button><Button type="button" onClick={() => setAdvancedOpen((open) => !open)}>{advancedOpen ? '收起高级筛选' : '高级筛选'}</Button></form>{advancedOpen && <form className="action-row" onSubmit={(event) => { event.preventDefault(); setPage(1) }}><label className="muted">处理<Select value={jobStatus} onChange={(event) => setJobStatus(event.target.value)}><option value="">全部处理</option><option value="not_started">未开始</option><option value="queued">排队中</option><option value="running">处理中</option><option value="failed">失败</option><option value="succeeded">已完成</option></Select></label><label className="muted">交付<Select value={deliveryStatus} onChange={(event) => setDeliveryStatus(event.target.value)}><option value="">全部交付</option><option value="complete">已交付</option><option value="incomplete">未改完</option><option value="not_generated">未生成</option></Select></label><label className="muted">上传<Select value={uploadStatus} onChange={(event) => setUploadStatus(event.target.value)}><option value="">全部上传</option><option value="pending">待上传</option><option value="accepted">已接收</option><option value="rejected">接收失败</option></Select></label><label className="muted">异常代码<input value={errorCode} onChange={(event) => setErrorCode(event.target.value)} placeholder="按提示关键词筛选" /></label><Button type="submit">应用高级筛选</Button><Button type="button" variant="quiet" onClick={() => { setJobStatus(''); setDeliveryStatus(''); setUploadStatus(''); setErrorCode(''); setPage(1) }}>清除</Button></form>}{docs.error ? <ErrorState error={docs.error} /> : docs.loading && !docs.data ? <Spinner /> : !docs.data?.items.length ? <div className="empty-state">没有符合条件的合同。</div> : <><div style={{ overflowX: 'auto' }}><table className="data-table"><thead><tr><th>合同</th><th>处理</th><th>资格</th><th>交付/目标</th><th>操作</th></tr></thead><tbody>{docs.data.items.map((document) => <DocumentRow key={document.document_id || document.client_id || document.name} taskId={taskId} document={document} />)}</tbody></table></div><Pagination page={docs.data.page} pageSize={docs.data.page_size} total={docs.data.total} onChange={setPage} /></>}</Card>
+    <Card><div className="page-heading"><div><h2>合同列表</h2><p>点击合同名称查看修改情况与下载文件。</p></div></div><form className="action-row" onSubmit={submitSearch}><label className="muted">搜索合同<input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="合同名称" /></label><label className="muted">排序<Select value={sort} onChange={(event) => { setSort(event.target.value); setPage(1) }}><option value="oldest">最早加入</option><option value="newest">最新加入</option><option value="exceptions">异常优先</option><option value="status">状态</option></Select></label><Button type="submit" variant="primary">筛选</Button><Button type="button" onClick={() => setAdvancedOpen((open) => !open)}>{advancedOpen ? '收起高级筛选' : '高级筛选'}</Button></form>{advancedOpen && <form className="action-row" onSubmit={(event) => { event.preventDefault(); setPage(1) }}><label className="muted">处理<Select value={jobStatus} onChange={(event) => setJobStatus(event.target.value)}><option value="">全部处理</option><option value="not_started">未开始</option><option value="queued">排队中</option><option value="running">处理中</option><option value="failed">失败</option><option value="succeeded">已完成</option></Select></label><label className="muted">交付<Select value={deliveryStatus} onChange={(event) => setDeliveryStatus(event.target.value)}><option value="">全部交付</option><option value="complete">已交付</option><option value="incomplete">未改完</option><option value="not_generated">未生成</option></Select></label><label className="muted">上传<Select value={uploadStatus} onChange={(event) => setUploadStatus(event.target.value)}><option value="">全部上传</option><option value="pending">待上传</option><option value="accepted">已接收</option><option value="rejected">接收失败</option></Select></label><label className="muted">异常提示<input value={errorCode} onChange={(event) => setErrorCode(event.target.value)} placeholder="按提示关键词筛选" /></label><Button type="submit">应用高级筛选</Button><Button type="button" variant="quiet" onClick={() => { setJobStatus(''); setDeliveryStatus(''); setUploadStatus(''); setErrorCode(''); setPage(1) }}>清除</Button></form>}{docs.error ? <ErrorState error={docs.error} /> : docs.loading && !docs.data ? <Spinner /> : !docs.data?.items.length ? <div className="empty-state">没有符合条件的合同。</div> : <><div style={{ overflowX: 'auto' }}><table className="data-table"><thead><tr><th>合同</th><th>处理</th><th>能否处理</th><th>交付情况</th><th>操作</th></tr></thead><tbody>{docs.data.items.map((document) => <DocumentRow key={document.document_id || document.client_id || document.name} taskId={taskId} document={document} />)}</tbody></table></div><Pagination page={docs.data.page} pageSize={docs.data.page_size} total={docs.data.total} onChange={setPage} /></>}</Card>
   </>
 }

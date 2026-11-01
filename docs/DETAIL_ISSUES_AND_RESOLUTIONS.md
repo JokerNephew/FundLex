@@ -8464,3 +8464,11 @@ H＝E×…
 - **铁律（最高级，覆盖 FL-D889）**：用户指令原文逐字进工单，禁止任何形式的范围缩水/抽象化/概括；单会话吃不下就**增开会话分摊**，不得用"域""重点""优先"等词缩小字面范围；每条需求必须有穷举式载体（本次起=docs/COVERAGE_MATRIX_20261101.md：549 文件+21 页面域逐格指派，零漏项），完成判定=矩阵逐格签认。
 - **已执行纠正**：增开 EN2/PL2 两条审计线（总会话 10 条），九线全部按矩阵重发总则追加令。
 - **状态**：生效中；再犯即用户终止订阅，主线无任何辩解余地。
+## FL-D899 V2 前端全站普查与直接修（总指挥令，2026-11-01，qa-frontend-v2 树）
+
+- **问题与影响**：V1 侧"声称完成"整改大量落空（哈希外泄/小字/列表不一致/组件丑），V2（frontend/src，React）与 V1 并行存在但从未以「用户挑刺」四关标准（①技术内容外泄 ②小字/啰嗦 ③与全站令牌不一致 ④组件丑/信息层级混乱）核过——同类隐患恐同样存在。
+- **普查方法**：基线重指主线最新 866bc2c（含批0-5+V2 第三轮）；全路由 before 截图 14 张（/tmp/opencode/qa/shots-v2-audit/，含真实合同 931 处差异的对比查看器 Word/双栏/覆盖 chip 展开）+ 代码扫描（直色值 153 处、死 CSS、行话、错误码渲染点）。逐页清单与证据：`docs/frontend/V2_AUDIT_20261101.md`。
+- **直接修（本批已实施）**：新建 `src/lib/issueText.ts` 错误码人话映射单源，接入 TaskDetail/NewTask 服务端接收结果/ComparePage 组卡（原裸渲染 error_code 原文三处清零）；Tasks 删「服务已连接」噪音行/啰嗦副标题与空态句/「指引快照」恒值列（Tasks+TaskDetailIndexPage）；TaskDetail 表头「资格」→「能否处理」、引擎词「目标 x/y」→「已改 x/y 项」、「按例外清单人工核对」→人话、phaseLabel 引擎阶段名（claim_replay/sweep/audit 等）映射中文（未知回退「处理中」，不再原文外泄）、未接收行补第 5 列对齐表头；Users 403 →「只有管理员可以管理账号。」整块替换并隐藏表单与列表（原错误+表单+「暂无账号。」三态并立）；CompareCard「校验：干净→有遗留」→「校验结果：无遗留问题/有 N 项待处理」；查看器 kicker「比较的文档」→「对比结果」；app.css 死样式五块删除（.task-phase-rail/.task-status-legend/.hash-value/.compare-gutter/.compare-lines）+chrome 直色值/小字令牌化（9/10px→--text-2xs；#f8dfd1→--brand-soft-strong 等八点）。
+- **登记不动工**：令牌档案增补 --text-display 档与 app.css 其余散色收编、CompareCard 元信息字段名「解析器版本」裁决（附录 1-3）；任务入口双轨/导航分组错配归 FL-D891/896（附录 4-5）。附录：`docs/frontend/DETAIL_APPEND_V2_AUDIT_20261101.md`。
+- **验证**：tsc 0 错 / vitest 24/24 / build ✓；after 截图 `/tmp/opencode/qa/shots-v2-after/`（01 列表无噪音行与快照列、03 表头与文案、04 索引列、22/23 查看器 kicker）；python 浏览器全套回归（FUNDLEX_BROWSER_TESTS=1, FUNDLEX_AUTH_MODE=dev）**101/101 通过**（422s，tests/browser/ 全套，-x 串行）。
+- **状态**：已解决（直接修批实施且四闸全绿：tsc 0/vitest 24/24/build/浏览器 101/101；登记项附录 1-5 保持 open 待主线裁决）。
