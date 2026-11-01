@@ -125,7 +125,7 @@ export function SafeCompareDocument({ html, label, activeDiffId, onDiff }: { htm
 }
 
 function PairInput({ pair, index, onChange, onRemove }: { pair: PairDraft; index: number; onChange: (side: 'left' | 'right', file?: File) => void; onRemove: () => void }) {
-  return <div className="compare-pair-input"><div className="compare-pair-head"><strong>第 {index + 1} 组</strong><Button type="button" variant="quiet" disabled={index === 0} onClick={onRemove}>移除</Button></div><div className="compare-side-inputs"><label><span>原版（基准）</span><input type="file" accept={`.docx,${DOCX}`} onChange={(event) => onChange('left', event.target.files?.[0])} /></label><label><span>对比版（修订）</span><input type="file" accept={`.docx,${DOCX}`} onChange={(event) => onChange('right', event.target.files?.[0])} /></label></div><p className="muted compare-file-label">{[pair.left, pair.right].map(fileName).filter(Boolean).join(' / ') || '尚未选择文件'}</p></div>
+  return <div className="compare-pair-input"><div className="compare-pair-head"><strong>第 {index + 1} 组</strong><Button type="button" variant="quiet" disabled={index === 0} onClick={onRemove}>移除</Button></div><div className="compare-side-inputs"><label><span>原版</span><input type="file" accept={`.docx,${DOCX}`} onChange={(event) => onChange('left', event.target.files?.[0])} /></label><label><span>对比版</span><input type="file" accept={`.docx,${DOCX}`} onChange={(event) => onChange('right', event.target.files?.[0])} /></label></div><p className="muted compare-file-label">{[pair.left, pair.right].map(fileName).filter(Boolean).join(' / ') || '尚未选择文件'}</p></div>
 }
 
 function taskDescription(task: CompareTask): string {
@@ -166,12 +166,11 @@ type CompareReaderProps = {
   rightRef: RefObject<HTMLDivElement | null>
   classicLeftRef: RefObject<HTMLDivElement | null>
   classicRightRef: RefObject<HTMLDivElement | null>
-  syncScroll: (source: HTMLElement) => void
 }
 
-function CompareReader({ view, selectedPair, viewQuery, activeDiff, visibleDiffs, diffIndex, diffType, mobilePane, viewMode, classicSide, isMobile, showSources, markup, setDiffType, setMobilePane, setViewMode, setClassicSide, setShowSources, setMarkup, focusDiff, selectPairDiff, mergedRef, leftRef, rightRef, classicLeftRef, classicRightRef, syncScroll }: CompareReaderProps) {
-  const leftName = view?.left.name || selectedPair?.left.name || '原文档'
-  const rightName = view?.right.name || selectedPair?.right.name || '修订的文档'
+function CompareReader({ view, selectedPair, viewQuery, activeDiff, visibleDiffs, diffIndex, diffType, mobilePane, viewMode, classicSide, isMobile, showSources, markup, setDiffType, setMobilePane, setViewMode, setClassicSide, setShowSources, setMarkup, focusDiff, selectPairDiff, mergedRef, leftRef, rightRef, classicLeftRef, classicRightRef }: CompareReaderProps) {
+  const leftName = view?.left.name || selectedPair?.left.name || '原合同'
+  const rightName = view?.right.name || selectedPair?.right.name || '改后的合同'
   const mergedName = view?.merged?.name || rightName
   const pairLabel = view?.pair.label || selectedPair?.label || '合同比较'
   return <div className="compare-word-shell">
@@ -183,53 +182,53 @@ function CompareReader({ view, selectedPair, viewQuery, activeDiff, visibleDiffs
         </div>
         <span className="compare-word-revision-summary"><strong>{view?.summary?.total ?? visibleDiffs.length}</strong> 处修订</span>
         {viewMode === 'word' && <label className="compare-word-toggle"><input type="checkbox" checked={showSources} onChange={(event) => setShowSources(event.target.checked)} /> 显示源文档</label>}
-        {viewMode === 'word' && <label className="compare-word-markup">显示标记<select value={markup} onChange={(event) => setMarkup(event.target.value as 'all' | 'simple' | 'final')}><option value="all">所有标记</option><option value="simple">简单标记</option><option value="final">最终状态</option></select></label>}
+        {viewMode === 'word' && <label className="compare-word-markup">显示<select value={markup} onChange={(event) => setMarkup(event.target.value as 'all' | 'simple' | 'final')}><option value="all">全部修改痕迹</option><option value="simple">只标位置</option><option value="final">最终样子</option></select></label>}
       </div>
     </div>
     <div className="compare-view-body" data-view-mode={viewMode}>
       <aside className="compare-diff-rail compare-word-revisions" aria-labelledby="compare-rail-title">
         <div className="compare-word-pane-head compare-word-revisions-head"><div><span className="compare-word-pane-kicker">修订</span><strong id="compare-rail-title">{visibleDiffs.length} 处修订</strong></div><div className="compare-diff-nav"><Button type="button" onClick={() => focusDiff(diffIndex - 1)} disabled={!visibleDiffs.length}>↑ 上一处</Button><strong>{visibleDiffs.length ? `${diffIndex + 1} / ${visibleDiffs.length}` : '0 / 0'}</strong><Button type="button" onClick={() => focusDiff(diffIndex + 1)} disabled={!visibleDiffs.length}>下一处 ↓</Button></div></div>
         <div className="compare-diff-toolbar"><label className="muted">筛选 <select value={diffType} onChange={(event) => setDiffType(event.target.value)}><option value="">全部</option><option value="modify">修改</option><option value="insert">新增</option><option value="delete">删除</option></select></label></div>
-        {viewQuery.error ? <div className="error-state">读取结果失败：{messageOf(viewQuery.error, '结果暂时不可用')}</div> : viewQuery.loading && !view ? <Spinner label="正在读取对比结果" /> : <div className="compare-diff-list">{visibleDiffs.length ? visibleDiffs.map((diff, index) => <div className={`compare-diff-item ${index === diffIndex ? 'is-active' : ''}`} key={diff.id}><button type="button" className="compare-diff-jump" onClick={() => focusDiff(index)}><span className="compare-diff-index">{index + 1}</span><span className={`compare-diff-kind is-${diff.type}`}>{diff.type === 'modify' ? '修改' : diff.type === 'insert' ? '插入' : '删除'}</span><span className="compare-diff-preview"><span>{diff.section || '正文'} · {diff.left?.text || ''}{diff.right?.text ? ` → ${diff.right.text}` : ''}</span></span></button></div>) : <p className="empty-state">{view?.coverage?.status === 'complete' ? '两份合同没有文字差异。' : '已覆盖范围内没有发现文字差异，无法确认全文无差异。'}</p>}</div>}
+        {viewQuery.error ? <div className="error-state">读取结果失败：{messageOf(viewQuery.error, '结果暂时不可用')}</div> : viewQuery.loading && !view ? <Spinner label="正在读取对比结果" /> : <div className="compare-diff-list">{visibleDiffs.length ? visibleDiffs.map((diff, index) => <div className={`compare-diff-item ${index === diffIndex ? 'is-active' : ''}`} key={diff.id}><button type="button" className="compare-diff-jump" onClick={() => focusDiff(index)}><span className="compare-diff-index">{index + 1}</span><span className={`compare-diff-kind is-${diff.type}`}>{diff.type === 'modify' ? '修改' : diff.type === 'insert' ? '插入' : '删除'}</span><span className="compare-diff-preview"><span>{diff.section || '正文'} · {diff.left?.text || ''}{diff.right?.text ? ` → ${diff.right.text}` : ''}</span></span></button></div>) : <p className="empty-state">{view?.coverage?.status === 'complete' ? '两份合同没有文字差异。' : '已比对的部分没发现不同；没比对到的部分不敢保证一样。'}</p>}</div>}
       </aside>
       <div className="compare-word-view" hidden={viewMode !== 'word'}>
         <div className="compare-mobile-switch" role="group" aria-label="切换文档视图">
-          {(['merged', 'left', 'right'] as const).map((pane) => <Button key={pane} type="button" aria-pressed={mobilePane === pane} onClick={() => { if (pane !== 'merged') setShowSources(true); setMobilePane(pane) }}>{pane === 'merged' ? '比较的文档' : pane === 'left' ? '原文档' : '修订的文档'}</Button>)}
+          {(['merged', 'left', 'right'] as const).map((pane) => <Button key={pane} type="button" aria-pressed={mobilePane === pane} onClick={() => { if (pane !== 'merged') setShowSources(true); setMobilePane(pane) }}>{pane === 'merged' ? '对照结果' : pane === 'left' ? '原合同' : '改后的合同'}</Button>)}
         </div>
         <div className={`compare-word-layout ${showSources ? '' : 'is-sources-hidden'}`.trim()} data-markup={markup}>
           <section className="compare-word-document" aria-labelledby="compare-merged-title">
             <div className="compare-word-pane-head"><div><span className="compare-word-pane-kicker">比较的文档</span><strong id="compare-merged-title">{pairLabel}</strong><small>{mergedName}</small></div><span className="compare-word-legend" aria-label="修订标记说明"><i className="compare-legend-ins">插入</i><i className="compare-legend-del">删除</i></span></div>
-            <div ref={mergedRef} className="compare-word-pane compare-merged-pane" onScroll={(event) => syncScroll(event.currentTarget)}><SafeCompareDocument html={view?.merged?.html || view?.right.html || ''} label="比较的文档" activeDiffId={activeDiff?.id} onDiff={selectPairDiff} /></div>
+            <div ref={mergedRef} className="compare-word-pane compare-merged-pane"><SafeCompareDocument html={view?.merged?.html || view?.right.html || ''} label="比较的文档" activeDiffId={activeDiff?.id} onDiff={selectPairDiff} /></div>
           </section>
           {showSources && <aside className="compare-word-sources" aria-label="源文档">
             <section className="compare-word-source" aria-labelledby="compare-source-left-title">
               <div className="compare-word-pane-head"><div><span className="compare-word-pane-kicker">原文档</span><strong id="compare-source-left-title">{leftName}</strong><small>只读源文档</small></div><button className="compare-word-close" type="button" onClick={() => setShowSources(false)} aria-label="关闭源文档">×</button></div>
-              <div ref={leftRef} className="compare-word-pane" onScroll={(event) => syncScroll(event.currentTarget)}><SafeCompareDocument html={view?.left.html || ''} label="原文档" activeDiffId={activeDiff?.id} onDiff={selectPairDiff} /></div>
+              <div ref={leftRef} className="compare-word-pane"><SafeCompareDocument html={view?.left.html || ''} label="原文档" activeDiffId={activeDiff?.id} onDiff={selectPairDiff} /></div>
             </section>
             <section className="compare-word-source" aria-labelledby="compare-source-right-title">
               <div className="compare-word-pane-head"><div><span className="compare-word-pane-kicker">修订的文档</span><strong id="compare-source-right-title">{rightName}</strong><small>只读源文档</small></div><button className="compare-word-close" type="button" onClick={() => setShowSources(false)} aria-label="关闭源文档">×</button></div>
-              <div ref={rightRef} className="compare-word-pane" onScroll={(event) => syncScroll(event.currentTarget)}><SafeCompareDocument html={view?.right.html || ''} label="修订的文档" activeDiffId={activeDiff?.id} onDiff={selectPairDiff} /></div>
+              <div ref={rightRef} className="compare-word-pane"><SafeCompareDocument html={view?.right.html || ''} label="修订的文档" activeDiffId={activeDiff?.id} onDiff={selectPairDiff} /></div>
             </section>
           </aside>}
         </div>
       </div>
       <div className="compare-classic-view" hidden={viewMode !== 'classic'}>
         <div className="compare-document-area">
-          <div className="compare-reader-label"><span>合同正文</span><small>双栏联动阅读，拖动中间分隔线可调整宽度</small></div>
+          <div className="compare-reader-label"><span>合同正文</span></div>
           <div className="compare-columns-head"><span><i className="compare-side-badge">A</i><b>合同A</b><small>{leftName}</small></span><span className="compare-columns-arrow" aria-hidden="true">→</span><span><i className="compare-side-badge is-revised">B</i><b>合同B</b><small>{rightName}</small></span></div>
           <div className="compare-mobile-switch" role="group" aria-label="切换合同A或合同B">
             <Button type="button" aria-pressed={classicSide === 'left'} onClick={() => setClassicSide('left')}>查看合同A</Button>
             <Button type="button" aria-pressed={classicSide === 'right'} onClick={() => setClassicSide('right')}>查看合同B</Button>
           </div>
           <div className="compare-columns" data-mobile-side={classicSide}>
-            <div ref={classicLeftRef} className="compare-pane" onScroll={(event) => syncScroll(event.currentTarget)}><SafeCompareDocument html={view?.left.html || ''} label="合同A正文" activeDiffId={activeDiff?.id} onDiff={selectPairDiff} /></div>
+            <div ref={classicLeftRef} className="compare-pane"><SafeCompareDocument html={view?.left.html || ''} label="合同A正文" activeDiffId={activeDiff?.id} onDiff={selectPairDiff} /></div>
             <div className="compare-classic-divider" aria-hidden="true" />
-            <div ref={classicRightRef} className="compare-pane" onScroll={(event) => syncScroll(event.currentTarget)}><SafeCompareDocument html={view?.right.html || ''} label="合同B正文" activeDiffId={activeDiff?.id} onDiff={selectPairDiff} /></div>
+            <div ref={classicRightRef} className="compare-pane"><SafeCompareDocument html={view?.right.html || ''} label="合同B正文" activeDiffId={activeDiff?.id} onDiff={selectPairDiff} /></div>
           </div>
         </div>
       </div>
     </div>
-    {isMobile && <p className="compare-word-mobile-note">当前为移动端单文档视图；切换上方标签查看源文档。</p>}
+    {isMobile && <p className="compare-word-mobile-note">用上方标签切换要看的文档。</p>}
   </div>
 }
 
@@ -360,20 +359,54 @@ export function ComparePage() {
   }, [activeDiff?.id, allPanes, classicSide, isMobile, mobilePane, scrollToDiff, viewMode])
   useEffect(() => { setDiffIndex(0) }, [diffType, view?.pair.id])
 
-  const syncScroll = (source: HTMLElement) => {
+  // Linked scrolling: throttle to one rAF per frame, suppress the echo
+  // events the programmatic writes cause, and release the echo guard only
+  // after the gesture settles. The previous version wrote target scrollTop
+  // synchronously on every scroll event and released its lock after a
+  // single frame, so momentum scrolling echoed back and jittered (FL-D842).
+  const syncTargetsRef = useRef<Set<HTMLElement>>(new Set())
+  const syncFrameRef = useRef<number | null>(null)
+  const syncReleaseRef = useRef<number | undefined>(undefined)
+  const syncScroll = useCallback((source: HTMLElement) => {
     if (scrollLockRef.current || isMobile) return
-    const panes = allPanes().filter((pane): pane is HTMLDivElement => Boolean(pane && pane.clientHeight))
-    const targets = panes.filter((pane) => pane !== source)
-    if (!targets.length) return
-    const sourceMax = Math.max(0, source.scrollHeight - source.clientHeight)
-    const ratio = sourceMax ? source.scrollTop / sourceMax : 0
-    scrollLockRef.current = true
-    targets.forEach((target) => {
-      const targetMax = Math.max(0, target.scrollHeight - target.clientHeight)
-      target.scrollTop = ratio * targetMax
+    if (syncTargetsRef.current.has(source)) return
+    if (syncFrameRef.current !== null) return
+    syncFrameRef.current = requestAnimationFrame(() => {
+      syncFrameRef.current = null
+      const panes = allPanes().filter((pane): pane is HTMLDivElement => Boolean(pane && pane.clientHeight))
+      const targets = panes.filter((pane) => pane !== source)
+      if (!targets.length) return
+      const sourceMax = Math.max(0, source.scrollHeight - source.clientHeight)
+      const ratio = sourceMax ? source.scrollTop / sourceMax : 0
+      targets.forEach((target) => {
+        syncTargetsRef.current.add(target)
+        const targetMax = Math.max(0, target.scrollHeight - target.clientHeight)
+        target.scrollTop = ratio * targetMax
+      })
+      window.clearTimeout(syncReleaseRef.current)
+      syncReleaseRef.current = window.setTimeout(() => { syncTargetsRef.current.clear() }, 160)
     })
-    requestAnimationFrame(() => { scrollLockRef.current = false })
-  }
+  }, [allPanes, isMobile])
+  useEffect(() => {
+    // Bind natively so the listeners can be passive; React's onScroll prop
+    // is never passive and would keep the compositor waiting on the handler.
+    const refs = [mergedRef, leftRef, rightRef, classicLeftRef, classicRightRef]
+    const panes = refs.map((ref) => ref.current).filter((pane): pane is HTMLDivElement => Boolean(pane))
+    const onScroll = (event: Event) => syncScroll(event.currentTarget as HTMLElement)
+    const takeControl = (event: Event) => { syncTargetsRef.current.delete(event.currentTarget as HTMLElement) }
+    panes.forEach((pane) => {
+      pane.addEventListener('scroll', onScroll, { passive: true })
+      pane.addEventListener('wheel', takeControl, { passive: true })
+      pane.addEventListener('pointerdown', takeControl, { passive: true })
+      pane.addEventListener('touchstart', takeControl, { passive: true })
+    })
+    return () => panes.forEach((pane) => {
+      pane.removeEventListener('scroll', onScroll)
+      pane.removeEventListener('wheel', takeControl)
+      pane.removeEventListener('pointerdown', takeControl)
+      pane.removeEventListener('touchstart', takeControl)
+    })
+  }, [syncScroll, showSources, view?.pair.id])
 
   const selectFiles = (index: number, side: 'left' | 'right', file?: File) => setPairs((current) => current.map((pair, itemIndex) => itemIndex === index ? { ...pair, [side]: file } : pair))
   const applyFolder = (side: 'left' | 'right', event: ChangeEvent<HTMLInputElement>) => {
@@ -387,7 +420,7 @@ export function ComparePage() {
     const next: PairDraft[] = left.map((file) => { const match = rightMap.get(relativePath(file)); if (match) used.add(match); return { left: file, right: match } })
     for (const file of right) if (!used.has(file)) next.push({ left: undefined, right: file })
     setPairs(next)
-    setMessage(`已按相对路径配对 ${next.filter((pair) => pair.left && pair.right).length} 组；${next.filter((pair) => !pair.left || !pair.right).length} 个文件未配对。`)
+    setMessage(`配成了 ${next.filter((pair) => pair.left && pair.right).length} 对；还有 ${next.filter((pair) => !pair.left || !pair.right).length} 个文件配不上对。`)
   }
 
   const continueUpload = async (draft: UploadDraft) => {
@@ -399,12 +432,12 @@ export function ComparePage() {
         setMessage(`正在上传第 ${index + 1} / ${draft.files.length} 组…`)
         const result = await uploadMutation.mutateAsync({ id: draft.task.id, files: [files.left, files.right], clientIds: [manifest.left.client_id, manifest.right.client_id] })
         const receipts = result.receipts || []
-        if (receipts.some((receipt) => !['accepted', 'already_accepted'].includes(receipt.status))) throw new Error(`第 ${index + 1} 组上传未完成。`)
+        if (receipts.some((receipt) => !['accepted', 'already_accepted'].includes(receipt.status))) throw new Error(`第 ${index + 1} 对还没上传完。`)
         draft.next = index + 1; setUploadDraft({ ...draft })
       }
       await sealMutation.mutateAsync(draft.task.id)
     } catch (nextError) {
-      setError(`上传中断：${messageOf(nextError, '文件上传未完成')}。已完成的文件已保留，可继续上传。`)
+      setError(`上传断了：${messageOf(nextError, '文件没传完')}；传好的没丢，继续传就行。`)
       return
     }
     setUploadDraft(undefined); setCreateOpen(false); setMessage('已提交，对比任务正在处理。'); setSelectedTaskId(draft.task.id)
@@ -436,10 +469,10 @@ export function ComparePage() {
     }
   }
   return <div className="fundlex-compare-page">
-    <div className="page-heading"><div><h1>合同对比</h1><p>按“原版 → 对比版”阅读两份 DOCX 的正文与普通表格差异，结果只代表已覆盖内容。</p></div><div className="action-row"><Button type="button" onClick={() => void tasks.refetch()}>刷新</Button><Button type="button" variant="primary" onClick={resetCreate}>＋ 新建对比任务</Button></div></div>
+    <div className="page-heading"><div><h1>合同对比</h1></div><div className="action-row"><Button type="button" onClick={() => void tasks.refetch()}>刷新</Button><Button type="button" variant="primary" onClick={resetCreate}>＋ 新建对比任务</Button></div></div>
     {error && <div className="error-state" role="alert">{error}</div>}{message && <div className="fundlex-message" role="status">{message}</div>}
-     <Card className="compare-task-card"><div className="page-heading"><div><h2>我的对比任务</h2><p className="muted">多组任务会分别展示处理状态，失败或覆盖不完整的分组保留人工复核提示。</p></div></div>{tasks.error ? <div className="error-state">读取对比任务失败：{messageOf(tasks.error, '服务暂时不可用')}</div> : tasks.loading && !tasks.data ? <Spinner /> : tasks.data?.items.length ? <div className="table-scroll"><table className="data-table"><thead><tr><th>任务</th><th>分组</th><th>状态</th><th>结果</th><th /></tr></thead><tbody>{tasks.data.items.map((item) => <tr key={item.id}><td><button type="button" className="table-link compare-task-name-cell" title={item.name} onClick={() => setSelectedTaskId(item.id)}>{item.name}</button></td><td>{item.total || item.pairs?.length || 0}</td><td><StatusBadge value={statusLabel(item.status)} /></td><td className="compare-task-result-cell">{taskDescription(item)}</td><td><Button type="button" variant="primary" onClick={() => setSelectedTaskId(item.id)}>查看</Button></td></tr>)}</tbody></table></div> : <div className="empty-state"><strong>还没有合同对比任务</strong><p>创建一组或多组左右合同开始比较。</p></div>}</Card>
-    {createOpen && <Card className="compare-create"><div className="compare-create-intro"><div><h2>新建对比任务</h2><p className="muted">先选择原版（基准文本），再选择对比版（修订文本）。</p></div><span className="compare-step">1 / 2 · 准备文件</span></div><label className="compare-task-name">任务名称<input value={taskName} maxLength={200} onChange={(event) => setTaskName(event.target.value)} placeholder="例如：法务与产品部合同差异" /></label><div className="compare-folder-actions"><label className="ui-button"><span>选择原版文件夹</span><input type="file" {...{ webkitdirectory: '', directory: '' } as Record<string, string>} multiple hidden onChange={(event) => applyFolder('left', event)} /></label><label className="ui-button"><span>选择对比版文件夹</span><input type="file" {...{ webkitdirectory: '', directory: '' } as Record<string, string>} multiple hidden onChange={(event) => applyFolder('right', event)} /></label><span className="muted">按相同相对路径配对；未配对文件可以手工补齐。</span></div>{pairs.map((pair, index) => <PairInput key={index} pair={pair} index={index} onChange={(side, file) => selectFiles(index, side, file)} onRemove={() => setPairs((current) => current.length > 1 ? current.filter((_, itemIndex) => itemIndex !== index) : current)} />)}<div className="action-row"><Button type="button" onClick={() => setPairs((current) => [...current, {}])}>＋ 添加一组</Button><Button type="button" variant="primary" disabled={createMutation.isPending || uploadMutation.isPending || sealMutation.isPending} onClick={() => void (uploadDraft ? continueUpload(uploadDraft) : createTask())}>{uploadDraft ? '继续上传' : '开始上传并对比'}</Button></div></Card>}
+     <Card className="compare-task-card"><div className="page-heading"><div><h2>我的对比任务</h2></div></div>{tasks.error ? <div className="error-state">读取对比任务失败：{messageOf(tasks.error, '服务暂时不可用')}</div> : tasks.loading && !tasks.data ? <Spinner /> : tasks.data?.items.length ? <div className="table-scroll"><table className="data-table"><thead><tr><th>任务</th><th>分组</th><th>状态</th><th>结果</th><th /></tr></thead><tbody>{tasks.data.items.map((item) => <tr key={item.id}><td><button type="button" className="table-link compare-task-name-cell" title={item.name} onClick={() => setSelectedTaskId(item.id)}>{item.name}</button></td><td>{item.total || item.pairs?.length || 0}</td><td><StatusBadge value={statusLabel(item.status)} /></td><td className="compare-task-result-cell">{taskDescription(item)}</td><td><Button type="button" variant="primary" onClick={() => setSelectedTaskId(item.id)}>查看</Button></td></tr>)}</tbody></table></div> : <div className="empty-state"><strong>还没有合同对比任务</strong><p>创建一组或多组左右合同开始比较。</p></div>}</Card>
+    {createOpen && <Card className="compare-create"><div className="compare-create-intro"><div><h2>新建对比任务</h2></div><span className="compare-step">1 / 2 · 准备文件</span></div><label className="compare-task-name">任务名称<input value={taskName} maxLength={200} onChange={(event) => setTaskName(event.target.value)} placeholder="例如：法务与产品部合同差异" /></label><div className="compare-folder-actions"><label className="ui-button"><span>选择原版文件夹</span><input type="file" {...{ webkitdirectory: '', directory: '' } as Record<string, string>} multiple hidden onChange={(event) => applyFolder('left', event)} /></label><label className="ui-button"><span>选择对比版文件夹</span><input type="file" {...{ webkitdirectory: '', directory: '' } as Record<string, string>} multiple hidden onChange={(event) => applyFolder('right', event)} /></label><span className="muted">按相同相对路径配对；未配对文件可以手工补齐。</span></div>{pairs.map((pair, index) => <PairInput key={index} pair={pair} index={index} onChange={(side, file) => selectFiles(index, side, file)} onRemove={() => setPairs((current) => current.length > 1 ? current.filter((_, itemIndex) => itemIndex !== index) : current)} />)}<div className="action-row"><Button type="button" onClick={() => setPairs((current) => [...current, {}])}>＋ 添加一组</Button><Button type="button" variant="primary" disabled={createMutation.isPending || uploadMutation.isPending || sealMutation.isPending} onClick={() => void (uploadDraft ? continueUpload(uploadDraft) : createTask())}>{uploadDraft ? '继续上传' : '开始上传并对比'}</Button></div></Card>}
     {selectedTaskId && <Card className="compare-detail"><div className="page-heading"><div><h2>{task.data?.name || '合同对比任务'}</h2><p className="muted">{task.data ? `${statusLabel(task.data.status)} · ${task.data.pairs?.length || 0} 组` : '正在读取任务…'}</p></div><Button type="button" onClick={() => void task.refetch()} disabled={task.refreshing}>刷新状态</Button></div><div className="compare-direction-note"><span className="compare-direction-icon" aria-hidden="true">→</span><div><strong>阅读方向</strong><span>原版（基准） → 对比版（修订）</span></div><small>新增 / 删除均按此方向解释</small></div>{task.error ? <div className="error-state">读取任务失败：{messageOf(task.error, '服务暂时不可用')}</div> : task.loading && !task.data ? <Spinner /> : <div className="compare-pair-statuses">{(task.data?.pairs || []).map((pair, index) => <button type="button" className={`compare-pair-status ${pair.id === selectedPairId ? 'is-selected' : ''} ${pairDone(pair) ? 'is-done' : ''} ${pair.status === 'incomplete' ? 'is-incomplete' : ''} ${pair.status === 'failed' ? 'is-failed' : ''}`} key={pair.id} onClick={() => { setSelectedPairId(pair.id); setViewerOpen(true) }}><span className="compare-pair-number">{String(index + 1).padStart(2, '0')}</span><span className="compare-pair-main"><strong>{pair.label || `第 ${index + 1} 组`}</strong><small>{pair.left?.name || '原版未命名'} → {pair.right?.name || '对比版未命名'}</small></span><span className="compare-pair-state">{statusLabel(pair.status)}{pair.summary ? ` · ${pair.summary.total || 0} 处` : ''}</span>{pair.error_code && <span className="compare-pair-error">处理失败：{pair.error_code}</span>}</button>)}</div>}</Card>}
     {selectedPairId && viewerOpen && <Card className="compare-viewer" role="dialog" aria-modal="true" aria-label="合同比对结果" data-mobile-pane={mobilePane} data-view-mode={viewMode}>
       <div className="compare-viewer-toolbar">
@@ -448,7 +481,7 @@ export function ComparePage() {
         </div>
         <div className="compare-summary-row"><div className="compare-summary-stat"><span>当前结果</span><strong>{view?.summary ? `共 ${view.summary.total || 0} 处差异 · 修改 ${view.summary.modify || 0} · 新增 ${view.summary.insert || 0} · 删除 ${view.summary.delete || 0}` : '结果尚未就绪'}</strong></div>{view?.coverage?.status !== 'complete' && view?.coverage && <details className="compare-coverage-chip"><summary>覆盖不完整 · {view.coverage.warnings?.length || 0} 项未覆盖</summary><div className="compare-coverage-popover" role="status"><p>以下内容未纳入比较，请人工复核，不要据此确认全文无差异。</p>{view.coverage.warnings?.length ? <ul>{view.coverage.warnings.map((warning, index) => <li key={`${warning}-${index}`}>{warning}</li>)}</ul> : null}</div></details>}</div>
       </div>
-      {viewQuery.error ? <div className="error-state">读取结果失败：{messageOf(viewQuery.error, '结果暂时不可用')}</div> : viewQuery.loading && !view ? <Spinner label="正在读取对比结果" /> : view && <CompareReader view={view} selectedPair={selectedPair} viewQuery={viewQuery} activeDiff={activeDiff} visibleDiffs={visibleDiffs} diffIndex={diffIndex} diffType={diffType} mobilePane={mobilePane} viewMode={viewMode} classicSide={classicSide} isMobile={isMobile} showSources={showSources} markup={markup} setDiffType={setDiffType} setMobilePane={setMobilePane} setViewMode={setViewMode} setClassicSide={setClassicSide} setShowSources={setShowSources} setMarkup={setMarkup} focusDiff={focusDiff} selectPairDiff={selectPairDiff} mergedRef={mergedRef} leftRef={leftRef} rightRef={rightRef} classicLeftRef={classicLeftRef} classicRightRef={classicRightRef} syncScroll={syncScroll} />}
+      {viewQuery.error ? <div className="error-state">读取结果失败：{messageOf(viewQuery.error, '结果暂时不可用')}</div> : viewQuery.loading && !view ? <Spinner label="正在读取对比结果" /> : view && <CompareReader view={view} selectedPair={selectedPair} viewQuery={viewQuery} activeDiff={activeDiff} visibleDiffs={visibleDiffs} diffIndex={diffIndex} diffType={diffType} mobilePane={mobilePane} viewMode={viewMode} classicSide={classicSide} isMobile={isMobile} showSources={showSources} markup={markup} setDiffType={setDiffType} setMobilePane={setMobilePane} setViewMode={setViewMode} setClassicSide={setClassicSide} setShowSources={setShowSources} setMarkup={setMarkup} focusDiff={focusDiff} selectPairDiff={selectPairDiff} mergedRef={mergedRef} leftRef={leftRef} rightRef={rightRef} classicLeftRef={classicLeftRef} classicRightRef={classicRightRef} />}
     </Card>}
 
   </div>

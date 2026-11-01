@@ -858,9 +858,17 @@ def evaluate_operation_effect(obligation: Any, original: Any, artifact: Any,
         from ..recall import g06_scope_locations
         g06_locations = g06_scope_locations(original)
         if not g06_locations:
-            return OperationEffect("OPEN", "UNPROVEN", **base,
-                                   failure_code="CLAIM_OPERATION_UNPROVEN",
-                                   reason="g06_subsection_scope_missing")
+            # FL-D863: contracts that keep the class-setup clause inside 基金的基本情况
+            # without the exact 「份额类别设置」 subsection heading (LOF 短版式) leave
+            # the heading-based scan empty, while the caller's resolved RuleScope is
+            # already bounded to the mapped class-basics leaves.  Fall back to that
+            # physical boundary; never widen to the document.
+            if boundary_locations:
+                g06_locations = frozenset(boundary_locations)
+            else:
+                return OperationEffect("OPEN", "UNPROVEN", **base,
+                                       failure_code="CLAIM_OPERATION_UNPROVEN",
+                                       reason="g06_subsection_scope_missing")
         sites = [site for site in sites
                  if str(site.get("location") or site.get("site_id") or "") in g06_locations]
     sites = _verified_site_closure(sites, original, spec,
@@ -890,6 +898,16 @@ def evaluate_operation_effect(obligation: Any, original: Any, artifact: Any,
         if rule_id == "G06":
             from ..recall import g06_scoped_text
             document = _compact(g06_scoped_text(original))
+            if not document and boundary_locations:
+                # Same FL-D863 fallback as the gate above: with no subsection
+                # heading the absence probe reads the caller's bounded scope text.
+                parts = []
+                for location in sorted(boundary_locations or ()):
+                    try:
+                        parts.append(str(original.by_location(str(location)).text))
+                    except (KeyError, ValueError, AttributeError):
+                        continue
+                document = _compact("".join(parts))
         else:
             document = _compact("".join(str(getattr(span, "text", ""))
                                          for span in getattr(original, "paragraphs", ())))

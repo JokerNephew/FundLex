@@ -24,7 +24,7 @@
 .gg-field{margin:14px 0}.gg-field input{width:100%}
 .gg-check{display:flex;gap:8px;align-items:flex-start;font-size:12px;margin:12px 0;line-height:1.7}
 .gg-check input{margin-top:4px;flex:none;accent-color:var(--accent)}
-.gg-badge{display:inline-block;vertical-align:middle;font-size:11px;line-height:1.55;padding:4px 8px;border-radius:5px;background:#f1f3f5;color:#56616d;font-weight:600;max-width:100%;overflow-wrap:anywhere}
+.gg-badge{display:inline-block;vertical-align:middle;font-size:var(--badge-size);line-height:1.55;padding:var(--badge-pad);border-radius:var(--badge-radius);background:#f0f2f4;color:#59646e;font-weight:var(--badge-weight);max-width:100%;overflow-wrap:anywhere}
 .gg-badge.gg-success{background:var(--green-soft);color:var(--green)}
 .gg-badge.gg-warning{background:var(--amber-soft);color:var(--amber)}
 .gg-badge.gg-error{background:var(--red-soft);color:var(--red)}
@@ -33,7 +33,7 @@
 .gg-note.gg-warning{background:var(--amber-soft);border-color:#eedab9;color:var(--amber)}
 .gg-workspace .gg-error{color:var(--red)}.gg-workspace .gg-success{color:var(--green)}.gg-workspace .gg-warning{color:var(--amber)}
 .gg-empty{text-align:center;color:var(--muted);padding:30px 16px;font-size:13px;overflow-wrap:anywhere}
-.gg-table-wrap{overflow-x:auto;max-width:100%;border:1px solid var(--line-soft);border-radius:6px}
+.gg-table-wrap{overflow-x:auto;max-width:100%;overscroll-behavior-inline:contain}
 @media(min-width:761px) and (max-width:1180px){
   .gg-table-wrap{
     background-image:
@@ -47,11 +47,11 @@
     background-attachment:local,local,scroll,scroll;
   }
 }
-.gg-table{border-collapse:collapse;width:100%;min-width:760px;text-align:left;font-size:12px}
-.gg-table th{background:#fafbfc;color:var(--muted);font-weight:600;padding:10px 12px;white-space:nowrap}
-.gg-table td{border-top:1px solid var(--line-soft);padding:12px;vertical-align:middle;max-width:300px;overflow-wrap:anywhere}
-.gg-table td small{display:block;color:var(--muted);margin-top:4px}
-.gg-table tbody tr:hover{background:#fdfbf9}
+.gg-table{min-width:760px}
+/* .gg-table th/td 规格收编 .table 体系（FL-D804：原 12px/td12px/hover#fdfbf9 散写删除） */
+.gg-table td{max-width:300px;overflow-wrap:anywhere}
+.gg-table td small{display:block;color:var(--muted);font-size:var(--list-meta-size);margin-top:2px}
+/* hover 收编 --list-row-hover-bg */
 .gg-create-layout{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(280px,1fr);gap:18px;align-items:start}
 .gg-create-layout>.gg-card{margin-bottom:0}
 .gg-create-layout aside .btn-primary{width:100%;margin-top:10px}

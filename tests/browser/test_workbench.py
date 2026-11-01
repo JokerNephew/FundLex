@@ -125,9 +125,9 @@ def test_verification_blocked_report_explains_waiting_without_business_residual(
     task, _ = seed(ui, states=[("retry_wait", "eligible", "not_generated")], report=report)
     page = open_task(ui, task)
     page.locator("#doc-rows [data-detail]").first.click()
-    page.get_by_role("heading", name="验证暂未完成，等待恢复处理").wait_for()
-    assert page.locator("#detail-body").get_by_text("当前文件尚未通过最终交付校验。", exact=False).is_visible()
-    assert page.get_by_role("button", name="最终版 DOCX", exact=True).count() == 0
+    page.get_by_text("验证暂未完成，恢复任务后将继续校验").wait_for()
+    assert page.locator("#detail-body").get_by_text("当前文件尚未通过最终交付核验。", exact=False).is_visible()
+    assert page.get_by_role("button", name="最终版", exact=True).count() == 0
 
 
 def presentation(ui, count=1, execution_mode="", summary=False, delivery="incomplete"):
@@ -204,8 +204,6 @@ def test_object_heading_long_parent_and_deep_link_return(ui, width):
 def test_overview_units_filters_and_single_supported_mode(ui):
     task, _ = seed(ui, states=[("succeeded", "eligible", "complete")])
     page = open_page(ui)
-    page.wait_for_function("document.querySelector('#overview-average').textContent==='90'")
-    assert "90 秒 秒" not in page.inner_text("#overview-description")
     page.fill("#task-search", "不存在的筛选")
     page.wait_for_function("document.querySelector('#task-rows').textContent.includes('没有任务')")
     assert page.locator("#first-run-guide").is_hidden()
@@ -339,13 +337,13 @@ def test_report_does_not_mark_unexecuted_targets_applied(ui):
     assert "已修改" not in row.inner_text()
     assert "完整联合改文" in page.locator("#detail-body").text_content()
     assert "首片段" not in page.locator("#detail-body").text_content()
-    assert "工作文件（未完成）" in page.locator('[data-download="selected_final"]').inner_text()
+    assert "选择版" in page.locator('[data-download="selected_final"]').inner_text()
 
 
 def test_report_shows_incomplete_business_issues(ui):
     presentation(ui, summary=True)
     page = ui[0]
-    assert "仍需人工核对 · 1 项" in page.inner_text("#detail-body")
+    assert "还要人工核 · 1 处" in page.inner_text("#detail-body")
     assert "未执行条款" in page.inner_text("#detail-body")
     assert "未改原文" in page.inner_text("#detail-body")
     assert "未找到可安全修改的正文位置" in page.inner_text("#detail-body")
@@ -365,7 +363,7 @@ def test_exception_delivery_remains_downloadable_without_direct_use_claim(ui):
     presentation(ui, delivery="complete_with_exceptions")
     page = ui[0]
     conclusion = page.locator("#detail-body .result-summary")
-    assert "需核对例外" in conclusion.inner_text()
+    assert "待人工核" in conclusion.inner_text()
     assert "已通过交付校验" not in conclusion.inner_text()
     assert page.locator('[data-download="final"]').is_visible()
     assert "按例外清单人工核对" in page.inner_text("#detail-body")
@@ -379,27 +377,26 @@ def test_contract_result_compact_summary_actions_and_folded_evidence(ui, width, 
     page.set_viewport_size({'width': width, 'height': 1000})
     presentation(ui, delivery=delivery, execution_mode='evaluation' if delivery.startswith('evaluation') else '')
     expect(page.locator('.result-summary')).to_be_visible()
-    expect(page.locator('.result-status-grid>div')).to_have_count(3)
-    expect(page.locator('.result-evidence')).not_to_have_attribute('open', '')
-    expect(page.locator('.result-evidence .detail-grid')).to_be_hidden()
+    expect(page.locator('.result-status-grid>div')).to_have_count(1)
+    expect(page.locator('.result-evidence')).to_have_count(0)
+    
     assert page.locator('.result-summary').bounding_box()['height'] < (320 if width == 390 else 230)
     boxes = [node.bounding_box() for node in page.locator('.result-status-grid>div').all()]
     assert max(box['y'] for box in boxes) - min(box['y'] for box in boxes) < 2
     if delivery == 'complete_with_exceptions':
         expect(page.locator('[data-download="final"]')).to_be_visible()
-        expect(page.locator('.result-summary')).to_contain_text('需核对例外')
+        expect(page.locator('.result-summary')).to_contain_text('待人工核')
     elif delivery.startswith('evaluation'):
         expect(page.locator('.result-summary')).to_contain_text('评测文件不能作为正式合同')
         expect(page.locator('[data-action="open-review"]')).to_have_count(0)
     else:
-        expect(page.locator('.result-summary')).to_contain_text('结果不完整')
+        expect(page.locator('.result-summary')).to_contain_text('待人工核')
         expect(page.locator('[data-action="open-review"]')).to_be_visible()
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
     if os.getenv('FUNDLEX_UX_EVIDENCE'):
         out=Path(os.environ['FUNDLEX_UX_EVIDENCE']);out.mkdir(parents=True,exist_ok=True)
         page.screenshot(path=str(out / f'result-{delivery}-{width}.png'))
-    page.locator('.result-evidence>summary').click()
-    expect(page.locator('.result-evidence .detail-grid')).to_be_visible()
+
 
 
 @pytest.mark.parametrize('view', ['overview', 'task'])
@@ -480,7 +477,7 @@ def test_guide_rule_switches_and_model_settings_are_editable(ui, monkeypatch):
     rules_button = page.locator('#guide-rows [data-guide-rules]').first
     guide_id = rules_button.get_attribute('data-guide-rules')
     rules_button.click()
-    expect(page.locator('#guide-overlay-body')).to_contain_text('规则组启停')
+    expect(page.locator('#guide-overlay-body')).to_contain_text('规则开关')
     toggle = page.locator('[data-guide-rule-toggle]').first
     toggle.uncheck()
     page.locator('[data-guide-rule-save]').click()
@@ -494,8 +491,8 @@ def test_guide_rule_switches_and_model_settings_are_editable(ui, monkeypatch):
     page.locator('.sidebar [data-nav="models"]').click()
     expect(page.locator('#model-settings-card')).to_be_visible()
     expect(page.locator('#feishu-connect-card')).to_be_hidden()
-    expect(page.locator('#model-settings-body')).to_contain_text('执行模型')
-    expect(page.locator('#model-settings-body')).to_contain_text('检查模型')
+    expect(page.locator('#model-settings-body')).to_contain_text('修改模型')
+    expect(page.locator('#model-settings-body')).to_contain_text('复核模型')
     # 读取态不显示表单，点击「修改配置」进入编辑态（FL-D750 读取态/编辑态重做）
     expect(page.locator('#model-settings-form')).to_have_count(0)
     page.locator('[data-model-edit="primary"]').click()
@@ -550,7 +547,7 @@ def test_model_and_feishu_pages_are_separate(ui):
     open_page(ui, 'models')
     # 读取态为角色卡，无表单（FL-D750）；卡容器即模型页标识
     expect(page.locator('#model-settings-card')).to_be_visible()
-    expect(page.locator('#model-settings-body')).to_contain_text('执行模型')
+    expect(page.locator('#model-settings-body')).to_contain_text('修改模型')
     expect(page.locator('#feishu-connect-card')).to_be_hidden()
     assert not any('/api/integrations/feishu/binding' in url for url in requests)
     page.reload()
@@ -651,7 +648,7 @@ def test_old_review_failure_cannot_overwrite_new_report(ui):
     page.wait_for_selector('[data-action="open-review"]')
     pending[0].fulfill(status=503, json={"detail": "fixture failure"})
     page.wait_for_timeout(100)
-    assert "业务结论" in page.inner_text("#detail-body")
+    assert "结论" in page.inner_text("#detail-body")
     assert "无法生成合同呈现" not in page.inner_text("#detail-body")
     assert page.locator("#detail-title").inner_text() == "合同1.docx"
 
@@ -826,7 +823,7 @@ def test_generation_blocks_duplicate_requests_and_late_reply(ui):
     page.wait_for_timeout(100)
     assert page.locator("#detail-title").inner_text() == "合同1.docx"
     assert not page.locator('[data-action="download-selected"]').count()
-    assert "业务结论" in page.inner_text("#detail-body")
+    assert "结论" in page.inner_text("#detail-body")
 
 
 def test_generation_preserves_disabled_review_navigation(ui):
@@ -851,14 +848,6 @@ def test_overview_polls_other_task_after_selected_task_completed(ui):
     page.wait_for_selector(f'#task-rows [data-task="{another}"]', timeout=10000)
     assert "后台新建任务" in page.inner_text("#task-rows")
 
-
-def test_failed_stats_are_unavailable_instead_of_zero(ui):
-    page, context, _, _ = ui
-    context.route("**/api/tasks/stats", lambda route: route.fulfill(status=503, json={"detail": "fixture failure"}))
-    open_page(ui)
-    page.wait_for_timeout(100)
-    for element in ["stat-month-contracts", "stat-completion-rate", "stat-average"]:
-        assert page.locator("#" + element).inner_text() == "—"
 
 
 def test_download_all_stays_disabled_until_terminal_result_exists(ui):

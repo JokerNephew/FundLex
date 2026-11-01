@@ -5147,7 +5147,7 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
         # business site.  Create its operation target from code-proven anchors even
         # when the wording is not byte-identical to the body paragraph.
         summary_targets = summary_copy_targets(targets, rules_by_id, inspection,
-                                               sections, scopes)
+                                               sections, scopes, facts=facts)
         for target in summary_targets:
             targets.append(target)
             synthetic.append(target)
@@ -5237,7 +5237,7 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
         # summary copy before the locator/plan stages (idempotent: an existing
         # active summary target suppresses a duplicate).
         late_summary = summary_copy_targets(targets, rules_by_id, inspection,
-                                            sections, scopes)
+                                            sections, scopes, facts=facts)
         for target in late_summary:
             targets.append(target)
             synthetic.append(target)

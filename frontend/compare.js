@@ -3,7 +3,7 @@
   const api = window.FundLexWorkbench || {};
   const $ = id => document.getElementById(id);
   const esc = api.esc || (v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])));
-  const state = { tasks: [], task: null, pairs: [], pairIndex: 0, selectedPairId: null, view: null, selection: null, selectionDraft: null, selectionDirty: false, selectionSaving: false, selectionToken: 0, selectionSaveToken: 0, poll: null, pollTaskId: null, requestToken: 0, lineFrame: null, scrollFrame: null, scrollSource: null, syncTargets: new Set(), syncSettle: null, identityToken: 0, listToken: 0, inputs: [{}], uploadDraft: null, splitRatio: .5, pendingSplitRatio: .5, splitDragging: false, leftMarks: null, rightMarks: null, mergedMarks: null, wordLeftMarks: null, wordRightMarks: null, viewMode: 'word', classicSide: 'left', classicRendered: false, wordSourcesRendered: false, diffPositions: null, docs: null, rawDocs: null, alignment: null };
+  const state = { tasks: [], task: null, pairs: [], pairIndex: 0, selectedPairId: null, view: null, selection: null, selectionDraft: null, selectionDirty: false, selectionSaving: false, selectionToken: 0, selectionSaveToken: 0, poll: null, pollTaskId: null, requestToken: 0, lineFrame: null, scrollFrame: null, scrollSource: null, syncTargets: new Set(), syncSettle: null, identityToken: 0, listToken: 0, inputs: [{}], uploadDraft: null, splitRatio: .5, pendingSplitRatio: .5, splitDragging: false, splitAlignTimer: null, splitRefreshTimer: null, lineSettle: null, linesScrolling: false, leftMarks: null, rightMarks: null, mergedMarks: null, wordLeftMarks: null, wordRightMarks: null, viewMode: 'word', classicSide: 'left', classicRendered: false, wordSourcesRendered: false, diffPositions: null, docs: null, rawDocs: null, alignment: null };
   const SPLIT_KEY = 'fundlex-compare-split-ratio', SPLIT_GUTTER = 28;
   const clampSplitRatio = value => { const number = Number(value); return value !== null && value !== '' && Number.isFinite(number) ? Math.min(.8, Math.max(.2, number)) : .5; };
   function storedSplitRatio() { try { return clampSplitRatio(localStorage.getItem(SPLIT_KEY)); } catch { return .5; } }
@@ -58,17 +58,15 @@
     state.task=task; state.pairs=task.pairs||[]; $('compare-detail').hidden=false; $('compare-task-name').textContent=task.name||'未命名任务';api.setObjectTitle?.('compare',task.name); $('compare-task-status').textContent=`${taskMetrics(task).status} · ${state.pairs.length} 组`;
     state.tasks=state.tasks.map(t=>t.id===task.id?task:t); renderTasks(); renderPairs();
     const hasResult=state.pairs.some(p=>['succeeded','incomplete'].includes(p.status));
-    const disclosure=document.querySelector('.compare-groups-disclosure'); if(disclosure)disclosure.open=!hasResult;
     const pendingNote=$('compare-pending-note'); if(pendingNote)pendingNote.hidden=hasResult;
   }
-  function failureStageLabel(v) { return ({claim_setup:'任务领取',input_integrity:'输入校验',compare:'文本比对',heartbeat:'租约心跳',finish:'结果落库'} [v] || v || '未知阶段'); }
+  function failureStageLabel(v) { return ({claim_setup:'开始处理',input_integrity:'文件检查',compare:'文本比对',heartbeat:'处理中',finish:'保存结果'} [v] || v || '未知阶段'); }
   function pairErrorLabel(p) {
     if (p.viewError) return p.viewError;
     if (!p.error_code) return '';
     const failure=p.diagnostics?.failure;
-    if (!failure || failure.error_code!==p.error_code) return `处理失败：${p.error_code}`;
-    const detail=[`阶段：${failureStageLabel(failure.stage)}`,failure.error_type?`类型：${failure.error_type}`:'',`可重试：${failure.retryable?'是':'否'}`].filter(Boolean).join(' · ');
-    return `处理失败：${p.error_code}（${detail}）`;
+    if (!failure || failure.error_code!==p.error_code) return `处理失败，请稍后重试`;
+    return `处理失败：${failureStageLabel(failure.stage)}环节出错${failure.retryable?'，可重试':'，请重新创建合同组'}`;
   }
   function renderPairs() {
     $('compare-pair-list').innerHTML=`<div class="compare-pair-statuses">${state.pairs.map((p,i)=>`<button type="button" class="compare-pair-status ${p.id===state.selectedPairId?'is-selected':''} ${['succeeded','incomplete'].includes(p.status)?'is-done':''} ${p.status==='incomplete'?'is-incomplete':''} ${p.status==='failed'||p.viewError?'is-failed':''}" data-compare-pair="${i}"><span class="compare-pair-number">${String(i+1).padStart(2,'0')}</span><span class="compare-pair-main"><strong>${esc(p.label||`第 ${i+1} 组`)}</strong><small>合同A：${esc(p.left?.name||'未命名')} / 合同B：${esc(p.right?.name||'未命名')}</small></span><span class="compare-pair-state">${esc(statusLabel(p.status))}${p.summary?` · ${p.summary.total} 处`:''}</span>${p.error_code||p.viewError?`<span class="compare-pair-error" role="status">${esc(pairErrorLabel(p))}</span>`:''}</button>`).join('')}</div>`;
@@ -134,6 +132,10 @@
       if (!dragging) return;
       event.preventDefault(); state.pendingSplitRatio = ratioAt(event); showPreview(state.pendingSplitRatio);
     };
+    const scheduleAlign = () => {
+      clearTimeout(state.splitAlignTimer);
+      state.splitAlignTimer = setTimeout(alignPanels, 120);
+    };
     const finish = apply => {
       if (!dragging) return;
       dragging = false; state.splitDragging = false;
@@ -141,6 +143,10 @@
       if (preview) { preview.style.left = ''; preview.style.opacity = ''; }
       window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', onUp); window.removeEventListener('pointercancel', onCancel);
       applySplitRatio(apply ? state.pendingSplitRatio : state.splitRatio, true); refreshVirtualLayouts(); drawLines();
+      // The re-wrap above invalidates every pane's own anchor; re-align the
+      // panes through the block-index model so the correspondence survives
+      // the width change (FL-D841).
+      if (apply) scheduleAlign();
     };
     const onUp = () => finish(true);
     const onCancel = () => finish(false);
@@ -154,31 +160,46 @@
       showPreview(state.splitRatio);
       window.addEventListener('pointermove', move); window.addEventListener('pointerup', onUp); window.addEventListener('pointercancel', onCancel);
     });
-    gutter.addEventListener('dblclick', () => applySplitRatio(.5));
+    gutter.addEventListener('dblclick', () => { applySplitRatio(.5); refreshVirtualLayouts(); drawLines(); scheduleAlign(); });
     gutter.addEventListener('keydown', event => {
       const step = event.shiftKey ? .05 : .02; let next = state.splitRatio;
       if (event.key === 'ArrowLeft') next -= step;
       else if (event.key === 'ArrowRight') next += step;
       else if (event.key === 'Home') next = .2;
       else if (event.key === 'End') next = .8;
-      else if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); applySplitRatio(.5); return; }
+      else if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); applySplitRatio(.5); refreshVirtualLayouts(); drawLines(); scheduleAlign(); return; }
       else return;
       event.preventDefault(); applySplitRatio(next);
+      // Keyboard nudges reflow too, but each keystroke must not pay for a
+      // full re-measure; debounce the heavy pass (FL-D840/FL-D841).
+      clearTimeout(state.splitRefreshTimer);
+      state.splitRefreshTimer = setTimeout(() => { refreshVirtualLayouts(); drawLines(); alignPanels(); }, 200);
     });
     applySplitRatio(storedSplitRatio(), false);
   }
   function bindPanelSplitters() {
     if (!window.FundLexColumnSplitter) return;
     let frame = null, alignTimer = null;
-    const refresh = () => {
+    const dragging = () => [$('compare-rail-splitter'), $('compare-word-splitter')].some(h => h?.classList.contains('is-dragging'));
+    const refresh = (final = false) => {
       state.diffPositions = null;
+      if (!final && dragging()) {
+        // Width changes continuously while dragging; the browser reflows the
+        // text on its own. Re-measuring every pane per frame here is what
+        // made the splitter drag stutter (FL-D840), so only the fallback
+        // line redraw stays live and the heavy pass runs once on pointerup.
+        setLinesScrolling(true);
+        drawLines();
+        return;
+      }
+      setLinesScrolling(false);
       if (!frame) frame = requestAnimationFrame(() => {
         frame = null;
         refreshVirtualLayouts();
         drawLines();
       });
       clearTimeout(alignTimer);
-      alignTimer = setTimeout(alignPanels, 160);
+      alignTimer = setTimeout(alignPanels, 120);
     };
     window.FundLexColumnSplitter($('compare-rail-splitter'), $('compare-view-body'), document.querySelector('.compare-word-revisions'), {
       key: 'fundlex-compare-revisions-width',
@@ -186,7 +207,8 @@
       min: 220, max: 660, minOther: 480, fallback: 300,
       side: () => state.viewMode === 'classic' ? 'right' : 'left',
       disabled: () => matchMedia('(max-width: 760px)').matches,
-      onChange: refresh,
+      onChange: () => refresh(false),
+      onEnd: () => refresh(true),
     });
     window.FundLexColumnSplitter($('compare-word-splitter'), $('compare-word-layout'), $('compare-word-sources'), {
       key: 'fundlex-compare-sources-width',
@@ -194,7 +216,8 @@
       min: 240, max: 720, minOther: 480, fallback: 360,
       side: 'right',
       disabled: () => matchMedia('(max-width: 760px)').matches,
-      onChange: refresh,
+      onChange: () => refresh(false),
+      onEnd: () => refresh(true),
     });
   }
   function refreshDiffMarks() {
@@ -208,17 +231,6 @@
     state.leftMarks = marks('compare-left-pane');
     state.rightMarks = marks('compare-right-pane');
   }
-  function cacheDiffPositions() {
-    if(!state.view||!state.leftMarks||!state.rightMarks)return;
-    const left=$('compare-left-pane'),right=$('compare-right-pane'); if(!left||!right)return;
-    const lr=left.getBoundingClientRect(),rr=right.getBoundingClientRect(),positions=[];
-    for(const d of state.view.diffs||[]){
-      const l=state.leftMarks.get(d.id),r=state.rightMarks.get(d.id); if(!l||!r)continue;
-      const a=l.getBoundingClientRect(),b=r.getBoundingClientRect();
-      positions.push({id:d.id,leftY:a.top-lr.top+left.scrollTop,rightY:b.top-rr.top+right.scrollTop,leftH:a.height,rightH:b.height,leftX:a.right-lr.left,rightX:b.left-rr.left});
-    }
-    state.diffPositions=positions;
-  }
   function drawLines() {
     if(state.lineFrame!==null)return;
     state.lineFrame=requestAnimationFrame(()=>{
@@ -229,28 +241,44 @@
       const cr=cols.getBoundingClientRect(); if(!cr.width||!cr.height)return;
       const left=$('compare-left-pane'),right=$('compare-right-pane'); if(!left||!right)return;
       const lr=left.getBoundingClientRect(),rr=right.getBoundingClientRect();
-      if(!state.diffPositions)cacheDiffPositions();
-      if(!state.diffPositions)return;
+      const leftMarks=left._virtualDoc?.marks,rightMarks=right._virtualDoc?.marks;
+      if(!leftMarks||!rightMarks)return;
       const active=visibleDiffs()[state.diffIndex]?.id;
       const leftTop=left.scrollTop,leftBottom=leftTop+left.clientHeight,rightTop=right.scrollTop,rightBottom=rightTop+right.clientHeight;
       const fragment=document.createDocumentFragment(); let count=0;
-      for(const p of state.diffPositions){
-        if(p.id!==active){
-          const above=p.leftY+p.leftH<leftTop-80&&p.rightY+p.rightH<rightTop-80;
-          const below=p.leftY>leftBottom+80&&p.rightY>rightBottom+80;
+      for(const d of state.view.diffs||[]){
+        const lm=leftMarks.get(d.id),rm=rightMarks.get(d.id);
+        if(!lm||!rm)continue;
+        if(d.id!==active){
+          const above=lm.top+lm.height<leftTop-80&&rm.top+rm.height<rightTop-80;
+          const below=lm.top>leftBottom+80&&rm.top>rightBottom+80;
           if(above||below)continue;
         }
-        const x1=lr.left-cr.left+p.leftX,y1=lr.top-cr.top+(p.leftY-leftTop)+p.leftH/2;
-        const x2=rr.left-cr.left+p.rightX,y2=rr.top-cr.top+(p.rightY-rightTop)+p.rightH/2;
-        if(p.id!==active&&((y1<-40&&y2<-40)||(y1>cr.height+40&&y2>cr.height+40)))continue;
+        const x1=lr.left-cr.left+lm.rightX,y1=lr.top-cr.top+(lm.top-leftTop)+lm.height/2;
+        const x2=rr.left-cr.left+rm.leftX,y2=rr.top-cr.top+(rm.top-rightTop)+rm.height/2;
+        if(d.id!==active&&((y1<-40&&y2<-40)||(y1>cr.height+40&&y2>cr.height+40)))continue;
         const path=document.createElementNS('http://www.w3.org/2000/svg','path');
         path.setAttribute('d',`M ${x1} ${y1} C ${(x1+x2)/2} ${y1}, ${(x1+x2)/2} ${y2}, ${x2} ${y2}`);
-        path.dataset.diffId=p.id;path.classList.toggle('active',p.id===active);fragment.append(path);
+        path.dataset.diffId=d.id;path.classList.toggle('active',d.id===active);fragment.append(path);
         if(++count>=240)break;
       }
       svg.setAttribute('viewBox',`0 0 ${cr.width} ${cr.height}`);
       svg.replaceChildren(fragment);
     });
+  }
+  function setLinesScrolling(on) {
+    // Fade the connector lines while a scroll gesture is in flight; they are
+    // recomputed once scrolling settles instead of being rebuilt every frame
+    // (FL-D840). The class is only meaningful in the classic view.
+    if (state.linesScrolling === on) return;
+    state.linesScrolling = on;
+    $('compare-viewer')?.classList.toggle('is-sync-scrolling', on);
+  }
+  function drawLinesDeferred() {
+    if ($('compare-classic-view')?.hidden || $('compare-viewer')?.hidden) return;
+    setLinesScrolling(true);
+    clearTimeout(state.lineSettle);
+    state.lineSettle = setTimeout(() => { setLinesScrolling(false); drawLines(); }, 90);
   }
   function visiblePanels() {
     return allPanels().filter(pane => pane.offsetParent !== null && pane.clientHeight > 0);
@@ -350,8 +378,8 @@
   function syncPaneScroll(source) {
     if(state.focusScrolling){drawLines();return;}
     if (window.matchMedia('(max-width: 760px)').matches) { drawLines(); return; }
-    if (state.syncTargets.has(source)) { drawLines(); return; }
-    if (state.scrollFrame !== null) { drawLines(); return; }
+    if (state.syncTargets.has(source)) { drawLinesDeferred(); return; }
+    if (state.scrollFrame !== null) { drawLinesDeferred(); return; }
     const targets = visiblePanels().filter(p => p !== source);
     if (!targets.length) return;
     state.scrollSource = source;
@@ -409,6 +437,11 @@
               ? (source.id.includes('left')?currentModel.leftToMerged[latestLeft]:currentModel.rightToMerged[latestRight] ?? latestRight)
               : target.id === 'compare-word-left-pane' || target.id === 'compare-left-pane'
                 ? latestLeft : latestRight;
+            // Verify before forcing: while the gesture is still running this
+            // settle fires every 150 ms; panes already on the target block
+            // must not pay for scrollToBlockIndex's force refreshes (FL-D840).
+            const current = doc.visibleBlock?.();
+            if (current && current.index === index && Math.abs(current.fraction - latest.fraction) < .25) return;
             doc.scrollToBlockIndex(index, latest.fraction, false);
           });
         }, 150);
@@ -429,11 +462,12 @@
           target.scrollTop = ratio * targetMax;
         });
       }
-      drawLines();
+      drawLinesDeferred();
       clearTimeout(state.syncRelease);
       state.syncRelease=setTimeout(() => {
         state.syncTargets.clear();
         state.scrollSource = null;
+        setLinesScrolling(false);
         drawLines();
       }, 220);
     });
@@ -712,7 +746,7 @@
   const DIFF_ITEM_HEIGHT=136, DIFF_RENDER_COUNT=24;
   function diffItemHtml(x,index,choice,disabled){
     const kind=x.type==='modify'?'修改':x.type==='insert'?'插入':'删除';
-    return `<div class="compare-diff-item ${choice!=='pending'?'is-selected-choice':''}" data-compare-diff="${esc(x.id)}"><button type="button" class="compare-diff-jump" data-compare-diff="${esc(x.id)}"><span class="compare-diff-index">${index+1}</span><span class="compare-diff-kind is-${esc(x.type)}">${esc(kind)}</span><span class="compare-diff-preview"><small>FundLex 对比</small><span>${esc(x.section||'正文')} · ${esc(x.left?.text||'')} ${x.right?.text?'→ '+esc(x.right.text):''}</span></span></button><div class="compare-choice" role="group" aria-label="${esc(x.id)} 采用 A 或 B"><label class="${choice==='left'?'is-checked':''}"><input type="radio" name="choice-${esc(x.id)}" value="left" data-selection-choice="left" data-diff-id="${esc(x.id)}" ${choice==='left'?'checked':''} ${disabled?'disabled':''}>采用 A</label><label class="${choice==='right'?'is-checked':''}"><input type="radio" name="choice-${esc(x.id)}" value="right" data-selection-choice="right" data-diff-id="${esc(x.id)}" ${choice==='right'?'checked':''} ${disabled?'disabled':''}>采用 B</label></div></div>`;
+    return `<div class="compare-diff-item ${choice!=='pending'?'is-selected-choice':''}" data-compare-diff="${esc(x.id)}"><button type="button" class="compare-diff-jump" data-compare-diff="${esc(x.id)}"><span class="compare-diff-index">${index+1}</span><span class="compare-diff-kind is-${esc(x.type)}">${esc(kind)}</span><span class="compare-diff-preview"><span>${esc(x.section||'正文')} · ${esc(x.left?.text||'')} ${x.right?.text?'→ '+esc(x.right.text):''}</span></span></button><div class="compare-choice" role="group" aria-label="${esc(x.id)} 采用 A 或 B"><label class="${choice==='left'?'is-checked':''}"><input type="radio" name="choice-${esc(x.id)}" value="left" data-selection-choice="left" data-diff-id="${esc(x.id)}" ${choice==='left'?'checked':''} ${disabled?'disabled':''}>采用 A</label><label class="${choice==='right'?'is-checked':''}"><input type="radio" name="choice-${esc(x.id)}" value="right" data-selection-choice="right" data-diff-id="${esc(x.id)}" ${choice==='right'?'checked':''} ${disabled?'disabled':''}>采用 B</label></div></div>`;
   }
   function renderDiffWindow(start){
     const list=$('compare-diff-list'),items=state.diffList||[];if(!list)return;
@@ -774,6 +808,7 @@
       this.container=container; this.blocks=document.blocks||[]; this.style=document.style||'';
       this.chunkSize=options.chunkSize||20; this.overscan=options.overscan||2;
       this.charsPerLine=options.charsPerLine||46; this.merged=Boolean(options.merged);
+      this.collectMarks=Boolean(options.collectMarks); this.marks=new Map();
       this.onChange=options.onChange||null; this.chunks=[]; this.first=0; this.last=0; this.frame=null; this.anchorLockUntil=0;
       this.blockIndex=new Map(); this.blocks.forEach((block,index)=>[block.blockId,...(block.blockIds||[]),...(block.diffIds||[])].filter(Boolean).forEach(id=>this.blockIndex.set(id,index)));
       this.scrollHandler=()=>this.schedule();
@@ -824,6 +859,15 @@
       if(!this.chunks.length)return;
       const [first,last]=forcedRange||this.currentRange(this.container.scrollTop,this.container.clientHeight||600);
       if(!force&&first===this.first&&last===this.last)return;
+      // Fast path: a forced refresh that would not mount, unmount or
+      // re-measure anything is a no-op. scrollToBlockIndex settles and the
+      // scroll-sync settle pass hit this constantly during linked scrolling
+      // (FL-D840); without it every call pays for two full layout passes.
+      if(first===this.first&&last===this.last){
+        let dirty=false;
+        for(let i=first;i<last;i++){const chunk=this.chunks[i];if(!chunk.el||!chunk.measured){dirty=true;break;}}
+        if(!dirty)return;
+      }
       const anchor=this.anchor(),anchorTop=this.totalBefore(anchor.index);
       const visible=!forcedRange?this.visibleBlock():null;
       const visibleNode=visible?this.chunks.find(chunk=>visible.index>=chunk.start&&visible.index<chunk.end)?.el?.children[visible.index%this.chunkSize]:null;
@@ -848,6 +892,18 @@
       }
       this.windowEl.replaceChildren(...this.chunks.slice(first,last).map(chunk=>chunk.el).filter(Boolean));
       for(let i=first;i<last;i++){const chunk=this.chunks[i];if(!chunk.measured&&chunk.el){chunk.height=Math.max(1,chunk.el.getBoundingClientRect().height);chunk.measured=true;}}
+      if(this.collectMarks){
+        // Collect diff-anchor geometry in the same layout pass as chunk
+        // measurement. drawLines reads this map instead of forcing its own
+        // 240-rect recache after every invalidation (FL-D840 classic view).
+        const paneRect=this.container.getBoundingClientRect(),scrollTop=this.container.scrollTop;
+        const marks=new Map();
+        for(const node of this.windowEl.querySelectorAll('[data-diff-id]')){
+          const r=node.getBoundingClientRect();
+          marks.set(node.dataset.diffId,{top:r.top-paneRect.top+scrollTop,height:r.height,leftX:r.left-paneRect.left,rightX:r.right-paneRect.left});
+        }
+        this.marks=marks;
+      }
       this.top.style.height=`${this.totalBefore(first)/this.scale}px`;
       this.bottom.style.height=`${this.totalAfter(last)/this.scale}px`;
       this.wrapper.style.minHeight='';
@@ -961,7 +1017,7 @@
 
   function onVirtualChange(){
     refreshDiffMarks();markActiveDiff();
-    if(state.viewMode==='classic'){state.diffPositions=null;drawLines();}
+    if(state.viewMode==='classic'){state.diffPositions=null;drawLinesDeferred();}
   }
   function clearVirtual(container){if(container?._virtualDoc){container._virtualDoc.destroy();container._virtualDoc=null;}}
   function ensureDoc(side){
@@ -977,8 +1033,8 @@
   }
   function renderClassicView() {
     if(!state.view||state.classicRendered||!state.docs)return;
-    virtualize($('compare-left-pane'),ensureDoc('left'),{charsPerLine:40,onChange:onVirtualChange});
-    virtualize($('compare-right-pane'),ensureDoc('right'),{charsPerLine:40,onChange:onVirtualChange});
+    virtualize($('compare-left-pane'),ensureDoc('left'),{charsPerLine:40,collectMarks:true,onChange:onVirtualChange});
+    virtualize($('compare-right-pane'),ensureDoc('right'),{charsPerLine:40,collectMarks:true,onChange:onVirtualChange});
     state.classicRendered=true;state.diffPositions=null;refreshDiffMarks();markActiveDiff();
   }
   function setFullscreenViewer(open) {

@@ -1,0 +1,50 @@
+{
+  "word_merged_scroll": {
+    "longtaskCount": 0,
+    "longtaskTotalMs": 0,
+    "frames": 264,
+    "frameGapP95Ms": 16.8,
+    "framesOver25msPct": 4.5,
+    "lineRebuilds": 0,
+    "lineRebuildMs": 0,
+    "refreshCalls": 964,
+    "refreshMs": 763.8,
+    "forceRefreshCalls": 4,
+    "forceRefreshMs": 28.3
+  },
+  "classic_left_scroll": {
+    "longtaskCount": 0,
+    "longtaskTotalMs": 0,
+    "frames": 256,
+    "frameGapP95Ms": 50,
+    "framesOver25msPct": 32,
+    "lineRebuilds": 3,
+    "lineRebuildMs": 0.3,
+    "refreshCalls": 722,
+    "refreshMs": 280,
+    "forceRefreshCalls": 2,
+    "forceRefreshMs": 12.1
+  },
+  "word_splitter_drag": {
+    "longtaskCount": 0,
+    "longtaskTotalMs": 0,
+    "frames": 135,
+    "frameGapP95Ms": 16.8,
+    "framesOver25msPct": 0,
+    "lineRebuilds": 0,
+    "lineRebuildMs": 0,
+    "refreshCalls": 9,
+    "refreshMs": 27.9,
+    "forceRefreshCalls": 5,
+    "forceRefreshMs": 27.8
+  },
+  "post_splitter_visible_index": {
+    "merged": 0,
+    "left": 0,
+    "right": 0
+  },
+  "post_gutter_visible_index": {
+    "left": 67,
+    "right": 67
+  }
+}

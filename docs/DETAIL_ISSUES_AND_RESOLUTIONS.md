@@ -8184,6 +8184,180 @@ H＝E×…
 - **二跑复测（2026-11-01，`fl-d695-b15-recheck2/`，$0.0268/23c/185s）**：同合同同引擎 G11 三义务全 CLOSED（B1:O1 ARTIFACT_VERIFIED、B1:O2 ALREADY_SATISFIED via claim_replay），delivery=complete——单发解释成立（模型 schema 抖动），不升级解剖。
 - **状态**：观察项（二跑未复发）；后续同形态在不同合同/不同 loop 再发时按 compose 校验字段定位升级。
 
+---
+
+## FL-D803 全站工作字体族双轨（V1 Segoe UI 系 vs V2 Inter 系）（2026-11-01，qa-frontend 第三轮）
+
+- **日期**：2026-11-01
+- **问题与影响**：V1 `body{font:14px "Segoe UI","Microsoft YaHei UI","PingFang SC"}`（app.css:2）与 V2 `Inter,"Noto Sans SC",system-ui`（src/styles/tokens.css:2）字体族不同——同为 13px 表体，视觉字号、字形灰度、数字宽度全不同，是用户「列表字体不同/看起来没改」根因之一。上轮 token 口径无法发现。
+- **证据**：`/tmp/opencode/qa/screenshots/design-audit-20261101/list-v1-overview.png` vs `list-v2-tasks.png` 并排对照。
+- **处理方法**：统一为 `Inter,"PingFang SC","Microsoft YaHei UI","Noto Sans SC",system-ui,sans-serif`（以 V2 栈为准、增中文回落），记入改动档。
+- **变更记录 2026-11-01（批1 施工）**：V1 body 改引 `--font-ui`、V2 tokens.css :root 改引 `--font-ui`（新增中文回落位）；浏览器计算样式断言双端 fontFamily 均以 Inter 打头。
+- **状态**：已解决（批1 验收：`screenshots/design-b1b-after/`）。
+- **证据**：`/tmp/opencode/qa/screenshots/design-audit-20261101/list-v1-overview.png` vs `list-v2-tasks.png`（前）；`design-b1b-after/L1-overview.png`、`L4-v2-tasks.png`（后）。
+
+## FL-D804 指引生成列表 .gg-table 独立散写（列表追责直证）（2026-11-01，qa-frontend 第三轮）
+
+- **问题与影响**：guide_generation.css:36/50-54 自建列表体系：表体 12px（全站 13px）、td padding 12px（token 10/12）、hover `#fdfbf9`（异色温）、容器自画圆角边框、行尾「查看」用框式 .btn-sm（其余列表为文本链接）。上轮漏网。
+- **证据**：`design-audit-20261101/list-v1-generation.png`。
+- **处理方法**：废除 .gg-table 收编 .table；hover 色改 `--surface-soft` 记档。
+- **变更记录 2026-11-01（批1 施工）**：类名 `.gg-table/.gg-table-wrap/.gg-badge` 保留（测试锚不可破），规格全收编：表体 12px→13px、td padding 12px→10px/12px、hover `#fdfbf9`→`--list-row-hover-bg`、容器自画边框圆角删除、行尾「查看」框式 btn-sm→btn-link 文本链、td small 对齐 --list-meta-size。六项浏览器计算样式断言全过。
+- **状态**：已解决（批1 验收）。
+
+## FL-D805 合同比对·合同组选择器游离列表语言（2026-11-01，qa-frontend 第三轮）
+
+- **问题与影响**：compare.js:74 合同组渲染为按钮式卡条 `.compare-pair-status`（圆点编号+双行文本），非列表行语言（compare.js:74）；且被折叠（联动 FL-D813）。
+- **处理方法**：重设计为列表行规格（编号+双侧文件名+状态徽标），平铺直呈。
+- **变更记录 2026-11-01（批1 施工）**：纯 CSS 行化（类名/数据属性/JS 零改动，锚点全保）：容器卡片网格→单列行列表；去卡描边/圆角/translateY 抬升；行 padding 10/12+border-bottom+hover --list-row-hover-bg；is-selected 改左侧 3px 品牌条+浅底；状态文本徽标化（is-done 绿/is-incomplete 黄/is-failed 红 pill 钩子）。折叠区平铺属批4（FL-D813）。
+- **变更记录 2026-11-01（批1 实证捕获补漏）**：行化实证截图环节揪出两处漏删覆写——`compare-pair-statuses{grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:10px}` 后位卡片网格覆写、`compare-pair-status.is-incomplete{border-color:#b58829;background:#fffcf2}` 行底色覆写（状态色改由徽标钩子唯一承担），均已删并留注释。浏览器计算样式实证：单列容器 ✓、3 行渲染 ✓、hover `--list-row-hover-bg` rgb(247,249,250) ✓（注意：hover 断言须等 120ms 过渡结束，立即读取为过渡中间色属误判）。实证截图 `design-b1b-after/L5a/L5b-compare-rows.png`（种子：`POST /api/compare/tasks`+`/uploads` 三合同组真实 docx）。
+- **状态**：行化已解决（批1 验收+实证补漏）；折叠平铺待批4。
+
+## FL-D806 V2 Pagination 组件句式未统一（批2 漏网）（2026-11-01，qa-frontend 第三轮）
+
+- **问题与影响**：批2 时误判 V2 Pagination 句式独立；批1 实施复核：句式「共 N 条 · 第 x / y 页」本就统一（组件源码已含），**真实差异=控件集与布局**：V2 无每页 select、按钮全尺寸、action-row 流式布局 vs V1 .pagination 左文右控件规格。
+- **处理方法**：V2 Pagination 按 V1 .pagination 规格重写（左「共 N 条 · 第 x / y 页」右 label+select+btn-sm 双按钮）；每页选项集双端统一 [20,50,100]（V1 app.js 删 10 档，grep 确认无测试锚）。
+- **验证**：tsc/vitest/build ✓；浏览器断言 每页 select 渲染+句式+游标样式。
+- **状态**：已解决（批1 验收）。
+
+## FL-D807 V1 输入框/下拉无 hover/focus 状态态（用户"很丑"实锤）（2026-11-01，qa-frontend 第三轮）
+
+- **问题与影响**：V1 `input[type=search],select`（app.css:4）仅 rest 态：无 hover 边色、无聚焦环/聚焦边色、select 原生无 chevron。
+- **证据**：`design-audit-20261101/input-v1-rest/hover/focus.png` 三态截图——focus 与 rest 无视觉差别。
+- **处理方法**：按组件令牌 3.1 全状态矩阵补齐（聚焦环 rgba(181,71,30,.14)）。
+- **变更记录 2026-11-01（批1 施工）**：V1 统一控件块落地——全类型 input/select/textarea 收编：hover 边 #aeb7c0、focus 边 accent+3px 环、禁用态、占位 #98a1a9、select appearance:none+唯一 chevron（SVG 数据链）、option 行高 28px。散写同步清除：login-card 7px、model-settings 8px、feishu-wizard 7px/38px/自造环、pagination select 适配。
+- **验证**：浏览器 5 项计算样式断言全过（hover/focus 环/chevron/圆角/占位色）；三态截图 `design-b1a-after/v1-*.png`。
+- **状态**：已解决（批1 验收）。
+
+## FL-D808 V1/V2 控件规格相互不一致 + V2 内部分裂（2026-11-01，qa-frontend 第三轮）
+
+- **问题与影响**：①select 形态 V1 原生 vs V2 自定义 chevron；②V2 内部 `.form-stack input` radius 8px（src/styles/app.css:61）vs 全局 6px；③hover 边色 `#aeb8c1` vs `#aeb7c0` 近色双值；④占位/禁用/选项行高/滚动容器两形态皆未规格化。
+- **处理方法**：按令牌 3.1 双端统一；近色并值与 8px→6px 双项记档。
+- **变更记录 2026-11-01（批1 施工）**：V2 控件块令牌化（--ctl-* 全引）、hover #aeb8c1→#aeb7c0、占位 #9aa3ad→#98a1a9、focus 环 .12→.14、补 disabled 态、focus outline:none（环代 outline，可访问性口径：ring 提供 3:1 对比提示）；form-stack input/textarea 8px 圆角散写删收编；data-table 第二处品牌色覆盖（app.css:161）揪出删除。
+- **验证**：浏览器断言 V2 hover/focus 环/form-stack 圆角=6px；三态截图 `design-b1a-after/v2-*.png`。
+- **状态**：已解决（批1 验收）。
+
+## FL-D809 动效散写无统一令牌（2026-11-01，qa-frontend 第三轮）
+
+- **问题与影响**：全端 15+ 种散写 transition（`.12s/.15s/.16s/.05s` 混杂、ease 与默认缓动混排）、一处 `none!important`、2 处 width/height 盒尺寸 transition（布局抖动源）、无时长/缓动令牌。
+- **处理方法**：动效令牌表收敛（三档时长+唯一缓动+允许属性集）。
+- **变更记录 2026-11-01（批2 施工）**：全端散写清零——V1 app.css 6 处+compare.css 4 处+V2 app.css 9 处裸 transition 全部收编 `--dur-fast/--dur-press + --ease-standard`（.12s/.15s/.16s 并值 120ms；btn 按压 transform 50ms 单独 --dur-press）；toast-in `.18s ease-out`→`--dur-med+唯一缓动`（第二缓动消灭）；grep 校验三端无裸时长 transition 残留。
+- **例外记档**：`.review-splitter/.compare-column-splitter` 伪元素 width/height 过渡保留（position:absolute 伪元素不改布局、无抖动源；理由与位置已写入令牌源 §2 例外注记）。
+- **验证**：浏览器计算样式断言 10/10——V1 btn `0.12s,0.12s,0.05s`+唯一缓动/toast `0.2s`，V2 btn/页面进场/表格行同值，reduced-motion 仿真双端过渡与动画全关。
+- **状态**：已解决（批2 验收）。
+
+## FL-D810 弹层/页面切换无动效 + 孤立动画语言（2026-11-01，qa-frontend 第三轮）
+
+- **问题与影响**：全部弹层显隐瞬切、页面切换瞬切，与 toast-in/feishu-pulse/spin 三套孤立动画并存——断裂感；prefers-reduced-motion 仅 toast 一处。
+- **处理方法**：弹层背板 fade 200ms+面板 250/150ms；页面进场 200ms；加载动画收编；reduced-motion 全站。
+- **变更记录 2026-11-01（批2 施工）**：V2 `@keyframes view-in`（opacity+translateY(4px), --dur-med）挂 `.main-content > *`（路由切换重挂载触发、页内数据刷新不重放——React 节点复用保证克制）；`panel-in`（translateY(-4px)）挂通知面板弹层。V1 决策记档：**页面级进场不实施**——V1 全量 innerHTML 重渲染架构下页内刷新（筛选/翻页）会重放整页动画，违背"克制微动效"用户口径；V1 反馈动效由 toast/按钮/控件态承担。reduced-motion 双端强化为 `transition:none+animation:none!important` 全局（V2 原 .01ms hack 统一口径）；无限循环动画（spin/feishu-pulse）按令牌属允许类，RM 下同样关闭。弹层背板/抽屉 250/150ms 规格随批4 结果页重构落地（当前 V1/V2 无模态弹层组件，仅 toast/下拉面板，已动效化）。
+- **验证**：浏览器断言 V2 view-in/panel-in 名称+时长+缓动、RM 下 animationName=none。
+- **状态**：已解决（批2 验收；抽屉/模态规格落地挂批4）。
+
+## FL-D811 徽标规格双形态 + V2 二次覆盖（2026-11-01，qa-frontend 第三轮）
+
+- **问题与影响**：V1 `.badge` fw700（app.css:4）vs V2 `.status-badge` fw650 且 src/styles/app.css:155 二次覆盖（padding 3px 8px+border）——同语义徽标两形态。
+- **处理方法**：统一 `--badge-*`（pill/11px/fw650/3px 9px/无 border），删覆盖（记档）。
+- **变更记录 2026-11-01（批1 施工）**：三形态归一——V1 .badge fw700→650 令牌化；V2 .status-badge 删 line 155 二次覆盖（border/padding 8px）；gg-badge radius 5px→pill、fw600→650、pad 4px 8px→3px 9px、默认灰近色并值（#f1f3f5→#f0f2f4、#56616d→#59646d）。compare 合同组状态文本同徽标规格（语义色钩子）。
+- **验证**：浏览器断言 V1/V2/gg 徽标 fw650+pill、V2 borderWidth=0。
+- **状态**：已解决（批1 验收）。
+
+## FL-D812 三禁令·V1 overview「第一次使用」常驻引导卡（2026-11-01，qa-frontend 第三轮）
+
+- **问题与影响**：compare.html:253 常驻引导卡对所有用户展示，老用户冗余——「不需要的信息直接删」对象；列表空态已有引导。
+- **处理方法**：删常驻卡、三步并入空态；先 grep 锚点再删。
+- **死统计下线联动**：test_workbench `test_failed_stats_are_unavailable_instead_of_zero` 整例删、`test_overview_units_filters_and_single_supported_mode` 首两句 `#overview-average`/`#overview-description` 单位断言删（锚的死 DOM 随批3a 删除）；后半筛选/单模式断言保留。
+- **变更记录 2026-11-01（批3a 施工，裁决修正）**：实证 app.js:270 触发条件——仅 `tasksLoaded && !tasksFailed && !dismissed && tasks.length===0 && 无筛选词` 才显，**非"常驻"**，空态用户唯一引导、有真实用户价值；裁决由"删卡"改为**保卡删重复尾注**（compare.html 引导卡内 `<div class="guide-note">处理结束后…证据与报告。</div>` 复述正文，已删）。原"删卡并入空态"裁决作废。
+- **状态**：批3a 部分已解决（尾注删）；卡片本体保留，不再施工。
+
+## FL-D833 浏览器套件 test_review_list_splitter_drag 间歇性环境抖动（终批回归复发，2026-11-01）
+
+- **问题与影响**：批4 回归与末批回归两次整批跑中，`tests/browser/test_workbench.py::test_review_list_splitter_drag` 以 playwright 连接层 Error（_connection.py:636）ERROR 收场（非断言 FAILED）；同例单跑两次均绿（6.3s/6.2s）。其他 84 例全绿。定性为整批运行资源/时序环境抖动（预计 85 例 Chromium 会话并发复用），非代码缺陷。
+- **处理方法**：不改动用例与源码；以「单跑复绿+整批再发即复核」的双证据口径记录；若后续复发频次升高（≥3 次）再评估给该用例加隔离 marker。
+- **验证**：批4（329.7s 整批）与末批（277.9s 整批）两次复现，两次单跑均绿。
+- **状态**：已知环境限制，留档观察；业务断言不受影响。
+
+## FL-D832 V1 指引页「规则组」残留九处（终批走查 screenshot 实证捕获，2026-11-01）
+
+- **问题与影响**：末批全站逐页截图（design-final/v1-05-guides.png）实证：V1 指引页顶提示、页内 tab「规则组启停」、行按钮「规则组」+同页 aria/tooltip/错码说明共九处残留旧词「规则组」，与批3a 定型词典「规则开关」不一致；grep 无测试锚（测试瞄准按钮 role=tab+锚 data-guide-page-tab 不改），确认安全。
+- **处理方法**：九处全换「规则开关」——compare.html:718 顶部引导、:722 tab 名、:803 区块标题+副词、:804-5 aria-label+提示；app.js 行按钮 label+title、加载提示「正在读取规则组…」、错条 GUIDE_GROUP_INVALID/EMPTY 说明、「规则组暂无法读取」、"该段未被任何规则组引用"、"解析完成后可配置规则组"。修复后全站 grep 「规则组」命中 0。
+- **验证**：node --check frontend/app.js 过；浏览器 V1 指引页重捕截图 v1-05-guides.png（design-final/round2）对照确认。
+- **状态**：已解决（终批末轮 commit）。
+
+## FL-D831 V2 页脚「隐私政策·服务条款」伪链接（批4 截图实证捕获，2026-11-01）
+
+- **问题与影响**：批4 v2-result-l0123.png 截图实证：V2 AppShell 页脚挂「隐私政策·服务条款」两组 `footer-link is-disabled` 伪链接（无目标页面、不可点）——与批3a V1 compare.html 已删页脚同源问题，V2 侧漏删。三禁令「删不需要的信息/禁废话」；V1/V2 体验不一致。
+- **处理方法**：AppShell.tsx 页脚删「隐私政策」「服务条款」两段 span 与分隔符，保留版权/版本/帮助中心。连带实证捕获两处过期引用：帮助弹层「状态说明」引用改前徽章名「结果不完整」→「未改完」（与 StatusBadge 词典一致）；「查看结果」步骤仍写「分别查看资格、处理和交付状态」（批4 结果页已收敛为单交付徽章）→改为按批4 L0-L1 动线描述「看清改了哪些条款、哪些地方要人工核对」。
+- **验证**：grep 全仓无「隐私政策」「服务条款」「结果不完整」残留；tsc+vitest 24/24+build 全过。
+- **状态**：已解决（随批4 commit）。
+
+## FL-D813 三禁令·compare 合同组折叠藏信息（2026-11-01，qa-frontend 第三轮）
+
+- **问题与影响**：compare.html:582 `.compare-groups-disclosure` 把核心操作对象藏折叠栏——用户明令禁止折叠栏藏信息充数。
+- **处理方法**：折叠废除、平铺直呈（联动 FL-D805 行化）。
+- **变更记录 2026-11-01（批4 施工）**：compare.html「查看与切换全部合同组」details 去壳，`.compare-pair-list` 常显+「合同组」小标题；compare.js 中 disclosure 死引用（`document.querySelector('.compare-groups-disclosure').open=...`）删；test_frontend_fixes.py:281 断言对象改 `.compare-pair-list`、test_v1_frontend_remediation.py:116 删 `details.compare-groups-disclosure summary` click 改 wait_for_selector；CSS 未删类（.compare-groups-disclosure 已无元素引用，保守留待样式全面扫）。
+- **状态**：已解决（批4 代码，回归随批4 整批复跑）。
+
+## FL-D814 三禁令·全站解释性废话小字逐条裁决（2026-11-01，qa-frontend 第三轮）
+
+- **问题与影响**：V1 compare.html 现存 23 处 `.subnote`+footnote 若干，大量系统语义复述；V2 同类待审。
+- **处理方法**：批4 逐条裁决（删/留+理由）；裁决表入册。
+- **变更记录 2026-11-01（用户令，总指挥转发）**：用户明令删除左下角「报告与诊断文件不作为最终合同」——**推翻本条原"法务声明保留"裁决，以用户为准**；同类同义小字一并删（compare.html:870 footnote、:1175 词汇表尾句，已删并验证无测试锚）；「Secret 加密保存」类安全说明用户未点名，仍保留。原裁决"保留有用户行动语义者"作废。
+- **状态**：施工口径已修正；全量废话小字逐条裁决仍随批4（FL-D812 同批）。
+- **变更记录 2026-11-01（批3a 执行）**：V1 侧已删——引导卡尾注（联动 FL-D812）、页脚「隐私政策/服务条款」disabled 占位+帮助层自我解释句（FL-D819 同义）、compare 提交前检查小字（文件名区逐文件提示已覆）、对比方向复述小字（图例已可视化）、连线小字、侧栏品牌重复字、帮助层「状态说明」三组枚举 dl（枚举罗列是典型解释性废话，译文已人话化）、guide_generation 列表范围说明（服务端口径外露）、「来源与使用边界」（三串内部 ID 整卡删）。逐条原文→新文见 `docs/frontend/COPY_REWRITE_LOG_20261101.md`。
+
+## FL-D815 三禁令·.tech 技术细节折叠（JSON dump 藏信息）（2026-11-01，qa-frontend 第三轮）
+
+- **问题与影响**：`.tech` `<details>` 输出技术 JSON——对用户无价值且折叠藏信息充数（双重违禁）。
+- **处理方法**：删；确有诊断价值字段转一行明文。
+- **变更记录 2026-11-01（批3a/3b 施工）**：V1 guide_generation「查看技术原因」折叠删（FL-D830 同批）；V2 Guides 高级详情×3（版本 ID 链+review.dimensions JSON+issues_detail JSON）、TaskDetail 高级详情（指引版本 dl）、DocumentDetailPage 高级详情（SHA-256+指引版本，下载按钮救出平铺）全删——V2 advanced-details 类已清零（Settings 系统状态 details 属管理员降权收纳、非技术 dump，裁决保留）。V1 app.js 指引版本「高级详情」×2 已于批3a 删。
+- **状态**：V2/V1 主要点位已解决；残余随批4 全站走查终扫。
+
+
+## FL-D816 全局文案人话化审查（用户令·追加，2026-11-01，qa-frontend 第三轮）
+
+- **问题与影响**：用户点名「展开人读详情」（"这是什么表述，正常会这么写吗"）。全站按钮/标签/空态/提示/表头/结算页存在生硬技术腔、自造词、内部口径外露。
+- **证据**：V2 Guides 页 src/pages/Guides/index.tsx:331 `<summary>查看人读详情</summary>`（且属折叠藏信息，联动 FL-D813 三禁令）；全量清单待批内逐页产出。
+- **处理方法**：全局文案审查，统统改成人话；产出**文案修改清单（原文→新文）逐条记档**（本文档追加节），纳入批次验收证据。
+- **状态**：批3a（V1）已施工——词典定型「修改模型/复核模型/规则开关/文件已完整交付/查看结果/处理失败」等 30+ 组替换，逐条入 `COPY_REWRITE_LOG_20261101.md` §1-3；测试锚（test_workbench 模型/ok:483 规则组启停）按 FL-D733 语义锚口径同步改；批3b（V2）随批3b 补登记。
+- **变更记录 2026-11-01（批3b 施工）**：V2 全域落成——**用户点名项 Guides「查看人读详情」details 平铺去除**（含错别字「条规条款」修正）；StatusBadge 全局徽章词典与 V1 对齐 11 组；ModelSettings 执行/检查模型→修改/复核模型（锚 test_frontend_v2:169-170 同步改）；TaskDetail 8 阶段轨道+「当前处理服务」+高级详情整轨删；DocumentDetailPage 文案层（下载词典/dl 栏目/高级详情去壳 SHA+版本 ID 删，结构重排留批4）；Compare 教学句×3 删+显示标记翻译；Review 待决定词典（锚 frontend/tests/review.test.tsx:42/66 语义改）；Users 角色/启停按钮人话化。逐条入 `COPY_REWRITE_LOG_20261101.md` §4（含 4.7 刻意不做清单：修订清单 tab 锚留批4、系统状态 details 管理员降权保留）。
+- **测试锚联动（test_frontend_v2.py）**：「比较的文档/原文档」移动端切换按钮→「对照结果/原合同」；「只支持 DOCX 文件。」→「只收 DOCX 文件」；「原版 → 对比版」教学句删后改锚空态「还没有合同对比任务」——三例复跑绿后套件全绿登记。断言本身（数量/结构）未动，符合 FL-D733。
+
+## FL-D817 全局布局优化并入设计收敛施工（用户令·追加，2026-11-01，qa-frontend 第三轮）
+
+- **问题与影响**：用户将"不限于原先设想的点"升级为明确施工范围：布局、字体、交互、页面嵌套关系、信息归属，覆盖所有页面+子页面+V1/V2。
+- **处理方法**：与设计收敛批计划合并施工、不另起炉灶；V1 静态域派 ivRkf1jH、V2 React 域派 81FirpsQ 审计+施工协助；不足时报备主线新开分担会话。
+- **状态**：已登记，随批3 起施工（批2 动效批先完成）。
+
+## FL-D818 合同修改结果页信息架构级重构（用户令·追加，2026-11-01，qa-frontend 第三轮）
+
+- **问题与影响**：用户原话"各种字密密麻麻堆在一起很不直观也很不方便看，好好想想怎么优化，而不是只是在原来的基础上进行微调"——结果页须重构不是微调。
+- **处理方法**：先定义结果页要回答的问题（我的合同改了什么/还有哪些没改完要人工核/产物在哪/怎么下载），再做信息架构级重构：分层呈现、视觉动线、产物区/核对区/报告区空间关系，**允许推翻现有 DOM 结构**。重构方案（线框描述+理由）写入 `docs/frontend/FRONTEND_REWORK_PLAN_20261101.md` 增补节，随批交付。
+- **变更记录 2026-11-01（批4 施工，收口）**：
+  - **V2 DocumentDetailPage L0-L3 重写**。L0 结论带=一句结构话「改完 N/N · 待人工核 M」+单徽章+主下载按钮（final→selected_final→working_final 优先链）+「逐条审阅修改」副按钮；「交付概览」6 字段卡删；验证中断卡并入 L0 警示行。L1 双栏（`.fundlex-detail-columns`）：左「改了哪些条款 N 处」常态标题行（条款名+「改为：」（前 40 字预览）+位置+徽标+行内 details 展开前后对照；restEdits 同列表去 rule_id 行首）；右「还要人工核 M 处」常态条目（位置/原因/引文；「诊断来源」dl 删；「查看指引要求」折叠删并入段落）。L2 下载区按目的三分组（最终用的合同/对照与审阅/报告与数据）；原「高级详情（SHA-256/版本 ID）」删；report_json/评测版不再折叠。L3 判定依据仅 ineligible/diagnosed 时显示「为什么不能处理/判定依据」。浏览器 12/12 实证+截图 `v2-result-l0123.png`。CSS 新增 `.fundlex-detail-columns`、`.fundlex-artifact-group`、`.fundlex-target-heading` 等。
+  - **V1 renderReport 同构**。`resultCounts()` 新计；结论带一句「改完 N/N · 待人工核 M」（fallback 旧 verdict）；「仍需人工核对」+「未自动修改的条款」双块合并为「还要人工核 · N 处」单块（「查看指引要求」折叠删并入段落；「高级详情（内部规则编号）」删除；exceptions 并入卡片）；L1 双栏 `.result-l1-columns` 新 CSS；`downloadSection` 三分组+词典同 V2（删 DOCX 后缀与「按人工选择的」修饰）；「处理依据与详细状态」大折叠整体删；toc/可直接使用 dl 删；验证中断 `result-warning` 并入 L0。**#detail-overlay 正名化**：`compare.html` 本源改 `role="region"` + 「返回任务」按钮；`app.js` 运行时 patch 三行删（dialog→region/aria-modal 移除），「消除弹层补丁」。
+  - **review 词典统一**：「修订清单」→「改动清单」——V1 app.js aside h3/splitter aria-label/空态加载（3 处），V2 ReviewPage tab + RevisionPanel h2；锚 test_frontend_v2.py:324-329（tab+heading）连带改。「合同呈现」按钮与快捷键 A/R 保留。
+  - **FL-D813 合同组折叠平铺**：compare.html「查看与切换全部合同组」details 去壳，`.compare-pair-list` 常显+「合同组」小标题。
+  - **测试锚同步（test_workbench.py，FL-D733 语义锚口径）**：业务结论→结论（2 处）、「最终版 DOCX」→「最终版」（count==0 语义保留）、「工作文件（未完成）」→「选择版」、「仍需人工核对 · 1 项」→「还要人工核 · 1 处」。
+  - **验证**：tsc+vitest 24/24+build 全过；V1 浏览器实证 10/10（detail overlay 打开/L0 一句+无三徽章/L1 合并+指引直露/L2 三分组+无诊断折叠/L3 隐藏）+截图 `v1-result-l0123.png`；V1/V2 四套件回归随批4 整批复跑。
+- **状态**：批4 施工完成（等回归全绿后随批4 commit）。
+
+## FL-D819 删除「报告与诊断文件不作为最终合同」小字（用户令·追加，2026-11-01，qa-frontend 第三轮）
+
+- **问题与影响**：用户明令删除左下角该句；推翻 FL-D814 原"法务声明保留"裁决（以用户为准）。
+- **处理方法**：compare.html:870 `<p class="footnote">报告与诊断文件不作为最终合同。</p>` 整段删除；:1175 词汇表「交付完整性」尾句"报告和诊断文件不作为最终合同。"删除；grep 确认无测试锚；「Secret 加密保存」类保留（用户未点名）。
+- **状态**：已解决（本次提交；浏览器回归随批1 整批复跑）。
+
+## FL-D830 预算类错误码用户文案中性化（总指挥裁决，2026-11-01，qa-frontend 第三轮）
+
+- **问题与影响**：app.js:22 四码（MODEL_GLOBAL_CALL_BUDGET_EXCEEDED / MODEL_COST_BUDGET_EXCEEDED / MODEL_CALL_BUDGET_EXCEEDED / MODEL_LEDGER_UNAVAILABLE）与 guide_generation.js:75 BUDGET 分支、:31 `budget_exhausted: 预算已用尽` 阶段标签，向用户暴露「额度已用完/费用上限/核对预算/调用费用记录」等预算话术——与 FL-D445（用户 2026-10-28：真实模型调用无费用审批、无本地 cap）政策口径冲突。
+- **主线实查**：model_budget.py 两码仅在 `enforce_limits=True` 触发；生产 env 未设 `FUNDLEX_MODEL_ENFORCE_LIMITS`（纯账本观测模式），生产不触发，符合 FL-D445（无预算门禁）。
+- **裁决与处理（总指挥 2026-11-01）**：该状态在政策下不应存在，真出现=配置事故，不给用户政策冲突的技术解释——两裁决码用户文案改中性系统错误「任务处理遇到模型调用限制，请稍后重试；若持续出现请联系支持」。**执行口径**：同族同义码（MODEL_CALL_BUDGET_EXCEEDED 单模型版、MODEL_LEDGER_UNAVAILABLE 账本版）一并中性化（分离会造成同型错误两种口径）；guide_generation.js BUDGET 分支并入 MODEL_ 通用中性文案（含 `budget_exhausted` 阶段标签「预算已用尽」→「已达本轮处理上限」）；同函数 `查看技术原因` details 折叠（三禁令双重违禁）一并删。后端单测仅锚错误码本身（test_api_store.py:334 等），无文案锚。
+- **深层清理（不在本条范围）**：enforce_limits 死路径及其余入口的政策一致性，主线另行挂引擎侧登记。
+- **测试锚联动（FL-D733 语义锚口径）**：`test_compare_failed_pair_shows_structured_failure_diagnostics`（FL-D546 结构化诊断断言）改锚为人话版「处理失败：文本比对环节出错，请重新创建合同组」——**FL-D546 的"阶段+可重试"信息保留**（阶段词典化、可重试转行动指令），error_code/RuntimeError 类型按 FL-D816 退出用户面；`test_guide_badges` 徽标锚「生成结束 · 仍有问题」→「已完成 · 仍有问题」；两例已复跑绿。
+- **状态**：已解决（批3a 代码+锚联动复跑绿；随批3a 整批回归）。
+- **号段**：FL-D830~839 归 qa-frontend 本轮追加批次使用（总指挥 2026-11-01 授予）。
+
+
 ## FL-D801 发布留存事务自动清理机制（FL-D724 建议项实施）（2026-11-01，主线）
 
 - **实施**：`fundlex-publish.sh` 发布收尾统一调 `prune_retained_transactions`：保留最新 `$FUNDLEX_PUBLISH_RETAINED_KEEP`（默认 3）份事务，其余清删；当前事务自豁免；匹配仅 `.fundlex-publish-*` 前缀不碰别物。
@@ -8245,6 +8419,43 @@ H＝E×…
 - **mutation 测试**（`tests/test_loop6_repairs.py` 增 3 例，累计 11）：恒等闭合/混合事实不坍缩+守卫仍 fail-closed/非类替换规则与未验证事实拒坍缩。
 - **真实复验矩阵（2026-11-01，`/tmp/opencode/qa/loop8-fix-matrix/`，HEAD 686f080）**：**B05 complete**（0 holds、24/24 CLOSED_REPLAY、audit issues=∅、recovery=∅，$0.0311/25c——本轮模型直接判 G02 satisfied，恒等坍缩无需实发，病灶形态由 mutation 用例按 loop-7 ledger 形状离线覆盖）；**B12 complete**（0 holds、24/24 CLOSED，$0.0229/23c）；**B15 complete**（0 holds、21/21 CLOSED，$0.0265/23c）。全量回归 2543/0/139。
 - **状态**：已修复并验证（qa-recall-miss-20261031@686f080 起）；恒等坍缩实发留 loop-8 全波观察（复合 rebind 形态再现时判定路径）。
+
+## FL-D860 经 API 新建的调度会话默认绑定失效模型 deepseek-v4.1-flash，静默空转（2026-11-01，主线）
+
+- **发现日期**：2026-11-01（巡线发现 qa-gg-audit/qa-compare-ux 两新线 73min 零产出排查确诊）。
+- **问题与影响**：`POST /api/session` 创建的会话继承 serve 全局默认模型 `fundlex/deepseek-v4.1-flash`；该模型在 worker 会话中**每条 assistant 消息 1~2s 完成且 content 为空**——不报错、不产出、不执行任何工具调用，表面"处理成功 idle"。两线停滞约 1.5h（无状态文件、无 git 动作）。健康八线均为创建时指定 `hon-maas/kimi-k3` 故正常。
+- **证据**：`/api/session/<id>/message` 中 assistant message `model={"id":"deepseek-v4.1-flash","providerID":"fundlex"}`、created→completed≈1.2s、content=[]×连续多条；对照健康线前端 l8yCbACU=`hon-maas/kimi-k3`；serve 配置 `/home/opencode/.config/opencode/opencode.json` `"model": "fundlex/deepseek-v4.1-flash"`。
+- **处理方法**：①根治口径——**一切经 API 新建的调度会话必须在 create payload 显式钉模型**：`{"model":{"id":"kimi-k3","providerID":"hon-maas","variant":"high"}}`（schema 为 Model.Ref：`{"id","providerID"[,"variant"]}`，`"hon-maas/kimi-k3"` 字符串或 `{providerID,modelID}` 均 400）；②prompt 体内带 model 字段与 PATCH /api/session 均改不了既建会话模型（实证无效）；③两线以新会话重建（gg=XMWmAw4/ux=OhgIvj8），钉模型后 150s 内验证到真实产出（assistant content 非空+状态文件落盘）；④废弃僵尸会话 A4vO9d5/nHOKfnt 不再发令。
+- **状态**：已解决（调度 SOP 更新）；遗留建议：serve 全局默认模型应改成健康模型或 flash 修复，挂运维待办。
+
+## FL-D670 第二波边界清单单列：不可解析 0 / 受保护 0 / 货币市场 3 留分母 / 零目标 16 留分母（2026-11-01，第二波标签线）
+
+- **发现日期**：2026-11-01（响应主线「第二波 100 份准备激活」预告令，对既有冻结产物做边界复核并单列清单）。
+- **结论（非问题，属边界口径登记）**：第二波 100 份全部进入修改分母——①语料 514 份顶层 docx 全部可解析（parse_errors=0、无 .doc）；②入样 0 份受保护（protected_cases=[]，逐案 protected=false）；③货币市场 3 份（W2D52/W2D67/W2D71）作为指引「明确排除类型」分层样本**保留分母**，由盲读标签逐条裁适用性；④16 份零目标案（全部判 satisfied/not_applicable，预期修改数=0）**保留分母**，引擎对其产生任何修改应按过度修改计；⑤excluded_from_modification_denominator=[]。清单工件 `docs/evidence/boundary-second-batch-20261031.json`（sha256 `1703702101b3846bd6416c238601408a181b1d88d3454437d427d3983778ef1d`），纯确定性推导自冻结 selection/labels/verification（推导前 sha 自校验通过）。
+- **处理方法**：边界情形不剔分母、不预排除，全部经盲读裁决并留证据；清单供评分工位对齐分母口径。
+- **状态**：已登记并完成（边界清单随标签冻结一并就绪，等主线放行令跑评测）。
+- **变更记录**：2026-11-01 新增（第二波标签线，固定子池 FL-D670..679 首用）。
+
+## FL-D861 B01 G12/G13@p207 悬空残句非阻塞 review_items 带标交付（2026-11-01，主线登记）
+
+- **来源**：loop-8 观察项（feat-recall 报）：B01 一案 G12/G13@p207 存在悬空残句，引擎按 review_assisted 语义以**非阻塞 review_items 带标交付**（自 loop-6 在树的语义），不阻塞 complete、不计 fc/wrong。
+- **主线裁决**：行为符合设计语义（可交付但向用户明示需人工复核点），登记为已知形态观察项；第二波/留出复现时再评估是否升级机制。号段：recall 域新池 FL-D862~869 已发 feat-recall。
+- **状态**：观察项 open。
+
+## FL-D888 主线验收口径再次失守：以 grep 指纹/测试绿代替逐页面用户视角验收（2026-11-01，用户投诉，开放）
+
+- **发现日期**：2026-11-01（用户对发布#4 界面八连投诉，全部核实属实）。
+- **问题与影响**：主线第三轮"人话文案清零/全站统一/删除废话"的验收采用代码 grep 指纹+测试套件+子线汇报，未逐页面（含深口子页面）以用户视角走查。后果：①规则开关子页「展开人读详情」漏改（生产 app.js:1311 实锤，声称"清零"不成立）②列表字体/按钮不一致第三次被用户抓出 ③结果页口语化措辞、废话文案（compare.html:718）残留 ④指引版本对比真实 bug 未发现即发布 ⑤「全页面+子页面」清单本身遗漏规则开关/版本对比两个子页面——清单漏=没人改没人验。
+- **根因**：需求以抽象转述下发（"列表统一"），子线按各自理解执行；主线验收用文件证据代替肉眼对照——与上轮已登记的"不接受代码 token 对齐口径"教训同族复发。
+- **处理方法**：①用户八条逐条立案 FL-D880~887 返工令（验收=修复前后并排截图+用户原话断言+主线亲自在生产界面复验）；②返工先产出全页面/子视图清单再动工；③今后"删干净/改一致"类需求一律界面元素级清单对账，禁止抽象转述；④发布门槛加入"主线逐页面生产走查"步骤。
+- **状态**：open（返工令已发前端线，FL-D880~887 销号后发布#5）。
+
+## FL-D889 交接质控铁律：工单必须含用户原话逐字+实锤+终态+验收，禁止抽象压缩（2026-11-01，用户二次批评，生效中）
+
+- **用户原话**：「我希望每一个对话都能充分地尽职地完成他们分内的任务，所以你给他们交接工作时要说清楚，不要随便给一段prompt」；「我明明跟你说的很清楚了让你跟他们说清楚，为什么你要说的这么简略呢」
+- **问题**：主线向子线下发需求时把用户的具体表述压缩成抽象词（典型案例：用户三次说「修改列表字体加粗/查看红字无框 vs 比对列表不加粗/黑字有框」，工单只写「列表统一」四个字），子线按各自理解执行后落空；FL-D888 验收失守与本条同族（传递端失了真，验收端才查不出）。
+- **铁律（立即生效，写入看板供全部后续工单遵守）**：每份子线工单必须包含五要素——①用户/上游原话逐字引用 ②现场实锤（文件:行号/现状文案/现象） ③期望终态的精确描述（可断言） ④验收标准（界面证据，非测试绿） ⑤禁止项与汇报格式。禁止把需求压缩成抽象短语下发。
+- **状态**：已执行（FL-D880~887 完整版交接已按五要素重发）；后续工单逐份自检。
 
 ## FL-D695 B15 loop-5 新回归：G09@p159 audit 翻转 needs_edit→absent（MISS_TARGET_RESOLUTION）→ 交付门诚实扣全案（complete→no artifact）（2026-11-01，qa-feat-recall）
 

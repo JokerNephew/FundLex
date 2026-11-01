@@ -337,3 +337,276 @@ def test_identity_helper_guards():
                         "subscription_fee_group": "UNRESOLVED",
                         "service_fee_group": "VERIFIED"})
     assert target_class_ops_identity(rule, ["G02:0"], unverified) is False
+
+
+# ---------------------------------------------------------------------------
+# FL-D862/863/864: holdout first-check families
+# ---------------------------------------------------------------------------
+
+def _guide_path():
+    return Path(__file__).resolve().parents[1] / "guides/builtin_guide_v1.json"
+
+
+def _facts_single():
+    """Single unlettered class, no sales service fee (BH04 shape)."""
+    from fundlex.recall import ClassFact, Facts
+    return Facts(fund_type="open_regular", fund_type_quote="某某纯债债券型证券投资基金基金合同",
+                 fund_type_basis="标题",
+                 classes=(ClassFact(name="__single__", subscription_fee=True,
+                                    service_fee=False, current=True, rate="0.8%",
+                                    quote="本基金"),),
+                 floating_management_fee=False, floating_quote="本基金合同经中国证监会核准。",
+                 floating_basis="无浮动安排", notes="",
+                 quotes_verified={"floating": True}, problems=(),
+                 fact_status={"share_class_structure": "VERIFIED",
+                              "subscription_fee_group": "VERIFIED",
+                              "service_fee_group": "VERIFIED"})
+
+
+def _facts_multi_no_svc():
+    """Multi-class, every class subscription-fee only (BH07 FOF shape)."""
+    from fundlex.recall import ClassFact, Facts
+    return Facts(fund_type="open_regular", fund_type_quote="某养老目标FOF基金合同",
+                 fund_type_basis="标题",
+                 classes=(ClassFact(name="A", subscription_fee=True, service_fee=False,
+                                    current=True, rate="1.2%", quote="A类"),
+                          ClassFact(name="Y", subscription_fee=True, service_fee=False,
+                                    current=True, rate="1.2%", quote="Y类")),
+                 floating_management_fee=False, floating_quote="本基金合同经中国证监会核准。",
+                 floating_basis="无浮动安排", notes="",
+                 quotes_verified={"floating": True}, problems=(),
+                 fact_status={"share_class_structure": "VERIFIED",
+                              "subscription_fee_group": "VERIFIED",
+                              "service_fee_group": "VERIFIED"})
+
+
+def _apply_guide_applicability(facts):
+    guide = json.loads(_guide_path().read_text())
+    ledger = compile_obligations(guide)
+    apply_facts(ledger, facts)
+    return ledger
+
+
+def test_guide_conditions_single_class_not_applicable():
+    """FL-D863: single unlettered class makes class/service rules N/A (BH04)."""
+    ledger = _apply_guide_applicability(_facts_single())
+    for obligation_id in ("G01:B1:O1", "G02:B1:O1", "G02:B1:O2", "G03:B1:O1",
+                          "G04:B1:O1", "G04:B1:O2", "G15:B1:O1", "G16:B1:O1",
+                          "G17:B1:O1", "G18:B1:O1"):
+        record = ledger.record(obligation_id)
+        assert record.applicability.status == "FALSE", (obligation_id, record.applicability)
+        assert record.completion == "NOT_APPLICABLE"
+
+
+def test_guide_conditions_multi_class_no_service():
+    """Multi-class product without a service-fee class (BH07 post-FL-D862)."""
+    ledger = _apply_guide_applicability(_facts_multi_no_svc())
+    for obligation_id in ("G01:B1:O1", "G02:B1:O1", "G03:B1:O1", "G04:B1:O1"):
+        assert ledger.record(obligation_id).applicability.status == "TRUE", obligation_id
+    for obligation_id in ("G15:B1:O1", "G16:B1:O1", "G17:B1:O1", "G18:B1:O1"):
+        record = ledger.record(obligation_id)
+        assert record.applicability.status == "FALSE", (obligation_id, record.applicability)
+
+
+def test_guide_conditions_multi_class_with_service():
+    """A/C product keeps the service-fee rules applicable (BH02/dev shape)."""
+    ledger = _apply_guide_applicability(_facts())
+    for obligation_id in ("G01:B1:O1", "G02:B1:O1", "G03:B1:O1", "G04:B1:O1",
+                          "G15:B1:O1", "G16:B1:O1", "G17:B1:O1", "G18:B1:O1"):
+        record = ledger.record(obligation_id)
+        assert record.applicability.status == "TRUE", (obligation_id, record.applicability)
+
+
+def test_fee_value_letterless_default_subscription_sentence():
+    """FL-D862(a): a letterless default fee sentence proves the class polarity."""
+    from fundlex.fee_evidence import fee_value
+    assert fee_value("申购费用由投资人承担，不列入基金财产。",
+                     "subscription_fee", "A") is True
+    # Mutation: the allowance is subscription-only; the service fee stays unread.
+    assert fee_value("申购费用由投资人承担，不列入基金财产。",
+                     "sales_service_fee", "A") is None
+    # Mutation: a letterless special-channel clause still proves nothing.
+    assert fee_value("通过直销机构网上交易申购本基金可享费率优惠，详列公告。",
+                     "subscription_fee", "A") is None
+
+
+def test_fee_value_exemption_proves_default_fee():
+    """FL-D862(b): 豁免（含可以豁免）presupposes the fee regime exists."""
+    from fundlex.fee_evidence import fee_value
+    assert fee_value("本基金可以豁免Y类基金份额的申购费用，具体规定请参见招募说明书或相关公告，"
+                     "法律法规另有规定的从其规定。", "subscription_fee", "Y") is True
+    # Exemption of the *other* fee must not leak into this class's polarity.
+    assert fee_value("本基金可以豁免Y类基金份额的申购费用，具体规定请参见招募说明书。",
+                     "subscription_fee", "A") is None
+
+
+def test_multi_class_no_service_evidence(tmp_path):
+    """FL-D862(c): zero class-bound service-fee sentences prove the empty group."""
+    from fundlex.recall import ClassFact, multi_class_no_service_evidence
+    classes = (ClassFact(name="A", subscription_fee=True, service_fee=False,
+                         current=True, rate=None, quote="A类"),
+               ClassFact(name="Y", subscription_fee=True, service_fee=False,
+                         current=True, rate=None, quote="Y类"))
+    fof = _inspect(tmp_path, "fof", [
+        "本基金根据销售账户的不同，将基金份额分为A类基金份额和Y类基金份额。",
+        "基金管理人运用本基金财产申购自身管理的其他基金（ETF除外），应当通过直销渠道申购"
+        "且不收取申购费、赎回费、销售服务费等销售费用。",
+        "申购费用由投资人承担，不列入基金财产。",
+    ])
+    assert multi_class_no_service_evidence(fof, classes) is True
+    bound = _inspect(tmp_path, "bound", [
+        "本基金根据收费方式的不同，将基金份额分为A类基金份额和C类基金份额。",
+        "C类基金份额的销售服务费按前一日C类基金份额资产净值的0.50%的年费率计提。",
+    ])
+    ac_classes = (classes[0],
+                  ClassFact(name="C", subscription_fee=False, service_fee=False,
+                            current=True, rate=None, quote="C类"))
+    assert multi_class_no_service_evidence(bound, ac_classes) is False
+    service_classes = (classes[0], ClassFact(name="Y", subscription_fee=True,
+                                             service_fee=True, current=True,
+                                             rate=None, quote="Y类"))
+    assert multi_class_no_service_evidence(fof, service_classes) is False
+
+
+# FL-D864: G18 replace absence certificate -----------------------------------
+
+def _g18_contract_paragraphs(extra_income=()):
+    return [
+        "基金利润指基金利息收入、投资收益、公允价值变动收益和其他收入扣除相关费用后的余额。",
+        "基金可供分配利润指截至收益分配基准日基金未分配利润与未分配利润中已实现收益的孰低数。",
+        *extra_income,
+        "本基金的收益分配原则如下：在符合有关基金分红条件的前提下，本基金可以进行收益分配。",
+    ]
+
+
+def _g18_obligations(facts):
+    guide = json.loads(_guide_path().read_text())
+    ledger = compile_obligations(guide)
+    apply_facts(ledger, facts)
+    return guide, ledger
+
+
+def test_g18_absence_certificate_scoped(tmp_path):
+    """BH02 shape: old wording absent from the income scope -> certificate."""
+    from types import SimpleNamespace
+    from fundlex.recall import absent_delete_coverage
+    insp = _inspect(tmp_path, "g18", _g18_contract_paragraphs())
+    guide, ledger = _g18_obligations(_facts())
+    rules_by_id = {rule["rule_id"]: rule for rule in guide["groups"]}
+    scopes = {"G18": SimpleNamespace(locations=frozenset(
+        [f"p{index}" for index in range(4)]))}
+    records = absent_delete_coverage(rules_by_id, [], insp, scopes, ledger,
+                                     facts=_facts())
+    assert "G18:0" in records
+    assert records["G18:0"]["kind"] == "rule_scope_scan"
+
+
+def test_mutation_g18_cert_blocked_by_service_fee_mention(tmp_path):
+    """A surviving 销售服务费 mention in the income scope blocks the certificate."""
+    from types import SimpleNamespace
+    from fundlex.recall import absent_delete_coverage
+    insp = _inspect(tmp_path, "g18x", _g18_contract_paragraphs(
+        extra_income=("由于本基金A类基金份额不收取销售服务费，C类份额费率不同，收益分配存在差异。",
+                      )))
+    guide, ledger = _g18_obligations(_facts())
+    rules_by_id = {rule["rule_id"]: rule for rule in guide["groups"]}
+    scopes = {"G18": SimpleNamespace(locations=frozenset(
+        [f"p{index}" for index in range(4)]))}
+    records = absent_delete_coverage(rules_by_id, [], insp, scopes, ledger,
+                                     facts=_facts())
+    assert "G18:0" not in records
+
+
+def test_mutation_g18_cert_blocked_by_unverified_facts(tmp_path):
+    """Unverified fee groups fail closed: no absence certificate."""
+    from types import SimpleNamespace
+    from fundlex.recall import absent_delete_coverage
+    insp = _inspect(tmp_path, "g18u", _g18_contract_paragraphs())
+    facts = _facts()
+    object.__setattr__(facts, "fact_status",
+                       {"share_class_structure": "VERIFIED",
+                        "subscription_fee_group": "UNKNOWN",
+                        "service_fee_group": "VERIFIED"})
+    guide = json.loads(_guide_path().read_text())
+    ledger = compile_obligations(guide)
+    for record in ledger.records:
+        if record.obligation_id == "G18:B1:O1":
+            continue
+    scopes = {"G18": SimpleNamespace(locations=frozenset(["p0", "p1", "p2", "p3"]))}
+    rules_by_id = {rule["rule_id"]: rule for rule in guide["groups"]}
+    records = absent_delete_coverage(rules_by_id, [], insp, scopes, ledger,
+                                     facts=facts)
+    assert "G18:0" not in records
+
+
+# FL-D863: G06 dual-scope replay gate ----------------------------------------
+
+class _ShimSpan:
+    """Paragraph span carrying the structure metadata of a real DOCX run."""
+
+    def __init__(self, location, text, section_path):
+        self.location = location
+        self.text = text
+        self.zone = "body"
+        self.section_path = section_path
+
+
+class _ShimInspection:
+    """Inspect-alike whose spans expose section_path (LOF no-heading shape)."""
+
+    def __init__(self, texts, section_path="第三部分基金的基本情况"):
+        self.paragraphs = tuple(
+            _ShimSpan(f"p{index}", text, section_path)
+            for index, text in enumerate(texts))
+        self.source_sha256 = "0" * 64
+
+    def by_location(self, location):
+        for span in self.paragraphs:
+            if span.location == location:
+                return span
+        raise KeyError(location)
+
+
+def _g06_obligation_stub():
+    from types import SimpleNamespace
+    spec = SimpleNamespace(rule_id="G06", operation_id="G06:0", op="delete",
+                           old_text="本基金各类基金份额之间不得相互转换。",
+                           alternatives=(), new_text="")
+    return SimpleNamespace(spec=spec, obligation_id="G06:B1:O1",
+                           applicability=SimpleNamespace(status="TRUE"))
+
+
+def _g06_coverage(insp, locations):
+    return {"kind": "rule_scope_scan", "operation_id": "G06:0",
+            "obligation_id": "G06:B1:O1", "scanned_locations": list(locations),
+            "document_sha256": insp.source_sha256}
+
+
+def test_g06_replay_gate_falls_back_to_rule_scope(tmp_path):
+    """LOF shape: no 份额类别设置 heading; boundary scope closes the delete."""
+    from fundlex.generation.effects import evaluate_operation_effect
+    insp = _ShimInspection([
+        "本基金设A类、C类、E类三类基金份额。",
+        "在符合法律法规且不损害持有人利益的前提下，基金管理人可以调整基金份额类别设置。",
+        "七、基金的财产",
+        "基金财产独立于基金管理人、基金托管人的固有财产。",
+    ])
+    boundary = {f"p{index}" for index in range(2)}
+    result = evaluate_operation_effect(_g06_obligation_stub(), insp, insp, [], [],
+                                       _facts(), boundary_locations=boundary,
+                                       absent_coverage=_g06_coverage(insp, boundary))
+    assert result.state == "PASS", result.as_dict()
+
+
+def test_mutation_g06_gate_still_closed_without_boundary(tmp_path):
+    """Old behaviour preserved: no subsection heading and no boundary -> OPEN."""
+    from fundlex.generation.effects import evaluate_operation_effect
+    insp = _ShimInspection([
+        "本基金设A类、C类两类基金份额。",
+        "七、基金的财产",
+        "基金财产独立于基金管理人、基金托管人的固有财产。",
+    ])
+    result = evaluate_operation_effect(_g06_obligation_stub(), insp, insp, [], [],
+                                       _facts(), boundary_locations=None)
+    assert result.state == "OPEN"
+    assert "g06_subsection_scope_missing" in str(result.reason)

@@ -19,10 +19,10 @@ function validateFiles(files: File[], maxBytes?: number): { accepted: File[]; is
   const seen = new Set<string>()
   for (const file of files) {
     const key = file.name.toLowerCase()
-    if (!/\.docx$/i.test(file.name) || (file.type && file.type !== DOCX && file.type !== 'application/octet-stream')) issues.push({ file, message: '只支持 DOCX 文件。' })
-    else if (!file.size) issues.push({ file, message: '空文件无法上传。' })
-    else if (maxBytes && file.size > maxBytes) issues.push({ file, message: `文件超过 ${Math.round(maxBytes / 1024 / 1024)} MB 限制。` })
-    else if (seen.has(key)) issues.push({ file, message: '同一批次中存在同名文件。' })
+    if (!/\.docx$/i.test(file.name) || (file.type && file.type !== DOCX && file.type !== 'application/octet-stream')) issues.push({ file, message: '只收 DOCX 文件' })
+    else if (!file.size) issues.push({ file, message: '这个文件是空的' })
+    else if (maxBytes && file.size > maxBytes) issues.push({ file, message: `这个文件超过 ${Math.round(maxBytes / 1024 / 1024)} MB` })
+    else if (seen.has(key)) issues.push({ file, message: '这次选的文件里有重名的' })
     else { seen.add(key); accepted.push(file) }
   }
   return { accepted, issues }
@@ -107,7 +107,7 @@ export function NewTaskPage() {
     event.preventDefault()
     if (!name.trim() && !taskId) { setError('请填写任务名称。'); return }
     if (!files.length) { setError('请至少选择一个可上传的 DOCX 文件。'); return }
-    if (!taskId && (guide.error || !guide.data?.current?.id)) { setError('当前指引不可用，请先在指引配置中完成解析或启用。'); return }
+    if (!taskId && (guide.error || !guide.data?.current?.id)) { setError('还没可用的修改指引，先去「修改指引」页传一份或启用一份。'); return }
     setBusy(true); setError(''); setProgress(0)
     try {
       const uploadIds = files.map((file) => clientIds[file.name.toLowerCase()] || asId(file))
@@ -147,7 +147,7 @@ export function NewTaskPage() {
       if (rejected.length) {
         const rejectedIds = new Set(rejected.map((receipt) => receipt.client_id))
         setFiles((current) => current.filter((file) => rejectedIds.has(clientIds[file.name.toLowerCase()] || asId(file))))
-        setError(`${rejected.length} 个文件未接收。请修正后重新选择文件，再从此页补传。`)
+        setError(`有 ${rejected.length} 个文件没传上去，改好文件名或内容后重新选。`)
         return
       }
       if (!taskId) await sealMutation.mutateAsync(created.id)

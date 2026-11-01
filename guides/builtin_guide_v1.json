@@ -18,8 +18,8 @@
      "op": "append",
      "new_text": "投资者通过直销机构（含基金管理人及其销售子公司，下同）申购本基金A类基金份额时，不收取认购/申购费用；通过直销机构申购的C类基金份额，不收取销售服务费。对于投资者通过直销机构之外的其他销售机构申购的C类基金份额且持续持有期限超过一年的，不再继续收取销售服务费。",
      "condition": {
-      "kind": "none",
-      "value": null
+      "kind": "class_count",
+      "value": "multiple"
      },
      "operation_id": "G01:0",
      "group_kind": "INDEPENDENT",
@@ -53,8 +53,8 @@
      "old_text": "A类基金份额",
      "new_text": "A类、B类基金份额",
      "condition": {
-      "kind": "none",
-      "value": null
+      "kind": "class_count",
+      "value": "multiple"
      },
      "operation_id": "G02:0",
      "group_kind": "INDEPENDENT",
@@ -65,8 +65,8 @@
      "old_text": "C类基金份额",
      "new_text": "C类、D类基金份额",
      "condition": {
-      "kind": "none",
-      "value": null
+      "kind": "class_count",
+      "value": "multiple"
      },
      "operation_id": "G02:1",
      "group_kind": "INDEPENDENT",
@@ -91,15 +91,15 @@
   {
    "rule_id": "G03",
    "title": "基金的基本情况-份额类别设置：",
-    "section_hint": "基金的基本情况",
+   "section_hint": "基金的基本情况",
    "requirement": "在基金的基本情况份额类别设置原条款后增加新条款，明确通过直销机构申购A类基金份额不收取认购/申购费用、通过直销机构申购的C类基金份额不收取销售服务费，以及通过其他销售机构申购的C类基金份额持续持有超过一年不再继续收取销售服务费。",
    "operations": [
     {
      "op": "append",
      "new_text": "投资者通过直销机构（含基金管理人及其销售子公司，下同）申购本基金A类基金份额时，不收取认购/申购费用；通过直销机构申购的C类基金份额，不收取销售服务费。对于投资者通过直销机构之外的其他销售机构申购的C类基金份额且持续持有期限超过一年的，不再继续收取销售服务费。",
      "condition": {
-      "kind": "none",
-      "value": null
+      "kind": "class_count",
+      "value": "multiple"
      },
      "operation_id": "G03:0",
      "group_kind": "INDEPENDENT",
@@ -123,7 +123,7 @@
   {
    "rule_id": "G04",
    "title": "基金的基本情况-份额类别设置：",
-    "section_hint": "基金的基本情况",
+   "section_hint": "基金的基本情况",
    "requirement": "根据产品实际设置的基金份额类别及各类别适用的收费规则，对原描述中的份额类别进行分组替换：将适用“收取认购、申购费用且不计提销售服务费”规则的“A类基金份额”替换为实际适用该规则的全部基金份额类别，将适用“不收取认购、申购费用且计提销售服务费”规则的“C类基金份额”替换为实际适用该规则的全部基金份额类别。",
    "operations": [
     {
@@ -131,8 +131,8 @@
      "old_text": "A类基金份额",
      "new_text": "A类、B类基金份额",
      "condition": {
-      "kind": "none",
-      "value": null
+      "kind": "class_count",
+      "value": "multiple"
      },
      "operation_id": "G04:0",
      "group_kind": "INDEPENDENT",
@@ -143,8 +143,8 @@
      "old_text": "C类基金份额",
      "new_text": "C类、D类基金份额",
      "condition": {
-      "kind": "none",
-      "value": null
+      "kind": "class_count",
+      "value": "multiple"
      },
      "operation_id": "G04:1",
      "group_kind": "INDEPENDENT",
@@ -623,8 +623,8 @@
      "op": "delete",
      "old_text": "C类基金份额的销售服务费每日计提，按月支付。由基金管理人向基金托管人发送基金销售服务费划付指令，经基金托管人复核后于次月首日起10个工作日内从基金财产中一次性支付给登记机构，由登记机构代付给销售机构。若遇法定节假日、公休日等，支付日期顺延。",
      "condition": {
-      "kind": "none",
-      "value": null
+      "kind": "has_service_fee",
+      "value": true
      },
      "operation_id": "G15:0",
      "group_kind": "INDEPENDENT",
@@ -659,8 +659,8 @@
      "op": "append",
      "new_text": "销售服务费每日计提。（1）直销机构：对于投资者通过直销机构持有的C类基金份额计提的销售服务费，在投资者赎回C类基金份额或基金合同终止时，随赎回款（或清算款）一并返还给投资者。基金管理人基金销售子公司销售母公司所管理基金的，按照本条要求执行。（2）直销机构以外的其他销售机构：对于投资者持续持有期限未超过一年（即365天，下同）的基金份额收取的销售服务费，按月支付，基金托管人按照与基金管理人协商一致的方式于次月首日起5个工作日内按照指定的账户路径进行支付。若遇法定节假日、公休日或不可抗力等，支付日期顺延。对于持续持有期限超过一年的基金份额，持有超过一年后继续计提的销售服务费，在投资者赎回基金份额或基金合同终止时，随赎回款（或清算款）一并返还给投资者。",
      "condition": {
-      "kind": "none",
-      "value": null
+      "kind": "has_service_fee",
+      "value": true
      },
      "operation_id": "G16:0",
      "group_kind": "INDEPENDENT",
@@ -696,8 +696,8 @@
      "op": "delete",
      "old_text": "C类基金份额的销售服务费主要用于支付销售机构佣金、以及基金管理人的基金行销广告费、促销活动费、基金份额持有人服务费等。C类基金份额的销售服务费使用范围不包括基金募集期间的上述费用。",
      "condition": {
-      "kind": "none",
-      "value": null
+      "kind": "has_service_fee",
+      "value": true
      },
      "operation_id": "G17:0",
      "group_kind": "INDEPENDENT",
@@ -728,8 +728,17 @@
      "old_text": "由于本基金A类基金份额不收取销售服务费，而C类基金份额收取销售服务费",
      "new_text": "由于本基金A类基金份额和C类基金份额费用收取不同",
      "condition": {
-      "kind": "none",
-      "value": null
+      "kind": "compound",
+      "value": [
+       {
+        "kind": "class_count",
+        "value": "multiple"
+       },
+       {
+        "kind": "has_service_fee",
+        "value": true
+       }
+      ]
      },
      "operation_id": "G18:0",
      "group_kind": "INDEPENDENT",
@@ -1328,11 +1337,11 @@
    "cost_is_provider_invoice": false
   }
  },
-  "document_sha256": "5335e401e8409f37c19543a145ec3def177a2d678a3622b618a17b1106e416f7",
+ "document_sha256": "82ed885a87d2da26e81bd96501dea6702f3dfaa0438a5ee0e5de760fc6597bc3",
  "certification": {
   "approved": true,
   "source_sha256": "b77be53c3439d785a9ffad0f09d8d03ba74f7722397576b999ae6f5dd6eef895",
-  "guide_document_sha256": "5335e401e8409f37c19543a145ec3def177a2d678a3622b618a17b1106e416f7",
+  "guide_document_sha256": "82ed885a87d2da26e81bd96501dea6702f3dfaa0438a5ee0e5de760fc6597bc3",
   "rule_count": 22,
   "operation_count": 34,
   "finding_dispositions": [
@@ -1342,7 +1351,7 @@
     "reason": "销售服务费按指引G15标题适用于多类别产品；加 class_count=multiple 与 G21 的单类别不替换分支互斥，避免同一清算句被两条规则同时命中。若真实合同出现单类别且收取销售服务费的边界，由引擎仲裁并登记。",
     "approved": true,
     "source_sha256": "b77be53c3439d785a9ffad0f09d8d03ba74f7722397576b999ae6f5dd6eef895",
-     "guide_document_sha256": "5335e401e8409f37c19543a145ec3def177a2d678a3622b618a17b1106e416f7",
+    "guide_document_sha256": "82ed885a87d2da26e81bd96501dea6702f3dfaa0438a5ee0e5de760fc6597bc3",
     "review_basis": "Recorded source review, rechecked against source paragraphs on 2026-10-21; engineering certification, not a new user business ruling."
    },
    {
@@ -1351,7 +1360,7 @@
     "reason": "段21条件'如果有收取销售服务费的份额类别'为产品级存在性判断，has_service_fee 即其编码；类别级解读会与段21的互斥分支语义冲突。",
     "approved": true,
     "source_sha256": "b77be53c3439d785a9ffad0f09d8d03ba74f7722397576b999ae6f5dd6eef895",
-     "guide_document_sha256": "5335e401e8409f37c19543a145ec3def177a2d678a3622b618a17b1106e416f7",
+    "guide_document_sha256": "82ed885a87d2da26e81bd96501dea6702f3dfaa0438a5ee0e5de760fc6597bc3",
     "review_basis": "Recorded source review, rechecked against source paragraphs on 2026-10-21; engineering certification, not a new user business ruling."
    },
    {
@@ -1360,7 +1369,7 @@
     "reason": "两个操作分别带 has_service_fee=true/false 条件，引擎按条件择一执行，即为互斥编码。",
     "approved": true,
     "source_sha256": "b77be53c3439d785a9ffad0f09d8d03ba74f7722397576b999ae6f5dd6eef895",
-     "guide_document_sha256": "5335e401e8409f37c19543a145ec3def177a2d678a3622b618a17b1106e416f7",
+    "guide_document_sha256": "82ed885a87d2da26e81bd96501dea6702f3dfaa0438a5ee0e5de760fc6597bc3",
     "review_basis": "Recorded source review, rechecked against source paragraphs on 2026-10-21; engineering certification, not a new user business ruling."
    },
    {
@@ -1369,7 +1378,7 @@
     "reason": "条款1/条款2 已分别作为两个 replace 操作；variants 仅为定位参考。",
     "approved": true,
     "source_sha256": "b77be53c3439d785a9ffad0f09d8d03ba74f7722397576b999ae6f5dd6eef895",
-     "guide_document_sha256": "5335e401e8409f37c19543a145ec3def177a2d678a3622b618a17b1106e416f7",
+    "guide_document_sha256": "82ed885a87d2da26e81bd96501dea6702f3dfaa0438a5ee0e5de760fc6597bc3",
     "review_basis": "Recorded source review, rechecked against source paragraphs on 2026-10-21; engineering certification, not a new user business ruling."
    },
    {
@@ -1378,7 +1387,7 @@
     "reason": "class_substitution=true 已表达该引用语义（与段5-8/13-16 的分组替换规则一致），引擎按槽位实例化执行。",
     "approved": true,
     "source_sha256": "b77be53c3439d785a9ffad0f09d8d03ba74f7722397576b999ae6f5dd6eef895",
-     "guide_document_sha256": "5335e401e8409f37c19543a145ec3def177a2d678a3622b618a17b1106e416f7",
+    "guide_document_sha256": "82ed885a87d2da26e81bd96501dea6702f3dfaa0438a5ee0e5de760fc6597bc3",
     "review_basis": "Recorded source review, rechecked against source paragraphs on 2026-10-21; engineering certification, not a new user business ruling."
    },
    {
@@ -1387,7 +1396,7 @@
     "reason": "notes 为说明性文字，不构成新增政策；描述2与单类别新文逐字一致，按已满足处理是代码可判定的等价关系，不改变指引要求。",
     "approved": true,
     "source_sha256": "b77be53c3439d785a9ffad0f09d8d03ba74f7722397576b999ae6f5dd6eef895",
-     "guide_document_sha256": "5335e401e8409f37c19543a145ec3def177a2d678a3622b618a17b1106e416f7",
+    "guide_document_sha256": "82ed885a87d2da26e81bd96501dea6702f3dfaa0438a5ee0e5de760fc6597bc3",
     "review_basis": "Recorded source review, rechecked against source paragraphs on 2026-10-21; engineering certification, not a new user business ruling."
    },
    {
@@ -1396,7 +1405,7 @@
     "reason": "指引段104明确'如果仅有一个份额类别，则不做替换'，class_count=1 即该分支的机器可执行编码。",
     "approved": true,
     "source_sha256": "b77be53c3439d785a9ffad0f09d8d03ba74f7722397576b999ae6f5dd6eef895",
-     "guide_document_sha256": "5335e401e8409f37c19543a145ec3def177a2d678a3622b618a17b1106e416f7",
+    "guide_document_sha256": "82ed885a87d2da26e81bd96501dea6702f3dfaa0438a5ee0e5de760fc6597bc3",
     "review_basis": "Recorded source review, rechecked against source paragraphs on 2026-10-21; engineering certification, not a new user business ruling."
    },
    {
@@ -1405,7 +1414,7 @@
     "reason": "当前写入能力以段内文本+换行(<w:br/>)表达分项，保留（1）（2）文本层级；段级插入为已知限制 FL-D032，真实产物审计将检查可读性。",
     "approved": true,
     "source_sha256": "b77be53c3439d785a9ffad0f09d8d03ba74f7722397576b999ae6f5dd6eef895",
-     "guide_document_sha256": "5335e401e8409f37c19543a145ec3def177a2d678a3622b618a17b1106e416f7",
+    "guide_document_sha256": "82ed885a87d2da26e81bd96501dea6702f3dfaa0438a5ee0e5de760fc6597bc3",
     "review_basis": "Recorded source review, rechecked against source paragraphs on 2026-10-21; engineering certification, not a new user business ruling."
    },
    {
@@ -1414,7 +1423,7 @@
     "reason": "source_paragraphs 记录组来源段落区间（含标题与原条款说明），删除操作文本本身逐字一致。",
     "approved": true,
     "source_sha256": "b77be53c3439d785a9ffad0f09d8d03ba74f7722397576b999ae6f5dd6eef895",
-     "guide_document_sha256": "5335e401e8409f37c19543a145ec3def177a2d678a3622b618a17b1106e416f7",
+    "guide_document_sha256": "82ed885a87d2da26e81bd96501dea6702f3dfaa0438a5ee0e5de760fc6597bc3",
     "review_basis": "Recorded source review, rechecked against source paragraphs on 2026-10-21; engineering certification, not a new user business ruling."
    },
    {
@@ -1423,7 +1432,7 @@
     "reason": "三种表述各自带 class_count 条件成为独立操作，任一命中即替换，条件已编码。",
     "approved": true,
     "source_sha256": "b77be53c3439d785a9ffad0f09d8d03ba74f7722397576b999ae6f5dd6eef895",
-     "guide_document_sha256": "5335e401e8409f37c19543a145ec3def177a2d678a3622b618a17b1106e416f7",
+    "guide_document_sha256": "82ed885a87d2da26e81bd96501dea6702f3dfaa0438a5ee0e5de760fc6597bc3",
     "review_basis": "Recorded source review, rechecked against source paragraphs on 2026-10-21; engineering certification, not a new user business ruling."
    }
   ]
