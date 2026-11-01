@@ -20,7 +20,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Iterable, Mapping, Sequence
 
-from .applicability import ApplicabilityDecision, branch_key, describe_condition, evaluate
+from .applicability import (ApplicabilityDecision, branch_key, describe_condition,
+                            evaluate, resolve)
 
 
 class GroupKind(str, Enum):
@@ -375,7 +376,7 @@ def apply_facts(ledger: ObligationLedger, facts: Any, *,
                 operation_id=item.spec.operation_id,
                 reason="FACT_PREREQUISITE_UNVERIFIED:" + ",".join(missing))
         elif resolve_unknown and gateway is not None and inspection is not None:
-            decision = __import__("fundlex.applicability", fromlist=["resolve"]).resolve(
+            decision = resolve(
                 item.spec.condition, facts, gateway=gateway, evidence=evidence,
                 inspection=inspection, rule_id=item.spec.rule_id,
                 operation_id=item.spec.operation_id)
