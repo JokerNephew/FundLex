@@ -71,6 +71,32 @@
 
   --focus: #b5471e;
   --shadow: 0 4px 18px rgb(34 40 48 / 0.05);
+
+  /* ── 第三轮设计令牌镜像（源：docs/frontend/DESIGN_TOKENS_20261101.md，与 V1 app.css 同名同值）── */
+  /* 字体 */
+  --font-ui: Inter, "PingFang SC", "Microsoft YaHei UI", "Noto Sans SC", system-ui, sans-serif;
+  /* 动效（唯一规格：三档时长+唯一缓动+允许属性集，禁盒尺寸动画） */
+  --dur-press: 50ms;
+  --dur-fast: 120ms;
+  --dur-med: 200ms;
+  --dur-slow: 250ms;
+  --ease-standard: cubic-bezier(.2,.6,.25,1);
+  /* 表单控件全状态矩阵 */
+  --ctl-border: var(--border-strong);
+  --ctl-border-hover: #aeb7c0;
+  --ctl-border-focus: var(--brand);
+  --ctl-focus-ring: 0 0 0 3px rgba(181,71,30,.14);
+  --ctl-radius: 6px;
+  --ctl-height: 36px;
+  --ctl-pad-y: 6px;
+  --ctl-pad-x: 10px;
+  --ctl-placeholder: #98a1a9;
+  --ctl-disabled-bg: #f5f6f8;
+  /* 徽标唯一规格 */
+  --badge-size: 11px;
+  --badge-weight: 650;
+  --badge-pad: 3px 9px;
+  --badge-radius: 999px;
 }
 * { box-sizing: border-box; }
 body { margin: 0; min-width: 320px; font-size: var(--text-md); line-height: var(--leading-normal); }
