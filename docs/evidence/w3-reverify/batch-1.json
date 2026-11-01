@@ -1,0 +1,43 @@
+{
+ "script": "tools/evaluation/w3_reverify_second_batch_labels_20261101.py",
+ "batch": 1,
+ "cases": [
+  "W2D01",
+  "W2D02",
+  "W2D03",
+  "W2D04",
+  "W2D05",
+  "W2D06",
+  "W2D07",
+  "W2D08",
+  "W2D09",
+  "W2D10",
+  "W2D11",
+  "W2D12",
+  "W2D13",
+  "W2D14",
+  "W2D15",
+  "W2D16",
+  "W2D17",
+  "W2D18",
+  "W2D19",
+  "W2D20"
+ ],
+ "labels_sha256": "423c6944687a6006d493d3f8dff4b4cb32593cc6acc26c2e2b3fb423622a88f5",
+ "selection_sha256": "32b36f02a9c6cafebee7a73fcda0791c707ac62d07fe67bb57e91daafc6187d9",
+ "envelope_problems": [],
+ "problems": [
+  "W2D11: rule_coverage[4] evidence_quote CONTENT not in source (G05/target): '在符合法律法规、基金合同的约定且不损害已有基金份额持有人权益的情况下，经与基金托'"
+ ],
+ "warnings": [
+  "W2D18: rule_coverage[4] evidence_quote punct-only diff (G05)"
+ ],
+ "counts": {
+  "cases": 20,
+  "targets": 223,
+  "coverage_entries": 874,
+  "cases_with_targets": 12,
+  "uncertain_entries": 6,
+  "ineligible_cases": []
+ }
+}
