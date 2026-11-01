@@ -476,23 +476,25 @@ def path_b_contract_sweep(router, store, requirements: list[PolicyRequirement],
         covered_ids: set[str] = set()
         for batch in contract_batches:
             related = _sweep_requirements(requirements, batch, max_requirements)
-            related_ids = {item.requirement_id for item in related}
             window = related[:8]
+            # Fill remaining window slots with the rest of the batch-relevant
+            # requirements BEFORE rotating in unrelated ones.  Testing the
+            # tail against ``related_ids`` can never match (every related id
+            # is already in the set), so the tail must be appended directly;
+            # otherwise related requirements ranked 9+ are never scanned for
+            # this batch and are displaced by rotation fill (FL-D823).
+            for item in related[8:]:
+                if len(window) >= max_requirements:
+                    break
+                window.append(item)
             rotating_attempts = 0
             while (rotating_requirements and len(window) < max_requirements
                    and rotating_attempts < len(rotating_requirements)):
                 item = rotating_requirements[rotating_cursor % len(rotating_requirements)]
                 rotating_cursor += 1
                 rotating_attempts += 1
-                if item.requirement_id not in related_ids:
+                if item.requirement_id not in {entry.requirement_id for entry in window}:
                     window.append(item)
-                    related_ids.add(item.requirement_id)
-            for item in related[8:]:
-                if len(window) >= max_requirements:
-                    break
-                if item.requirement_id not in related_ids:
-                    window.append(item)
-                    related_ids.add(item.requirement_id)
             contract_jobs.append((contract, batch, window))
             covered_ids.update(item.requirement_id for item in window)
         missing = [item for item in requirements
