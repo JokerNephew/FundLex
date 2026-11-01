@@ -137,3 +137,8 @@
 - 新线：**Kdvq1x**=EN2 引擎审计2（generation/docx/guide*/delivery 等，FL-D921~939）；**czGpu**=PL2 平台审计（tools 97+tests 全量，FL-D940~959）；总会话 10 条
 - 九线总则追加令已发（用户铁律原文逐字置头）
 - FL-D920：简化需求=大忌，最后通牒级登记
+
+### 2026-11-01 16:5x 监督线设立 + 两合并完成
+- **监督线 qa-overseer（会话 WO4MKd 尾）**：用户亲令设立，独立树 qa-overseer；追溯+产出侧+常驻三审计，驳回权；发现号段 FL-D960~979；工单留档制 /tmp/opencode/qa/dispatch-log/（API 窗口仅找回 6 份历史工单，产出侧审计补足）
+- recall 修复回归 2659/0 绿 → **留出第二轮令已发**（新引擎冻结 05c3ef1）
+- compare-ux B 阶段（FL-D843~848 链路重设计）并入 7b95c38（vitest24/build/浏览器 12 绿）
