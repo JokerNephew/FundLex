@@ -96,7 +96,7 @@
     if (p.error_code==='COMPARE_PAIR_INCOMPLETE') {
       const bad=['left','right'].map(side=>({side,file:p[side]})).filter(x=>!x.file||x.file.upload_status!=='accepted');
       if(!bad.length) return '该组文件不完整，请稍后重试';
-      // FL-D981: 文件级原因自带的「新建对比任务上传」补救与尾句重复，
+      // FL-D983: 文件级原因自带的「新建对比任务上传」补救与尾句重复，
       // 尾句只补充「该组已判失败」的结论，不再重复补救路径。
       return bad.map(x=>{const tag=x.side==='left'?'合同A':'合同B';
         return x.file?.error_code?`${tag}：${uploadErrorLabel(x.file.error_code)}`:`${tag} 未成功上传`;
@@ -572,7 +572,7 @@
     const box=$('compare-selection-downloads'); if(!box)return;
     const artifacts=state.selectionDirty?[]:(state.selection?.artifacts||[]);
     if(!artifacts.length){box.replaceChildren();return;}
-    // FL-D982: 后端产物 kind 恒为 final/redline（store.SELECTION_KINDS），
+    // FL-D984: 后端产物 kind 恒为 final/redline（store.SELECTION_KINDS），
     // 旧标签表的 selected_* 键名从不命中，下载按钮直露裸 kind。
     const labels={final:'下载选择结果 DOCX',redline:'下载选择结果（带修订痕迹）DOCX',selected_final:'下载选择结果 DOCX',selected_redline:'下载选择结果（带修订痕迹）DOCX',selection_report_markdown:'下载选择报告（Markdown）',selection_report_json:'下载选择报告（JSON）'};
     box.innerHTML=artifacts.map(item=>{const isDocx=item.kind.endsWith('docx')||['final','redline'].includes(item.kind);return `<div class="compare-artifact"><button class="btn btn-sm" type="button" data-selection-download="${esc(item.download_url)}" data-selection-filename="${esc(`compare-v${item.version}-${item.kind}${isDocx?'.docx':''}`)}" ${item.status==='stale'?'title="该版本已过期，仅作追溯"':''}>${esc(labels[item.kind]||item.kind)} · v${item.version}${item.status==='stale'?' · 已过期':''}</button></div>`;}).join('');
