@@ -1602,11 +1602,10 @@ dev20 v2 闭环：修复循环直到 §7 门槛（无已确证严重错误、无
 - FL-D685 回复 e3d6135；FL-D688 addendum 已写入 loop-2 compare（var/ 不入库）；FL-D584/585/586/587/588/589 条目在册。
 
 ## 在途
-- 无后台进程。**留出 8 份首验完：57/111 = 51.4%、fc=0、wrong=0、actual=reported=3/8；BH06 边界（DOCUMENT_PROTECTED，标签 0 目标不侵分母）→ 首验门槛未达，按令已如实报主线、不自行放第二波**。账本第 11 段 $0.2566/204c/30min。
-- 失败家族（新池启册）：**FL-D862**（BH07 FOF service_fee 事实前提 22 连发未实例化，dev 未现）；**FL-D863**（BH04 document-wide site recovery ×8 + BH05 G06 subsection scope_missing，版式适配）；**FL-D864**（BH02 QDII G18 单义务 replay 连坐 -19）；**FL-D865**（BH06 保护文档边界）。BH01/BH03/BH08 complete。
-- 等主线：留出首验判定（机制泛化修复 / 放第二波 / 分层口径）。号池余 FL-D866~869。引擎冻结 aa30eaf 不放松。
-- 已完成：语料全量剖析 `docs/engine/CORPUS_TYPOLOGY_20261101.md`（578→542 去重；类型/结构/费用表；FL-D862→41/863→25/864→13 罩住量；布外预警 38 零覆盖+149 ETF+43 非AC字母+386 无字母类；数据治理 18 名×3 副本+BH06 enforcement=0 补证 FL-D865）。**留出二轮令到即以二轮最高优先插断，跑批期间续剖析深化（可按家族出逐案清单）**。
-- 已完成：项 7/8 自查作证 `docs/QA_ITEMS78_SELF_TESTIMONY_20261101.md`（机制面逐 commit 判定 + 唯一规则工件改动 08cb0e6 圈界披露 + 解析链路证据与两缺口 + 542 扩样台账）。
+- **留出 r2 续跑中**（sh_1966f562d001psSK9zSz8JTJdS，--resume：001 保留、002 起续；setsid+PYTHONUNBUFFERED；看门狗 sh_1966f6c86001Tlz1NoUbi4FiXX 批死 15 分钟内自报）。r2 批死事故已诊断入账（裸 nohup& 被会话进程组回收，教程入状态文件）。
+- 预警：BH01 r2 incomplete（r1 complete）——全批跑完逐案核命中/回摆。
+- 跑完：post 评分→BH02/04/05/07 逐案命中（FL-D862/863/864）+BH01 新缺口→两轮并排报告（FL-D866 标注）→报主线。
+- EVAL 审计 58/58 完成已回执（FL-D867/868/869 + 三报主线立号块；recall_run 泄漏=第二波前必办已提请）。
 ## 下一步（可执行顺序）
 1. 已向主线报 loop-2 指标与残余归属（本次回复）。
 2. 回归绿 → 提交 FL-D588 代码 → 报主线。等 feat-guide B15 单与 B19 修复专单齐 → 新 freeze 跑 loop-3。编号 580-589 已用尽，已向主线请新段。
