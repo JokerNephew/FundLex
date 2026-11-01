@@ -8220,3 +8220,13 @@ H＝E×…
 - **对照证据**：同日 loop-6 冻结树 B15 complete（`/tmp/opencode/qa/loop6-fix-matrix/b15-frozen/`，$0.0327/25c/227s，G11 p164 FOUND+CLOSED）——抖动单发性仍成立，首次跨树复发说明频率高于「罕见」。
 - **下一步**：统计 loop-7 全波 G11 compose schema 失败率；≥2 波复发即升级为机制条目（compose 校验失败 deterministic tier1/fixed-text 回退，或业务轮对 MODEL: 软失败的有限再盘）。
 - **状态**：观察项（已复发一次，未升级解剖）。
+
+## FL-D820 指引生成运行必败：语料目录位于 /home 受 systemd ProtectHome 沙箱拦截（2026-11-01，主线，用户真实任务暴露）
+
+- **发现日期**：2026-11-01（用户在生产提交指引生成 run `a552520c…fe19`，FAILED，主线追查）。
+- **问题与影响**：`FUNDLEX_GUIDE_CORPUS_DIR=/home/opencode/data/funds_word`，但 `fundlex-guide-worker.service` 沙箱 `ProtectHome=true + ProtectSystem=strict`——服务 mount namespace 内 /home 不可见，`stage_snapshot/sync_corpus` 扫语料即 `PermissionError [Errno 13] '/home/opencode/data/funds_word'`，run 必然失败。影响：指引生成功能在生产**任何 run 都会在语料同步阶段失败**（前三阶段 INGEST/EXTRACT/VERIFY 完成，SNAPSHOT 死亡）。普通用户无权诊断。
+- **误导排查的陷阱**：以 `runuser -u fundlex` 直接测 ACL 时**读取成功**（514 份 glob+读字节全通）——runuser 不带 systemd confinement；只有 `systemd-run --uid=fundlex -p ProtectHome=true -p ProtectSystem=strict` 同款沙箱才能复现。教训：排查服务 EACCES 必须用同款 confinement 复现，不能信裸 shell。
+- **处理方法（已实施）**：①语料整目录拷贝至沙箱白名单路径 `/var/lib/fundlex/corpus/funds_word`（78M，chown fundlex:fundlex）；②`/etc/fundlex-recall.env` 的 `FUNDLEX_GUIDE_CORPUS_DIR` 改指新路径（前值备份 `…env.bak-20261101-gg`）；③重启 fundlex-guide-worker（active）。
+- **验证结果**：同款沙箱 `systemd-run` 内实测：新路径 glob=514+读文件 OK；旧路径复现出与生产**逐字一致**的 Errno 13（根因 100% 确认）。
+- **遗留/下一步**：①「对指引生成功能全面检查开发测试优化」专项线已开（用户第 4 点），含：部署形态样例运行冒烟（发布守门加跑一跑 PILOT run 断此回归类）、`pipeline.py` 默认 corpus 回退 `<repo>/funds_word` 在发布树无此目录时的行为策略（应显式报配置缺失而非静默空语料/GE 误导）、cron/健康检查。②ACL 层（/home/opencode 对 fundlex --x）保留作纵深但不再承载功能。③同形态隐患排查：其他服务若引用 /home 路径须同查（已知 compare 语料在树内 var/，未见引用 /home）。
+- **状态**：主体已解决（待全面检查线收尾复验一次真实 run 端到端）。
