@@ -23,7 +23,7 @@
     const selected = [pair.left?.name || fileName(pair._left), pair.right?.name || fileName(pair._right)].filter(Boolean).join(' / ');
     const sideCard=(side,title,badge)=>{
       const name=pair[side]?.name||fileName(pair[`_${side}`]);
-      return `<div class="compare-file-card ${name?'has-file':''}" data-file-side="${side}"><div class="compare-file-card-title"><span class="compare-side-badge">${badge}</span><strong>${title}</strong></div><div class="compare-file-name" title="${esc(name)}">${esc(name||'尚未选择合同')}</div><div class="compare-file-card-action"><button type="button" class="btn btn-sm" data-compare-choose="${side}" aria-label="选择${title}">${name?'更换文件':'选择文件'}</button><span>仅支持 DOCX；.doc 请先另存为 .docx</span></div><input type="file" accept=".doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" data-compare-${side}="${index}" aria-label="${title}" hidden></div>`;
+      return `<div class="compare-file-card ${name?'has-file':''}" data-file-side="${side}"><div class="compare-file-card-title"><span class="compare-side-badge">${badge}</span><strong>${title}</strong></div><div class="compare-file-name" title="${esc(name)}">${esc(name||'尚未选择合同')}</div><div class="compare-file-card-action"><button type="button" class="btn btn-sm" data-compare-choose="${side}" aria-label="选择${title}">${name?'更换文件':'选择文件'}</button><span>仅支持 DOCX；.doc 请先另存为 .docx。带修订痕迹的文件可直接上传，按「接受全部修订」后的内容比对</span></div><input type="file" accept=".doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" data-compare-${side}="${index}" aria-label="${title}" hidden></div>`;
     };
     return `<div class="compare-pair-input" data-pair-index="${index}"><div class="compare-pair-head"><strong>合同组 ${String(index+1).padStart(2,'0')}</strong><button type="button" class="btn-link" data-compare-remove="${index}" ${index?'':'disabled'}>移除本组</button></div><div class="compare-side-inputs">${sideCard('left','合同A','A')}${sideCard('right','合同B','B')}</div><p class="sr-only compare-file-label" data-compare-label="${index}">${esc(selected||'尚未选择文件')}</p></div>`;
   }
@@ -83,10 +83,11 @@
         const form=new FormData(); markFiles(form,x,draft.pairs[i]); const uploaded=await json(`/api/compare/tasks/${encodeURIComponent(draft.task.id)}/uploads`,{method:'POST',body:form});
         if(identity!==state.identityToken)return; const receipts=uploaded.receipts||[],bad=['left','right'].map(side=>receipts.find(r=>r.client_id===draft.pairs[i][side].client_id)).filter(r=>!r||!['accepted','already_accepted'].includes(r.status));
         if(bad.length)throw Error(`第 ${i+1} 组上传未完成：${bad.map(r=>r?`${r.client_id}（${uploadErrorLabel(r.error_code)||r.status}）`:'缺少上传回执').join('、')}`);
+        draft.acceptedRevisions=(draft.acceptedRevisions||0)+receipts.reduce((n,r)=>n+(r&&Number(r.revisions_accepted)>0?1:0),0);
         draft.next=i+1;
       }
       message.textContent='文件已上传，正在提交对比任务…'; await json(`/api/compare/tasks/${encodeURIComponent(draft.task.id)}/seal`,{method:'POST'}); if(identity!==state.identityToken)return;
-      message.textContent='已提交，对比任务正在处理。'; state.uploadDraft=null; showCreate(false); await loadTasks(); await openTask(draft.task.id);
+      message.textContent='已提交，对比任务正在处理。'+(draft.acceptedRevisions>0?`其中 ${draft.acceptedRevisions} 份文件带修订痕迹，已按「接受全部修订」后的内容参与比对。`:''); state.uploadDraft=null; showCreate(false); await loadTasks(); await openTask(draft.task.id);
     } catch(e) { if(identity===state.identityToken){message.textContent=`上传中断：${e.message}。已完成的文件已保留，可点击“继续上传”。`; $('compare-retry').hidden=false;} }
     finally { if(identity===state.identityToken)$('compare-submit').disabled=false; }
   }

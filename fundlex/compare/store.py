@@ -288,7 +288,7 @@ class CompareStore:
                                      "revisions_accepted": int(file["revisions_accepted"] or 0)}
         result = {"id": row["id"], "task_id": row["task_id"], "ordinal": row["ordinal"],
                   "client_pair_id": row["client_pair_id"], "label": row["label"], "status": row["status"],
-                  "error_code": row["error_code"], "summary": None, "coverage": None,
+                  "error_code": row["error_code"], "summary": None, "coverage": None, "metadata": None,
                   "result_sha256": row["result_sha256"], "left": mapped.get("left"), "right": mapped.get("right"),
                   "view_url": f"/api/compare/pairs/{row['id']}/view",
                   "result_url": f"/api/compare/pairs/{row['id']}"}
@@ -299,6 +299,8 @@ class CompareStore:
                 result["coverage"] = payload.get("coverage")
                 result["comparison_scope"] = payload.get("comparison_scope")
                 result["diagnostics"] = payload.get("diagnostics")
+
+                result["metadata"] = payload.get("metadata")
             except (TypeError, ValueError):
                 pass
         return result

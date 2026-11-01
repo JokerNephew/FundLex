@@ -7780,7 +7780,7 @@ H＝E×…
 - **状态**：已修复并验证。
 - **变更记录**：2026-11-01 新增。
 
-## FL-D792 可选接口瞬时失败导致有效凭证被判 502（2026-11-01，qa-feishu-onboarding）
+## FL-D802 可选接口瞬时失败导致有效凭证被判 502（2026-11-01，qa-feishu-onboarding）【原号 FL-D792，因与 recall-miss 线 FL-D792 碰撞改号】
 
 - **发现**：scopes 与企业名属“能读到更好、读不到不影响接入”的可选信息，但初版未捕获其 `AppOnboardingError`，一次网络抖动就让整笔保存失败，用户以为凭证错了。
 - **处理**：两处可选读取改为捕获后按“未读到”处理，`scopes_checked=false` 并给出降级文案；必需步骤（token、机器人状态）仍然严格失败并给精确诊断。
@@ -8175,6 +8175,7 @@ H＝E×…
 
 - **判定**：loop-4 复验时 FL-D792 归因为「survey 采样波动、保守诚实扣件」观察项；loop-5 同形态在 B12 原址复发（T002@p796 同 span 0..90、同 TARGET_SOURCE_MISMATCH、同 CLAIM_REPLAY_FAILED 链）。复发证明这不是采样噪声而是结构性缺陷：replay 闭合必需集系统性混入计划阶段已否决的站点主张。归属变更：FL-D792 = FL-D696 首次临床（loop-4 重跑），同根同修；原「若多案复发考虑排除」建议由 FL-D696 以更一般的机制（任意计划的确定性站点否决，不限 G16/append-delete 竞争）实施。
 - **状态**：归属结论已下（同族机制问题，非新机制、非纯波动）；修复验证随 FL-D696 真实 B12 复验一并收口。
+- **主线裁决（2026-11-01）**：确认归属判定成立；loop-6 冻结门槛中的「T014 形状 replay FAIL 消退」已实证（loop-6 零出现），本条目收口；编号 FL-D792 归本条目独占使用，feishu 线同号条目已改 FL-D802。
 
 ## FL-D793 B15 本轮新阻塞 G11 compose 连续 MODEL_SCHEMA_INVALID→诚实 incomplete（2026-11-01，FL-D695 真实复验发现，观察项）
 
@@ -8182,6 +8183,43 @@ H＝E×…
 - **归类**：同案 loop-5（9ebeacf）G11 双义务 CLOSED_REPLAY、loop-4 亦正常——首选解释为模型侧运行间波动（schema 抖动），非已确证机制缺陷；现有重试/重建链按设计耗尽并诚实扣件。与 FL-D695 同类教训方向：模型单点失败缺少更硬的违约承载（如 fixed-text replace 在 ANOMALOUS 变体下无 deterministic tier1 回退，只能 compose）。
 - **二跑复测（2026-11-01，`fl-d695-b15-recheck2/`，$0.0268/23c/185s）**：同合同同引擎 G11 三义务全 CLOSED（B1:O1 ARTIFACT_VERIFIED、B1:O2 ALREADY_SATISFIED via claim_replay），delivery=complete——单发解释成立（模型 schema 抖动），不升级解剖。
 - **状态**：观察项（二跑未复发）；后续同形态在不同合同/不同 loop 再发时按 compose 校验字段定位升级。
+
+## FL-D801 发布留存事务自动清理机制（FL-D724 建议项实施）（2026-11-01，主线）
+
+- **实施**：`fundlex-publish.sh` 发布收尾统一调 `prune_retained_transactions`：保留最新 `$FUNDLEX_PUBLISH_RETAINED_KEEP`（默认 3）份事务，其余清删；当前事务自豁免；匹配仅 `.fundlex-publish-*` 前缀不碰别物。
+- **验证**：bash -n ✓；已完成发布器测试 17/17 绿；隔离假目录干跑（5 份留存、keep=2）清 t1-t3 留 t4-t5 + 自豁免正确；生产现状立即手工清到 3 份（gLmldm 最新/QQh2do/HSmFwd）；root 发布器已同步（drift-check OK）。
+- **注意**：source 整脚本会执行主入口（测试时误触过一次生产 prune 路径，root-only rm 被权限拦截无损）；后续函数级测试一律 sed 抽段执行。
+- **状态**：已解决（FL-D724 建议项关闭；另 FL-D724 的 worker 重启计数基线建议保留 open，择处）。
+
+## FL-D697 B05 五连首负：复合引用整段替换崩塌 + 合并多位点 audit 兄弟操作盲区（2026-11-01，loop-6 门槛 FAIL-1，qa-recall-miss）
+
+- **发现**：loop-6（9efe827）B05 五连后首负，8 holds、义务完成回摆 -13。两条独立机制缺陷：(a) `plan_composite_target` 对捆绑到多段落 composite 引用的**词级** replace（G02:0 old_text「A类基金份额」6 字）执行整段引用替换，p118(0..49)+p119(0..54) 两句定义被换成裸 token「A类基金份额」（destructive edit 源头不是模型 compose，是确定性 builder 无范围证明）；(b) G15+G16 在 p788/p1237 合并为 atomic_paragraph 编辑（G15 删 0..132、G16 插 133）数学拼接正确，但 audit 按单规则孤立复核 G16「追加」语义，要求 G15 已被独立 auditing completed 授权删除的原条款继续存在 → AUDIT_NOT_COMPLETED(fc EXECUTION)→RETRY_DETERMINISTIC 重放同一确定性 builder→无进展熔断→诚实扣件，相邻义务同窗口重盘回摆放大为 -13。
+- **机制修复**（NOT 规则级补丁）：(a) composite_replace 守卫——整段引用替换仅当适用 replace 操作的 old_text 覆盖整个 composite 引用才授权，否则 `RECALL_COMPOSITE_REPLACE_SCOPE_UNPROVEN` fail-closed 单目标扣件；G11 分支自带的 `_g11_bearer_end` 范围证明不受影响（recall.py:6560+ 区）。(b) `_audit_issues` 兄弟授权删除覆写——evidence_quote（可含省略号，逐分片校验）被同址**已完成**兄弟规则操作授权 old_text 覆盖时，丢失属授权移除而非本规则缺陷；无完成兄弟则保持 fail-closed（recall_pipeline.py:_audit_issues，全 8 个调用点接 planned）。
+- **mutation 测试**：`tests/test_loop6_repairs.py` 8 例（词级崩塌拒、整段授权放行、兄弟覆写生效/无兄弟/兄弟未完工两组 fail-closed、FL-D698 双 satisfied 不误判+needs_edit 对仍判、FL-D695 残余重盘后闸再发+无证据 fail-closed）。
+- **真实复验（2026-11-01，`/tmp/opencode/qa/loop6-fix-matrix/b05/`，$0.0315/27c/204s，HEAD c977573）**：同合同 delivery=complete、0 holds、miss 24/24 CLOSED_REPLAY、audit issues=∅、recovery actions=∅——G02 本轮 ALREADY_SATISFIED（事实判定无需分替）、G15/G16 ARTIFACT_VERIFIED（同一确定性合并编辑经兄弟上下文复核通过），-13 回摆形态全消。全量回归 2540/0/139。
+- **状态**：已修复并验证（适用版本 qa-recall-miss-20261031@c977573 起）。
+
+## FL-D698 B12 G05:2@p162 残余保守扣件：同址 satisfied 双计伪造 occurrence 歧义（2026-11-01，loop-6 门槛 FAIL-2，qa-recall-miss）
+
+- **发现**：loop-6 B12 G05:B3:O1 MISS_PLAN_GAP——同址双 satisfied 目标（T006 39..173 与 `resolve_absent_site_targets` 克隆 `{parent}-ABSENT-G05-2` 0..173）均无 occurrence identity → CLAIM_SITE_OCCURRENCE_UNRESOLVED → 保守扣件。两处 satisfied 是同一否定事实陈述两遍（删除字面已不在），无编辑可双计。
+- **机制修复**：claim_replay 两处歧义判定（义务循环 same_location_targets 与全局 duplicate_target_groups）只对 `needs_edit` 候选计入；absent/not_applicable/satisfied/already_satisfied 均不制造编辑位歧义。replay 站点证明与聚合逻辑不变。
+- **真实复验（2026-11-01，`/tmp/opencode/qa/loop6-fix-matrix/b12/`，$0.0294/25c/193s，HEAD c977573）**：B12 delivery=complete、0 holds；G05:B3:O1 无 occurrence 冲突。残余 G16:B1:O1 MISS_REPLAY_GATE replay PASS 为 FL-D651 跨层 seam（命名原因、非阻断），不属本条目。
+- **状态**：已修复并验证（c977573 起）。
+
+## FL-D695 更新（loop-6 残余）：业务轮重盘整体替换冲掉反证+已执行目标——重盘后反证闸二次挂点（2026-11-01，qa-recall-miss）
+
+- **发现**：loop-6 B15 反证闸第一轮生效（~b:T002 G09、~b:T003 G11 flip 且 G09 已执行+audit R0 completed），但业务轮 `entry.targets` 整体替换（recall_pipeline:5447-5458 区），第二轮模型重判 G09 absent→#1:T011，被反证翻转的目标连已审计执行一并冲掉 → G09:B1:O1 OPEN「verified site missing」。
+- **机制修复**：业务轮 `_collect_targets` 重建+survey 后、rebind/locator 烧模型调用前，再次应用 `refute_absent_by_variant_evidence`，refutation 记录 extend 入 report。
+- **真实复验矩阵（2026-11-01，HEAD c977573）**：B15 两轮本树跑均未复现 absent 重判形态（T3 locator 直接锚定 p159/p164/p165 变体 span，闸无需实发）；第一轮因 inventory 模型静默（18 targets vs 常态 26-34）+第二轮 G11 抖动未 complete（见 FL-D794）；loop-6 冻结树同日下午 B15 complete（34 targets，G09/G11/G12 全 FOUND），本树 B15-rerun 亦捞出 G09/G12——同形态未再发≠已证实修复在所有方差下兜住，留 loop-7 全波观察。
+- **状态**：修复已实施+mutation 验证；真实形态未再发但样本不足，loop-7 全波回归收口判定。
+
+## FL-D794 FL-D793 复发：B15 G11 compose MODEL_SCHEMA_INVALID 双连→计划级 unresolved 无业务级再试（2026-11-01，loop-6 修后真实复验发现，观察项）
+
+- **发现**：loop-6 修后 B15 第二跑（`/tmp/opencode/qa/loop6-fix-matrix/b15-rerun/`，$0.0392/37c/341s）：G11 #1~b:T003@p164 needs_edit 后 compose 连续不过 schema（gateway 层有限重试已耗尽）→ 目标 unresolved（reason MODEL:MODEL_SCHEMA_INVALID），audit「AFTER==BEFORE」如实拦截 → G11:B1:O1 MISSING/OPEN+G11:B1:O2 PLAN_GAP → 9 holds 诚实 incomplete。与 FL-D793 同形态跨树复发（loop-6 曾判零出现销案）。
+- **归类**：模型 schema 抖动 + 计划级软失败缺少业务轮后续再试通道（MODEL_SCHEMA_INVALID 属 SOFT_STOP，目标直接 unresolved 后恢复循环未对其再融资）。后果按设计诚实扣件，无误 complete。
+- **对照证据**：同日 loop-6 冻结树 B15 complete（`/tmp/opencode/qa/loop6-fix-matrix/b15-frozen/`，$0.0327/25c/227s，G11 p164 FOUND+CLOSED）——抖动单发性仍成立，首次跨树复发说明频率高于「罕见」。
+- **下一步**：统计 loop-7 全波 G11 compose schema 失败率；≥2 波复发即升级为机制条目（compose 校验失败 deterministic tier1/fixed-text 回退，或业务轮对 MODEL: 软失败的有限再盘）。
+- **状态**：观察项（已复发一次，未升级解剖）。
 
 ## FL-D695 B15 loop-5 新回归：G09@p159 audit 翻转 needs_edit→absent（MISS_TARGET_RESOLUTION）→ 交付门诚实扣全案（complete→no artifact）（2026-11-01，qa-feat-recall）
 
