@@ -392,7 +392,8 @@ def test_compare_word_style_reader_renders_merged_redline_and_display_modes(brow
         assert page.locator("#compare-coverage-chip").is_visible()
         assert "2 项未覆盖" in page.locator("#compare-coverage-summary").inner_text()
         page.locator("#compare-coverage-summary").click()
-        assert "header" in page.locator("#compare-coverage-list").inner_text()
+        # FL-D980：覆盖警告对用户是可读中文（机读 token 不再直露）。
+        assert "页眉" in page.locator("#compare-coverage-list").inner_text()
         assert page.locator("#compare-coverage-list").is_visible()
         # FL-D843：比对结果区为页面内嵌 region（无 dialog/backdrop/全屏锁）
         assert page.locator("#compare-viewer").get_attribute("role") == "region"

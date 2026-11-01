@@ -4,6 +4,7 @@ import { Button, Card, Spinner } from '../../components/ui'
 import { useCompareTask, useCompareView } from '../../api/hooks'
 import {
   CompareReader,
+  coverageWarningLabel,
   messageOf,
   pairDone,
   statusLabel,
@@ -186,7 +187,7 @@ export function CompareTaskPage() {
       {selectedPair && <Card className="compare-viewer" role="region" aria-label="合同比对结果" data-mobile-pane={mobilePane} data-view-mode={viewMode}>
         <div className="compare-viewer-toolbar">
           <div className="compare-viewer-title"><div><strong id="compare-pair-title">{view?.pair.label || selectedPair?.label || '合同对比'}</strong></div></div>
-          {selectPairReady ? <div className="compare-summary-row"><div className="compare-summary-stat"><span>合同A → 合同B</span><strong>{view?.summary ? `共 ${view.summary.total || 0} 处差异 · 修改 ${view.summary.modify || 0} · 新增 ${view.summary.insert || 0} · 删除 ${view.summary.delete || 0}` : '结果尚未就绪'}</strong></div>{view?.coverage?.status !== 'complete' && view?.coverage && <details className="compare-coverage-chip"><summary>覆盖不完整 · {view.coverage.warnings?.length || 0} 项未覆盖</summary><div className="compare-coverage-popover" role="status"><p>以下内容未纳入比较，请人工复核，不要据此确认全文无差异。</p>{view.coverage.warnings?.length ? <ul>{view.coverage.warnings.map((warning, index) => <li key={`${warning}-${index}`}>{warning}</li>)}</ul> : null}</div></details>}</div> : null}
+          {selectPairReady ? <div className="compare-summary-row"><div className="compare-summary-stat"><span>合同A → 合同B</span><strong>{view?.summary ? `共 ${view.summary.total || 0} 处差异 · 修改 ${view.summary.modify || 0} · 新增 ${view.summary.insert || 0} · 删除 ${view.summary.delete || 0}` : '结果尚未就绪'}</strong></div>{view?.coverage?.status !== 'complete' && view?.coverage && <details className="compare-coverage-chip"><summary>覆盖不完整 · {view.coverage.warnings?.length || 0} 项未覆盖</summary><div className="compare-coverage-popover" role="status"><p>以下内容未纳入比较，请人工复核，不要据此确认全文无差异。</p>{view.coverage.warnings?.length ? <ul>{view.coverage.warnings.map((warning, index) => <li key={`${warning}-${index}`}>{coverageWarningLabel(warning)}</li>)}</ul> : null}</div></details>}</div> : null}
         </div>
         {!selectPairReady ? <p className="compare-viewer-empty" role="status">{selectedPair.status === 'failed' ? pairFailureLabel(selectedPair) || '该组处理失败，请新建对比任务后重试' : '该组正在处理或等待上传，暂无比对结果。'}</p> : viewQuery.error ? <div className="error-state">读取结果失败：{messageOf(viewQuery.error, '结果暂时不可用')}</div> : viewQuery.loading && !view ? <Spinner label="正在读取对比结果" /> : view && <CompareReader view={view} selectedPair={selectedPair} viewQuery={viewQuery} activeDiff={activeDiff} visibleDiffs={visibleDiffs} diffIndex={diffIndex} diffType={diffType} mobilePane={mobilePane} viewMode={viewMode} classicSide={classicSide} isMobile={isMobile} showSources={showSources} markup={markup} setDiffType={setDiffType} setMobilePane={setMobilePane} setViewMode={setViewMode} setClassicSide={setClassicSide} setShowSources={setShowSources} setMarkup={setMarkup} focusDiff={focusDiff} selectPairDiff={selectPairDiff} mergedRef={mergedRef} leftRef={leftRef} rightRef={rightRef} classicLeftRef={classicLeftRef} classicRightRef={classicRightRef} />}
       </Card>}
