@@ -8456,3 +8456,49 @@ H＝E×…
 - **问题**：主线向子线下发需求时把用户的具体表述压缩成抽象词（典型案例：用户三次说「修改列表字体加粗/查看红字无框 vs 比对列表不加粗/黑字有框」，工单只写「列表统一」四个字），子线按各自理解执行后落空；FL-D888 验收失守与本条同族（传递端失了真，验收端才查不出）。
 - **铁律（立即生效，写入看板供全部后续工单遵守）**：每份子线工单必须包含五要素——①用户/上游原话逐字引用 ②现场实锤（文件:行号/现状文案/现象） ③期望终态的精确描述（可断言） ④验收标准（界面证据，非测试绿） ⑤禁止项与汇报格式。禁止把需求压缩成抽象短语下发。
 - **状态**：已执行（FL-D880~887 完整版交接已按五要素重发）；后续工单逐份自检。
+
+## FL-D900 api.py 上传路由残留死代码 reasons 映射表（后端普查）
+
+- **发现日期**：2026-11-01（第七轮饱和式普查·后端非引擎域，qa-backend-audit）。
+- **问题与影响**：`fundlex/api.py:1413` 在 `upload_task` 内构造 `reasons = {"only DOCX files are supported": "UNSUPPORTED_FILE_FORMAT", ...}` 九项「旧错误消息→错误码」映射，全文件仅此一处出现，从未被读取——现行路径已直接用 `UploadValidationError.code`（行 1428 `error = exc.code`）。无功能影响，属演进残留死代码，误导读者以为还有消息串匹配逻辑。
+- **处理方法**：建议删除该字面量（纯删，行为不变）。
+- **状态**：已登记，待修复（低风险快改）。
+- **下一步**：随后端任一批次顺手删除；无需专门回归（引用为零可静态证明）。
+
+## FL-D901 模型设置三处中文 422 detail 被稳定错误信封吞掉（用户不可见）
+
+- **发现日期**：2026-11-01（后端普查，api×api_errors×前端封装交叉核对）。
+- **问题与影响**：`fundlex/api.py:1269/1277/1279` 三处 `raise HTTPException(422, "模型配置无法保存，请检查供应商、模型和访问密钥。"/"请先填写有效的供应商、模型和访问密钥；服务地址须为公网 HTTPS 地址。")`。但全局信封（`api_errors.code_from_detail` + `api.py:572 api_error_response`）只把匹配 `^[A-Z0-9_]+$` 的 detail 当稳定码，中文长句一律归为 `INVALID_REQUEST`，响应 `message/detail` 均为通用文案/码；前端 `reason()` 映射表亦无 `INVALID_REQUEST`/`MODEL_SETTINGS_INVALID` 条目 → 用户实际只见「请求或文件无法处理。」，路由作者写的具体修复指引（查供应商/密钥/HTTPS 地址）不可达。影响面：模型配置保存与验证连接失败时的排障指引缺失，恰是用户高频踩坑点。
+- **处理方法**：建议改为稳定码路径——`MODEL_SETTINGS_INVALID`/`MODEL_CONNECTION_INVALID`（`raise_api_error` 已支持），并把对应中文指引补进前端 `reasons` 表；或信封增加「安全 detail 白名单」通道。禁直接回传异常原文。
+- **状态**：已登记，待产品定口径后修复。
+- **下一步**：与前端线确认 reason 表增补条目，一处后端+一处前端同步改。
+
+## FL-D902 guide_store canary/parse_report 增强失败完全静默（可观测性缺口）
+
+- **发现日期**：2026-11-01（后端普查 AST 扫描 38 处吞错逐批复核收尾）。
+- **问题与影响**：`fundlex/guide_store.py:221`（executability canary 产 needs_review 复核维度）与 `:233`（block_report 产块级解析报告）两处 `except Exception: pass`（noqa: BLE001）。定位是 advisory 增强、失败不阻塞主错误路径——方向正确；但**无任何日志**：canary 自身坏掉（如依赖变更）时，needs_review 标记静默消失，审核面出现假干净，排查无线索。
+- **处理方法**：建议两处至少 `LOGGER.debug/warning("canary/block_report 附加信息生成失败", exc_info=True)`，不改变 best-effort 语义。
+- **状态**：已登记，待修复（低风险）。
+- **下一步**：同 guide_store 下次改动一并补日志。
+
+## FL-D903 飞书建卡成功后 discard_draft_files 清理失败静默无日志
+
+- **发现日期**：2026-11-01（后端普查，service.py 吞错现场复核）。
+- **问题与影响**：`fundlex/integrations/feishu/service.py:834` 任务创建、状态卡已发出后，`self.integrations.discard_draft_files(...)` 的 `except Exception: pass` 无日志。失败后果仅是草稿文件孤儿（retention 兜底，无功能损害）；但 DB/文件清理持续失败（如磁盘满、锁）时无任何痕迹，只有孤儿文件堆积这一滞后信号。
+- **处理方法**：建议补 `_LOGGER.warning("draft files discard failed draft_id=%s", ..., exc_info=True)`。
+- **状态**：已登记，待修复（低风险）。
+- **下一步**：随飞书线下次改动补日志。
+
+## FL-D904 feishu_health 路由用 __import__ 动态探测 worker 存活（脆弱异味）
+
+- **发现日期**：2026-11-01（后端普查，api.py 管理面走查）。
+- **问题与影响**：`fundlex/api.py:1065` `feishu_health` 用 `__import__("fundlex.integrations.feishu.service", fromlist=["active_service"]).active_service() is not None` 判断飞书 worker 进程存活。两处脆弱：①`active_service` 是模块级单例，经 `__import__` 在同一进程内求解——而 admin 健康检查跑在 **API 进程**，worker 是独立 systemd 单元，import 到的只是 API 进程内的副本（通常 None），语义上测不到真实 worker 状态，`service_process_active` 字段长期为 false 或误导；②`__import__` 内联写法绕开模块依赖声明，改名即炸且无静态检查。
+- **处理方法**：建议改为真实跨进程探活（worker 心跳行/lease 记录，integrations store 已有 health() 聚合可承载），或如实把该字段标记为"仅同进程诊断"并改名避免误读。
+- **状态**：已登记，待运维确认现有告警是否依赖该字段后再修。
+- **下一步**：核对生产监控是否消费 `service_process_active`；无消费者则按②改名+注释，有消费者则按①做实。
+
+## FL-D905 后端普查正向结论（饱和令覆盖声明，非问题）
+
+- **发现日期**：2026-11-01（第七轮饱和式普查后端非引擎域收口）。
+- **结论**：对 api 路由（71 个端点）、tasks 生命周期、五 worker plumbing（recall/compare/guide/feishu unit 模板+jobs 租约接管）、鉴权会话（scrypt/时序燃烧/throttle/事务化 last-admin）、静态托管（catch-all 仅重定向不拼路径）、部署脚本（tools/deploy 全部）逐文件走查+AST 扫描 38 处吞错全部现场复核：**无注入面**（SQL 全参数化，f-string 仅白名单标识符/占位符）、**无路径穿越面**（下载三件套白名单+读字节回响应、上传名 Path().name 归一、guide source 库 ID 解析）、**无越权面**（owner 全链路、admin 404 防枚举）、**无硬编码密钥**（部署脚本凭据全经 env/文件引用）。除 FL-D900~904 五项低风险登记外无中高严重度发现。CSP 缺失为既有在册项（api.py:619 注释自引），不重复登记。
+- **状态**：普查完成，结论归档（详见 docs/backend/BACKEND_AUDIT_20261101.md 及附录）。
