@@ -8237,3 +8237,11 @@ H＝E×…
 - **主线实查**：两码仅在 `enforce_limits=True` 时触发（model_budget.py reserve）；生产 `/etc/fundlex-recall.env` 未设 `FUNDLEX_MODEL_ENFORCE_LIMITS`（model.py/roles.py 读该 flag 默认关）→ 生产为纯账本观测模式，两码不可达，政策一致。
 - **裁决**：①用户文案改为中性系统错误（不出现"预算/额度/已用尽"），政策下该状态不应存在，真出现=配置事故不给用户政策冲突解释——前端 FL-D830 执行；②`enforce_limits` 死路径及入口的政策一致性深层清理挂引擎侧待办（`jobs.py`/`model_router.py`/`delivery.py`/`recovery/types.py` 的旁路名单保留属容错合理，不拆）。
 - **状态**：裁决已下，前端执行中；深层清理保持 open（低优先，不阻塞）。
+
+## FL-D699 释义容器型 composite 内的恒等类替换被计划面永久扣件：实例化恒等⇒satisfied-noop（2026-11-01，loop-7 残存单因子 B05，qa-recall-miss）
+
+- **发现**：loop-7（ada83eb）唯一 FAIL=B05 5 holds 诚实扣件。FL-D697a 容器守卫精确事前拒证（`RECALL_COMPOSITE_REPLACE_SCOPE_UNPROVEN`，破坏性编辑结构性排除）、G16 兄弟盲区支消退；残余机制缺陷：rebind_clause_continuation 把 G02:0 词级替换绑到 p118+p119 释义容器 composite，守卫拒整段替换（正确），但 G02:0 实例化新文本=A类基金份额==旧引用（subscription_group=["A"] 硬事实）——恒等替换本应判定已满足，却无通道闭合 → G02:B1:O1 MISS_PLAN_GAP 永久扣件（统计 -13）。主线裁决归族 FL-D650/683（模型生成面挥发触发的形状），要求机制化 span/no-op 约束而非提示词调优。
+- **机制修复**：plan 阶段 composite 分支在 `plan_composite_target` 前判恒等——`target_class_ops_identity`（recall.py）：class_substitution 规则、三群组事实均 VERIFIED、目标认领的适用 replace 操作逐一 instantiate_slots==old_text（逐操作粒度，混合型产品只坍缩恒等支、不动实工支）→ 目标转 satisfied-noop（ledger reason `class_substitution_identity_noop`），复用 FL-D052/FL-D106 硬事实边界与 R033 `class_operation_binding` 先例。
+- **mutation 测试**（`tests/test_loop6_repairs.py` 增 3 例，累计 11）：恒等闭合/混合事实不坍缩+守卫仍 fail-closed/非类替换规则与未验证事实拒坍缩。
+- **真实复验矩阵（2026-11-01，`/tmp/opencode/qa/loop8-fix-matrix/`，HEAD 686f080）**：**B05 complete**（0 holds、24/24 CLOSED_REPLAY、audit issues=∅、recovery=∅，$0.0311/25c——本轮模型直接判 G02 satisfied，恒等坍缩无需实发，病灶形态由 mutation 用例按 loop-7 ledger 形状离线覆盖）；**B12 complete**（0 holds、24/24 CLOSED，$0.0229/23c）；**B15 complete**（0 holds、21/21 CLOSED，$0.0265/23c）。全量回归 2543/0/139。
+- **状态**：已修复并验证（qa-recall-miss-20261031@686f080 起）；恒等坍缩实发留 loop-8 全波观察（复合 rebind 形态再现时判定路径）。
