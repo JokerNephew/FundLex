@@ -1,0 +1,42 @@
+{
+ "script": "tools/evaluation/w3_reverify_second_batch_labels_20261101.py",
+ "batch": 2,
+ "cases": [
+  "W2D21",
+  "W2D22",
+  "W2D23",
+  "W2D24",
+  "W2D25",
+  "W2D26",
+  "W2D27",
+  "W2D28",
+  "W2D29",
+  "W2D30",
+  "W2D31",
+  "W2D32",
+  "W2D33",
+  "W2D34",
+  "W2D35",
+  "W2D36",
+  "W2D37",
+  "W2D38",
+  "W2D39",
+  "W2D40"
+ ],
+ "labels_sha256": "423c6944687a6006d493d3f8dff4b4cb32593cc6acc26c2e2b3fb423622a88f5",
+ "selection_sha256": "32b36f02a9c6cafebee7a73fcda0791c707ac62d07fe67bb57e91daafc6187d9",
+ "envelope_problems": [],
+ "problems": [
+  "W2D33: rule_coverage[8] evidence_quote CONTENT not in source (G09/target): '赎回金额为按实际确认的有效赎回份额乘以当日对应份额类别的基金份额净值并扣除相应的'",
+  "W2D39: rule_coverage[12] evidence_quote CONTENT not in source (G13/satisfied): '基金管理人可以在基金合同约定的范围内调整费率或收费方式，并最迟应于新的费率或收费'"
+ ],
+ "warnings": [],
+ "counts": {
+  "cases": 20,
+  "targets": 263,
+  "coverage_entries": 880,
+  "cases_with_targets": 18,
+  "uncertain_entries": 4,
+  "ineligible_cases": []
+ }
+}
