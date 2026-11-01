@@ -90,6 +90,18 @@ def fee_value(quote: str, field: str, name: str, *, single_bound: bool = False) 
         if not subjects:
             if single_bound and (name == "__single__" or "本基金" in sentence):
                 blocks = [sentence]
+            elif (field == "subscription_fee"
+                  and re.search(r"(?:认购|申购)(?:费用|费)由[^，,。；;]{1,15}承担",
+                                sentence)):
+                # FL-D862: a class-specific fee quote may cite the contract's
+                # letterless default subscription-fee sentence, but only the
+                # charge-assignment shape ("申购费用由投资人承担，不列入基金财产")
+                # establishes a charge — a letterless rate-discretion sentence
+                # ("申购费率由基金管理人决定") deliberately proves nothing at
+                # class level (test_fee_fact_evidence guard).  With no class
+                # letters anywhere in the sentence it cannot be about another
+                # class; the per-clause _SPECIAL/_UNCERTAIN filters still apply.
+                blocks = [sentence]
             else:
                 continue
         else:
@@ -116,8 +128,18 @@ def fee_value(quote: str, field: str, name: str, *, single_bound: bool = False) 
                     if _SPECIAL.search(prefix):
                         continue
                     blocks.append(sentence[start:end])
+        fee_pattern = (r"(?:认购[、/和及]|认)?申购(?:费用|费)"
+                       if field == "subscription_fee" else r"销售服务费(?:用)?")
         for block in blocks:
             if "分别" in block and not _shared_respective_fee(block, field):
+                continue
+            if (re.search(r"豁免[^，,。；;]{0,24}?" + fee_pattern, sentence)
+                    and re.search(fee_pattern, block)):
+                # FL-D862: a waiver clause ("本基金可以豁免Y类基金份额的申购费用")
+                # presupposes the fee exists by default — you can only exempt a
+                # fee that is otherwise charged.  This outranks the _UNCERTAIN
+                # 可以 filter: the clause proves the default fee regime.
+                values.add(True)
                 continue
             special = False
             for clause in re.split(r"[，,]", block):

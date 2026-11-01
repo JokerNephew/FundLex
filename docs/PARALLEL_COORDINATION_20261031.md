@@ -84,3 +84,67 @@
 - ✅ recall-miss r3 → 9efe827（FL-D695/696 机制修复）；loop-6 冻结令已发 feat-recall
 - ✅ compare-tracked → 30cf69e（修订痕迹接受视图；worker/store 双特性共存）——compare 域全部线收口
 - 在跑：loop-6 dev20；项9 已完；留 compare 性能复测（低噪窗口）
+
+### 2026-11-01 09:5x 收口进度（巡线29）
+- ✅ recall-miss r4 → ada83eb（FL-D697 容器校验/FL-D698 satisfied 消歧/FL-D695 残渣；24 测绿）；loop-7 冻结令已发 feat-recall
+- ✅ 前端第三轮规划过目通过 → 批0/批1 动工令（FL-D803~815 入册；验收=并排对照非 token）
+- 在跑：loop-7 dev20；前端设计收敛批0/批1
+
+### 2026-11-01 10:4x 会话映射补充
+- **A4vO9d5**=guide-generation 专项（ses_e6b1fb214ffe9UIKWT7A4vO9d5，worktree qa-gg-audit）：FL-D820 后续全面检查/守门补强/错误人读化；号段 FL-D820~829
+- 第三轮需求追加 5 项已发前端主线合并施工
+
+### 2026-11-01 12:1x 会话映射补充
+- **HOKfnt**=compare-ux 线（ses_e6acc8f6effe1JmCR2hnHOKfnt，worktree qa-compare-ux）：比对滚动丝滑+比对链路重设计；号段 FL-D840~859；与前端主线 compare 文件域错峰约定
+- gg-audit（A4vO9d5）扩权：审计→补完开发+充分测试（用户第 17 点）
+
+### 2026-11-01 12:4x 收口进度（巡线32）
+- ✅ recall-miss r5 → aa30eaf（FL-D699 恒等类替换坍缩；21 测绿）；loop-8 冻结令已发
+- ✅ 前端第三轮全量 → 4173dec（设计令牌/输入下拉/动效/三禁令/列表统一/文案人话化/FL-D818 结果页重构；主线复验 vitest24/build/浏览器80 全绿+并排对照亲验）
+- 在跑：loop-8 dev20；gg-audit（扩权后观察中）；compare-ux 方案阶段
+
+### 2026-11-01 13:0x 会话映射勘误（FL-D860）
+- ~~A4vO9d5 / nHOKfnt~~（僵尸，deepseek-flash 空转）→ 重建：**XMWmAw4**=gg-audit、**OhgIvj8**=compare-ux（均钉 hon-maas/kimi-k3#high，已见产出）
+- 调度 SOP：API 建会话必须显式钉模型（Model.Ref 对象）
+
+### 2026-11-01 13:5x 收口进度（巡线34，里程碑）
+- 🎯 **loop-8 = 100.0%（390/390）八波首达——dev20 冻结门槛全项达成**；留出 8 份首验令已发 feat-recall；第二波 100 份标签准备激活 kvvQwuiB
+- ✅ compare-ux A 阶段 → 滚动丝滑化并入（rAF 同步+splitter 重对齐+双视图；perf 新测绿）
+- FL-D861 B01 悬空残句带标交付形态登记（观察项）；recall 新池 FL-D862~869
+
+### 2026-11-01 14:4x 巡线35（评测转折）
+- 留出首验 51.4%（57/111，3/8，fc=0守住）：分布外新家族 FL-D862/863/864——**第二波不放行**，修复令发 recall-miss（禁样本特判；留出首轮如实留史，二轮待修复）
+- compare-ux B 方案过目通过 → FL-D843~848 动工（P1/P2/P3 两级嵌套去 dialog）
+- gg-audit 节奏催收（85min 不可见）
+
+### 2026-11-01 15:xx 既往十项复验令（用户第五轮指令）
+- 前端线：FL-D890~893（模型配置页重构/版本比对完整性/规则选择人话化/既往全量自证）与 FL-D880~887 同一交付
+- 比对线：COMPARE_SCROLL_REUSE_NOTES.md 复用说明（供 FL-D891）
+- 飞书线：项5 盘点+操作成本优化清单+真实验证脚本
+- 评测线：项7/8 作证报告（机制面自证+扩样台账）
+- gg-audit：盘点追加指引 diff 后端能力问题
+- 发布#5 门槛：FL-D880~887 与 FL-D890~893 全部销号 + 主线生产逐页亲验
+
+### 2026-11-01 15:2x 第六轮派工（用户"派给空闲的对话"）
+- recall-miss：FL-D897 修订流程大修授权（失效模式总图 REVISION_FAILURE_MODES.md）
+- gg-audit：FL-D898 新指引解析质量门（可检验标准+多形态测试矩阵+变量名外泄根治）
+- 前端主线：+FL-D894 技术外泄清扫 / FL-D895 小字复查 / FL-D896 合同修改页面群整体设计（方案先过目）
+- V2线（81FirpsQ）复出：FL-D899 V2 全站四关普查
+- 发布#5 总门槛更新：FL-D880~887 + 890~896 + 899 全销号 + 主线逐页亲验
+
+### 2026-11-01 16:3x 全覆盖矩阵 + 两条新审计线（用户最后通牒后）
+- docs/COVERAGE_MATRIX_20261101.md：549 文件+21 页面域逐格成指派，零漏项；销号=逐格签认
+- 新线：**Kdvq1x**=EN2 引擎审计2（generation/docx/guide*/delivery 等，FL-D921~939）；**czGpu**=PL2 平台审计（tools 97+tests 全量，FL-D940~959）；总会话 10 条
+- 九线总则追加令已发（用户铁律原文逐字置头）
+- FL-D920：简化需求=大忌，最后通牒级登记
+
+### 2026-11-01 16:5x 监督线设立 + 两合并完成
+- **监督线 qa-overseer（会话 WO4MKd 尾）**：用户亲令设立，独立树 qa-overseer；追溯+产出侧+常驻三审计，驳回权；发现号段 FL-D960~979；工单留档制 /tmp/opencode/qa/dispatch-log/（API 窗口仅找回 6 份历史工单，产出侧审计补足）
+- recall 修复回归 2659/0 绿 → **留出第二轮令已发**（新引擎冻结 05c3ef1）
+- compare-ux B 阶段（FL-D843~848 链路重设计）并入 7b95c38（vitest24/build/浏览器 12 绿）
+
+### 2026-11-01 17:5x 三并收口（GG/CX/V2）
+- GG 并入 7931390（FL-D898 质量门+16测+27文件签认+parse-2/prompt-v2 有意升级，两处测试断言跟进 38997a5/续）
+- CX 并入 92aa408（FL-D853~860 签认修复；事故：主线误 reset 后已按 reflog 无损重建历史）
+- V2 并入（FL-D899 普查+直修；冲突裁决：app.css 取比对新形态/ComparePage.tsx 尊重 B 重设计删除/DETAIL 并集）→ vitest24/build/浏览器12 全绿
+- 工单留档制落地：dispatch-log/MAINLINE-2026-11-01.md（监督线常驻审计料）

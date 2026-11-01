@@ -3,7 +3,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import axe from 'axe-core'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { SplitPane } from '../src/components/document/SplitPane'
-import { SafeCompareDocument } from '../src/pages/Compare/ComparePage'
+import { SafeCompareDocument } from '../src/pages/Compare/shared'
 import { AppShell } from '../src/components/layout/AppShell'
 
 vi.mock('../src/api/hooks', () => ({

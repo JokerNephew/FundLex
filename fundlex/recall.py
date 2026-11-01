@@ -975,6 +975,49 @@ def single_class_fee_evidence(inspection: DocumentInspection) -> tuple[str, bool
     return "", False
 
 
+def multi_class_no_service_evidence(inspection: DocumentInspection,
+                                    classes: Sequence[Any]) -> bool:
+    """Bounded absence proof for a multi-class product's empty service-fee group.
+
+    Multi-class counterpart of :func:`single_class_fee_evidence` (FL-D862): when
+    every current class claims ``service_fee=False`` the polarity gate still
+    stays empty if the contract never writes a class-bound sales-service-fee
+    clause (an FOF mentions 销售服务费 only for its underlying funds — the fee
+    never binds a product class letter).  Scan the whole document: any sentence
+    that binds a current class letter (``X类``) to 销售服务费 refutes the proof;
+    zero bindings for every current class proves the empty group.
+    """
+    current = [item for item in classes
+               if getattr(item, "current", False)
+               and str(getattr(item, "name", "")) != "__single__"]
+    if not current or any(getattr(item, "service_fee", False) for item in current):
+        return False
+
+    def _letter(name: str) -> str:
+        # Class names arrive either as the bare letter ("A", "Y") or as the
+        # full legal name ("A类基金份额").
+        if re.fullmatch(r"[A-ZＡ-Ｚ]", name):
+            return name
+        match = re.search(r"[A-ZＡ-Ｚ](?=类)", name)
+        return match.group(0) if match else ""
+
+    letters = {letter for item in current
+               if (letter := _letter(str(item.name)))}
+    if not letters:
+        return False
+    for span in inspection.paragraphs:
+        text = _compact(str(span.text or ""))
+        if "销售服务费" not in text:
+            continue
+        for sentence in re.split(r"(?<=[。；;！？!?])", text):
+            if "销售服务费" not in sentence:
+                continue
+            bound = set(re.findall(r"[A-ZＡ-Ｚ](?=类)", sentence))
+            if letters & bound:
+                return False
+    return True
+
+
 def facts_from_value(inspection: DocumentInspection, value: dict[str, Any]) -> Facts:
     """Parse one FACTS_SCHEMA answer and verify every quote against the source.
 
@@ -1117,6 +1160,8 @@ def facts_from_value(inspection: DocumentInspection, value: dict[str, Any]) -> F
         class_set_evidence = verify_class_set(inspection, classes, class_set_quote)
     set_complete = bool(class_set_evidence["set_complete_verified"])
     from .fee_evidence import fee_value
+    multi_class_no_service_verified = multi_class_no_service_evidence(
+        inspection, classes)
     fee_polarities: dict[str, dict[str, bool | None]] = {}
     for item in classes:
         fee_polarities[item.name] = {}
@@ -1146,6 +1191,24 @@ def facts_from_value(inspection: DocumentInspection, value: dict[str, Any]) -> F
                 problems.append(f"FEE_QUOTE_UNPROVEN:{item.name}:{field_name}")
             elif expected is not getattr(item, field_name):
                 problems.append(f"FEE_QUOTE_CONFLICT:{item.name}:{field_name}")
+    # FL-D862: the multi-class absence proof certifies an empty service group
+    # only when every current class already produced a concrete subscription
+    # polarity (the extraction demonstrably engaged the fee chapter).  A
+    # contract whose fee quotes never resolve (silent/discretion-only) must
+    # stay UNKNOWN — the same fail-closed behaviour as before.
+    if multi_class_no_service_verified:
+        current = [item for item in classes
+                   if item.current and item.name != "__single__"]
+        if current and all(fee_polarities[item.name].get("subscription_fee") is not None
+                           for item in current):
+            applied = [item.name for item in current
+                       if fee_polarities[item.name].get("service_fee") is None]
+            for name in applied:
+                fee_polarities[name]["service_fee"] = False
+                quotes_verified[f"service_fee:{name}"] = True
+            if applied:
+                unproven = {f"FEE_QUOTE_UNPROVEN:{name}:service_fee" for name in applied}
+                problems[:] = [item for item in problems if item not in unproven]
     value_verified = bool([item for item in classes if item.current]) and all(
         class_quotes.get(item.name, False) and all(
             fee_polarities[item.name][key] is getattr(item, key)
@@ -6254,6 +6317,46 @@ def class_substitution_letter_stable(rule: dict, facts: Facts) -> bool:
     return checked
 
 
+def target_class_ops_identity(rule: dict, operation_ids: Sequence[str],
+                              facts: Facts) -> bool:
+    """Hard fact: every claimed applicable replace op instantiates to its own reference.
+
+    FL-D699: a class-substitution rule rebound onto a container (composite
+    definition clause) can carry instantiated replacements equal to the guide
+    reference term-by-term (the product's own classes already are the group the
+    rule asks for, e.g. subscription group ["A"] vs "A类基金份额").  An identity
+    replacement is a satisfied no-op by definition; planning an edit would either
+    rewrite text for no effect or trip the composite scope guard and leave the
+    obligation permanently open (B05 G02:0@p118 loop-7).  Same hard-fact guards
+    as ``class_substitution_letter_stable`` — verified group facts, no slot
+    issues — scoped to the operation ids the target actually claims, so a mixed
+    product (one branch identity, one branch real work) only collapses the
+    identity branch.
+    """
+    if not rule.get("class_substitution"):
+        return False
+    if any(facts.status_of(name) != "VERIFIED" for name in (
+            "share_class_structure", "subscription_fee_group", "service_fee_group")):
+        return False
+    claimed = {str(key) for key in (operation_ids or ())}
+    rule_id = str(rule.get("rule_id") or "")
+    checked = False
+    for index, operation in enumerate(rule.get("operations") or []):
+        if claimed and _declared_operation_key(rule_id, index, operation) not in claimed:
+            continue
+        if not condition_matches(operation.get("condition"), facts):
+            continue
+        if operation.get("op") != "replace":
+            return False
+        instantiated, issues = instantiate_slots(str(operation.get("new_text") or ""), facts)
+        if issues or not instantiated:
+            return False
+        if _compact(instantiated) != _compact(str(operation.get("old_text") or "")):
+            return False
+        checked = True
+    return checked
+
+
 def _condition_fact_names(condition: dict | None) -> set[str]:
     if not condition:
         return set()
@@ -6609,6 +6712,27 @@ def plan_composite_target(rule: dict, target: Target, inspection: DocumentInspec
             remaining -= length
         parts = bounded
         target.composite = tuple(f"{location}:{start}:{end}" for location, start, end in parts)
+    elif new_text:
+        # FL-D697: a composite whole-reference replacement is only authorized
+        # when the operation's own ``old_text`` covers the entire reference.
+        # (The G11 branch above already bounded the reference with its own
+        # bearer-end proof; every other rule needs this containment check.)
+        # A term-level replace (G02:A类基金份额→…) rebound onto a multi-paragraph
+        # composite reference must NOT swap the whole reference for the bare
+        # term: B05 p118+p119 collapsed two full definitions into the token
+        # "A类基金份额".  Fail closed (target-level hold) instead.
+        applicable = [rule["operations"][i] for i in
+                      _selected_operation_indices(rule, target, inspection, facts, None)
+                      if rule["operations"][i].get("op") == "replace"]
+        authorized_old = "".join(_compact(str(operation.get("old_text") or ""))
+                                 for operation in applicable)
+        reference = _compact("".join(
+            compact_offsets(inspection.by_location(location).text)[0][start:end]
+            for location, start, end in parts))
+        if not authorized_old or not compact_in(reference, authorized_old):
+            raise RecallError("RECALL_COMPOSITE_REPLACE_SCOPE_UNPROVEN", {
+                "target": target.target_id, "rule": target.rule_id,
+                "parts": [f"{loc}:{s}:{e}" for loc, s, e in parts]})
     edits: list[PlannedEdit] = []
     for index, (location, start_clean, end_clean) in enumerate(parts):
         span = inspection.by_location(location)
@@ -9289,6 +9413,19 @@ def plan_edits(rules_by_id: dict[str, dict], targets: Sequence[Target], inspecti
                         raise RecallError("RECALL_SLOT_UNRESOLVED",
                                           {"rule": rule["rule_id"], "issues": issues})
                     break
+                if target_class_ops_identity(rule, target.operations, facts):
+                    # FL-D699: every claimed class-substitution op instantiates to
+                    # its own reference — the container already names the actual
+                    # classes.  Close as satisfied-noop instead of planning an
+                    # identity edit (which the FL-D697a guard would fail-closed
+                    # into a permanent obligation hold, B05 G02:0@p118 loop-7).
+                    target.state = "satisfied"
+                    target.reason = f"{target.reason}|CLASS_SUBSTITUTION_IDENTITY_NOOP"
+                    ledger.append({"target_id": target.target_id, "rule_id": target.rule_id,
+                                   "status": "satisfied",
+                                   "reason": "class_substitution_identity_noop",
+                                   "operation_keys": list(target.operations)})
+                    continue
                 composite_edits = plan_composite_target(rule, target, inspection, facts,
                                                         new_text=replacement)
                 for composite_edit in composite_edits:
@@ -10740,7 +10877,7 @@ def absent_delete_coverage(rules_by_id: Mapping[str, Any],
     # offered the redemption-fee reduction (弘利 p159).  This is narrower than the
     # delete rules: any surviving fee-adjustment wording in scope blocks the
     # certificate, so a paraphrase cannot be closed as absent.
-    replace_noop = {"G05", "G14", "G02", "G04"}
+    replace_noop = {"G05", "G14", "G02", "G04", "G18"}
     in_scope_operations: set[str] = set()
     for target in targets:
         if (target.out_of_scope or target.attribution_error
@@ -10779,6 +10916,23 @@ def absent_delete_coverage(rules_by_id: Mapping[str, Any],
             continue
         references = [str(value) for value in
                       (spec.old_text, *spec.alternatives) if str(value).strip()]
+        if spec.op == "replace" and spec.rule_id == "G18":
+            # FL-D864: a class-bearing old sentence may be absent only when the
+            # *instantiated* form is absent too.  Verified groups are required
+            # (fail closed when they are not), and an unresolvable slot blocks
+            # the certificate.
+            if facts is None or any(
+                    facts.status_of(name) != "VERIFIED" for name in
+                    ("share_class_structure", "subscription_fee_group",
+                     "service_fee_group")):
+                continue
+            if not references:
+                continue
+            instantiated, issues = instantiate_slots(references[0], facts)
+            if issues or not instantiated:
+                continue
+            references = list(dict.fromkeys([references[0], instantiated,
+                                             *references]))
         scope = (scopes or {}).get(spec.rule_id)
         scanned = sorted(scope.locations) if scope is not None else locations
         scanned = [location for location in scanned
@@ -10805,6 +10959,13 @@ def absent_delete_coverage(rules_by_id: Mapping[str, Any],
                 # no-op check above.  Any enumerated replacement class that is
                 # already present is also left to the normal target path.
                 pass
+            elif spec.rule_id == "G18":
+                # FL-D864: the income section must not discuss the classes'
+                # service-fee arrangement at all.  Any surviving mention is a
+                # paraphrase the literal scan failed to anchor; the obligation
+                # stays open (fail closed) instead of a false absence.
+                if "销售服务费" in scoped_document:
+                    continue
             elif re.search(r"调低[^。；;]{0,16}费率", scoped_document):
                 continue
         semantic_hits = _semantic_delete_hits(spec.rule_id, document)

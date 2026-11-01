@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import hashlib
+import os
 import re
 import time
 from dataclasses import dataclass
@@ -23,6 +24,22 @@ _CONTRACT_SUFFIX = re.compile(r"基金合同.*$")
 _NON_CONTRACT = re.compile(r"(?:模板|template|说明|指引|备忘|对比|compare)", re.IGNORECASE)
 
 
+class CorpusConfigError(RuntimeError):
+    """The configured corpus directory cannot serve a run.
+
+    The stable ``code`` distinguishes a missing/misconfigured directory
+    (``CORPUS_DIR_MISSING``) from one the process cannot read
+    (``CORPUS_DIR_UNREADABLE``).  Both are configuration/deployment faults and
+    must never degrade into an empty snapshot that a gate later reports as the
+    ambiguous ``CORPUS_EMPTY`` (FL-D821).
+    """
+
+    def __init__(self, code: str, detail: str):
+        super().__init__(f"{code}: {detail}")
+        self.code = code
+        self.detail = detail
+
+
 @dataclass
 class SyncResult:
     snapshot: CorpusSnapshot
@@ -30,6 +47,9 @@ class SyncResult:
     reused: int
     skipped: int
     errors: list[dict[str, str]]
+    # Eligible contract files found in the directory before ``limit``
+    # truncation; callers can tell a truncated scan from an empty corpus.
+    eligible_files: int = 0
 
 
 def _normalise_name(name: str) -> str:
@@ -76,11 +96,50 @@ def scan_corpus_directory(directory: str | Path) -> list[Path]:
     return files
 
 
+def _validated_corpus_root(directory: str | Path) -> Path:
+    """Fail loudly when the corpus directory is missing or unreadable.
+
+    ``Path.is_dir``/``glob`` semantics differ across platforms and Python
+    versions: a sandboxed or permission-denied directory can collapse into a
+    silent empty scan, which previously surfaced only as the ambiguous
+    ``CORPUS_EMPTY`` two stages later (FL-D820/FL-D821).  ``os.listdir`` gives
+    a precise errno so the run fails with an actionable configuration error
+    at the first corpus stage instead.
+    """
+    if not str(directory or "").strip():
+        raise CorpusConfigError("CORPUS_DIR_MISSING", "no corpus directory configured")
+    root = Path(directory)
+    try:
+        os.listdir(root)
+    except FileNotFoundError:
+        raise CorpusConfigError(
+            "CORPUS_DIR_MISSING",
+            f"corpus directory does not exist: {root}") from None
+    except NotADirectoryError:
+        raise CorpusConfigError(
+            "CORPUS_DIR_MISSING",
+            f"corpus path is not a directory: {root}") from None
+    except PermissionError:
+        raise CorpusConfigError(
+            "CORPUS_DIR_UNREADABLE",
+            f"corpus directory is not readable by this process: {root}") from None
+    except OSError as exc:
+        raise CorpusConfigError(
+            "CORPUS_DIR_UNREADABLE", f"{root}: {exc}") from None
+    return root
+
+
 def sync_corpus(store: GuideGenerationStore, directory: str | Path, *,
                 limit: int | None = None, force: bool = False) -> SyncResult:
     """Parse new/changed contracts and publish one immutable snapshot."""
     store.ensure_schema()
-    paths = scan_corpus_directory(directory)
+    root = _validated_corpus_root(directory)
+    try:
+        paths = scan_corpus_directory(root)
+    except OSError as exc:
+        raise CorpusConfigError(
+            "CORPUS_DIR_UNREADABLE", f"cannot scan {root}: {exc}") from None
+    eligible = len(paths)
     if limit:
         paths = paths[:limit]
     parsed = reused = skipped = 0
@@ -178,4 +237,5 @@ def sync_corpus(store: GuideGenerationStore, directory: str | Path, *,
                 "parse_failed": sum(item.status == "parse_failed" for item in all_versions)},
     )
     store.create_snapshot(snapshot)
-    return SyncResult(snapshot=snapshot, parsed=parsed, reused=reused, skipped=skipped, errors=errors)
+    return SyncResult(snapshot=snapshot, parsed=parsed, reused=reused, skipped=skipped,
+                      errors=errors, eligible_files=eligible)

@@ -291,8 +291,8 @@ def test_worker_parses_queued_guide_job(tmp_path, monkeypatch):
     parsed = guide_store.get_version(store, OWNER, version["id"])
     assert parsed["status"] == "parsed" and parsed["rules_count"] == 2
     assert parsed["qualification_status"] == guide_store.QUALIFICATION_CERTIFIED
-    assert parsed["parser_version"] == "guide-parse-1"
-    assert parsed["prompt_versions"] == {"guide_parse": "guide_parse_v1", "guide_verify": "guide_verify_v1"}
+    assert parsed["parser_version"] == "guide-parse-2"  # FL-D904 表体抽取升级
+    assert parsed["prompt_versions"] == {"guide_parse": "guide_parse_v2", "guide_verify": "guide_verify_v1"}  # FL-D898 一致性契约升级
     document = guide_store.guide_document(store, version["id"])
     assert document["schema_version"] == GUIDE_SCHEMA_VERSION and len(document["groups"]) == 2
     guide_store.set_current_guide(store, OWNER, version["id"])

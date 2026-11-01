@@ -2989,10 +2989,12 @@ def _reopen_audit_disagreed_targets(issues: Sequence[dict[str, Any]],
 
 def _audit_issues(state: dict[str, Any], targets: Sequence[Target],
                   rules_by_id: Mapping[str, dict] | None = None,
-                  facts: Facts | None = None) -> list[dict[str, Any]]:
+                  facts: Facts | None = None,
+                  planned: dict | None = None) -> list[dict[str, Any]]:
     """Current unresolved audit problems: missing/incomplete verdicts and missed targets."""
     issues: list[dict[str, Any]] = []
     results = state.get("results") or {}
+    planned_edits = (planned or {}).get("edits") or []
     for target in targets:
         if target.state not in {"needs_edit", "satisfied"} or target.out_of_scope:
             continue
@@ -3022,6 +3024,42 @@ def _audit_issues(state: dict[str, Any], targets: Sequence[Target],
                     and not result.get("evidence_in_after")
                     and target_quote and target_quote in evidence_quote):
                 continue
+            # FL-D697: at a merged multi-rule site the auditor reviews one rule in
+            # isolation and can demand the survival of text that a sibling rule's
+            # authorized operation legitimately removed (B05 G16 "append"
+            # re-audited against the clause G15 was planned — and independently
+            # audited — to delete).  A quoted loss covered by a completed sibling
+            # operation's authorized old text at the same location is an
+            # authorized removal, not this rule's defect.  The quote may contain
+            # ellipses ("……"); every fragment must be covered, and the skip is
+            # only possible when at least one fragment is substantive.
+            if (result.get("evidence_verified") and result.get("evidence_in_before")
+                    and not result.get("evidence_in_after") and evidence_quote
+                    and planned_edits):
+                sibling_rules = {
+                    sibling.rule_id for sibling in targets
+                    if sibling.rule_id != target.rule_id
+                    and sibling.location == target.location
+                    and not sibling.out_of_scope
+                    and (results.get(_target_identity(sibling)) or {}).get("verdict")
+                    == "completed"}
+                if sibling_rules:
+                    fragments = [fragment for fragment in
+                                 re.split(r"…+|\.\.\.+", evidence_quote) if len(fragment) >= 4]
+                    if fragments and any(
+                            all(fragment in authorized for fragment in fragments)
+                            for authorized in (
+                                "".join(_compact(text) for text in
+                                        [str(edit.get("expected_old_text") or "")] +
+                                        [str(component.get("expected_old_text") or "")
+                                         for component in (edit.get("components") or [])]
+                                        if text)
+                                for edit in planned_edits
+                                if str(edit.get("location") or "") == target.location
+                                and any(str(key).split(":")[0] in sibling_rules
+                                        for key in (edit.get("operation_keys") or ())))
+                            if authorized):
+                        continue
             issues.append({"code": "AUDIT_NOT_COMPLETED" if result["evidence_verified"]
                            else "REVIEW_UNPROVEN", "rule_id": target.rule_id,
                            "target_id": target.target_id, "location": target.location,
@@ -5109,7 +5147,7 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
         # business site.  Create its operation target from code-proven anchors even
         # when the wording is not byte-identical to the body paragraph.
         summary_targets = summary_copy_targets(targets, rules_by_id, inspection,
-                                               sections, scopes)
+                                               sections, scopes, facts=facts)
         for target in summary_targets:
             targets.append(target)
             synthetic.append(target)
@@ -5199,7 +5237,7 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
         # summary copy before the locator/plan stages (idempotent: an existing
         # active summary target suppresses a duplicate).
         late_summary = summary_copy_targets(targets, rules_by_id, inspection,
-                                            sections, scopes)
+                                            sections, scopes, facts=facts)
         for target in late_summary:
             targets.append(target)
             synthetic.append(target)
@@ -5284,7 +5322,8 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                 round_ledger.update(round=round_number, scope=scope)
                 audit_rounds.append(round_ledger)
                 _merge_audit_state(audit_state, round_ledger, targets)
-                issues = _audit_issues(audit_state, targets, rules_by_id, facts)
+                issues = _audit_issues(audit_state, targets, rules_by_id, facts,
+                                        planned=planned)
                 reopened = _reopen_audit_disagreed_targets(
                     issues, targets, rules_by_id, facts)
                 if reopened:
@@ -5458,6 +5497,20 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                                 mapping=mapping, scopes=scopes)
                 if needs_discovery:
                     targets = _collect_targets(entries, synthetic, rules_by_id, inspection)
+                    # FL-D695 (residual): a business-round re-inventory replaces
+                    # ``entry.targets`` wholesale, so a fresh model round can mint
+                    # a new ``absent`` verdict at a site whose executed/verified
+                    # target the rebuild just dropped (B15 G09 p159: round 1
+                    # flipped + audited, round 2 re-judged absent as #1:T011 and
+                    # the executed ~b:T002 was wiped).  Re-apply the variant
+                    # refutation gate after every rebuild, before rebind/locator
+                    # burn model calls on the contradicted site.
+                    from .recall import refute_absent_by_variant_evidence
+                    rerun_refutations = refute_absent_by_variant_evidence(
+                        targets, rules_by_id, inspection, scopes, facts=facts)
+                    if rerun_refutations:
+                        report.setdefault("absent_refutations", []).extend(
+                            rerun_refutations)
                 report["rebind"] = _rebind_unresolved_targets(
                     targets, origins, inspection, rules_by_id=rules_by_id, facts=facts)
                 report.setdefault("target_attribution", []).extend(
@@ -5538,7 +5591,8 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                                   and not target.out_of_scope
                                   and plan_by_target.get(target.target_id, {}).get("status")
                                   not in {"planned", "satisfied", "not_applicable"}]
-            audit_issues = _audit_issues(audit_state, targets, rules_by_id, facts)
+            audit_issues = _audit_issues(audit_state, targets, rules_by_id, facts,
+                                        planned=planned)
             pending_findings = [finding for finding in findings
                                 if finding["status"] in {"pending", "unresolved"}]
             unresolved: list[dict[str, Any]] = []
@@ -5988,7 +6042,7 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                         audit_rounds.append(recovery_audit)
                         _merge_audit_state(audit_state, recovery_audit, targets)
                         report["audit"] = {"rounds": audit_rounds,
-                                           "issues": _audit_issues(audit_state, targets)}
+                                           "issues": _audit_issues(audit_state, targets, planned=planned)}
                         report["targets"] = _target_ledger(targets, planned, audit_state,
                                                            origins)
                     except (RecallError, ModelError) as exc:
@@ -6027,7 +6081,7 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                     unresolved[:] = [item for item in unresolved
                                      if item.get("kind") not in {"audit", "sweep",
                                                                  "claim_replay"}]
-                    for issue in _audit_issues(audit_state, targets):
+                    for issue in _audit_issues(audit_state, targets, planned=planned):
                         unresolved.append({"kind": "audit", **issue})
                     for finding in findings:
                         if finding.get("status") in {"pending", "unresolved"}:
@@ -6037,7 +6091,7 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                                                    "issue", "status", "reason",
                                                    "failure_class")}})
                     report["audit"] = {"rounds": audit_rounds,
-                                       "issues": _audit_issues(audit_state, targets)}
+                                       "issues": _audit_issues(audit_state, targets, planned=planned)}
                     report["targets"] = _target_ledger(targets, planned, audit_state,
                                                        origins)
                     if recovery_sweep_unverified:
@@ -6055,7 +6109,7 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                     and not target.out_of_scope
                     and plan_by_target.get(target.target_id, {}).get("status")
                     not in {"planned", "satisfied", "not_applicable"}]
-                audit_issues = _audit_issues(audit_state, targets)
+                audit_issues = _audit_issues(audit_state, targets, planned=planned)
                 _apply_artifact_proof_to_findings(findings, replay, actual,
                                                   obligation_ledger, rules_by_id,
                                                   facts=facts, edits=planned.get("edits") or [], original=inspection)
@@ -6274,7 +6328,7 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                     round_ledger.update(round=round_number, scope="sweep_repair")
                     audit_rounds.append(round_ledger)
                     _merge_audit_state(audit_state, round_ledger, targets)
-                    round_ledger["issues"] = [issue for issue in _audit_issues(audit_state, targets)
+                    round_ledger["issues"] = [issue for issue in _audit_issues(audit_state, targets, planned=planned)
                                               if issue.get("rule_id") in reaudit]
                 changed = [chunk for chunk in _sweep_chunks(actual, sections, max_chars=chunk_chars)
                            if chunk.text not in swept_texts]
@@ -6333,7 +6387,7 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                     unresolved.append({"kind": "target", "rule_id": target.rule_id,
                                        "target_id": target.target_id, "location": target.location,
                                        "reason": entry.get("reason") or "RECALL_TARGET_UNRESOLVED"})
-            audit_issues = _audit_issues(audit_state, targets)
+            audit_issues = _audit_issues(audit_state, targets, planned=planned)
             unresolved.extend({"kind": "audit", **issue} for issue in audit_issues)
             unresolved.extend({"kind": "sweep", **finding} for finding in findings
                               if finding.get("status") in {"pending", "unresolved"})

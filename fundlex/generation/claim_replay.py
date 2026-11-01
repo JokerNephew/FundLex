@@ -1420,7 +1420,11 @@ def replay_claims(edits: Sequence[Mapping[str, Any]], before_inspection: Any,
         # An inventory ``absent``/not-applicable alias at the same source site is
         # a stale negative assertion, not a second editable occurrence.  It must
         # not make the real survey target's occurrence ambiguous (G17 p846/p1326).
-        if str(target.get("state") or "") in {"absent", "not_applicable"}:
+        # ``satisfied`` proofs assert a negative fact with no edit to
+        # double-count; the absent-site clone and its resolved parent state the
+        # same fact twice (B12 G05:2 p162, FL-D698).
+        if str(target.get("state") or "") in {"absent", "not_applicable",
+                                              "satisfied", "already_satisfied"}:
             continue
         for key in target.get("operations") or ():
             duplicate_target_groups.setdefault(str(key), []).append(target)
@@ -1933,12 +1937,16 @@ def replay_claims(edits: Sequence[Mapping[str, Any]], before_inspection: Any,
         # Two targets for the same operation and paragraph must carry occurrence
         # identity.  Collapsing them to ``pN`` makes a single successful edit look
         # like proof for both targets and makes replay dependent on target order.
+        # Only ``needs_edit`` candidates count toward the ambiguity: satisfied
+        # proofs assert a negative fact (no edit to double-count), so two
+        # satisfied targets at one site are the same fact stated twice (B12
+        # G05:2 p162: the resolved target plus its absent-site clone, FL-D698).
         same_location_targets: dict[str, list[Mapping[str, Any]]] = {}
         for candidate in targets:
             candidate_keys = {str(key) for key in (candidate.get("operations") or ())}
             if (operation_id in candidate_keys and not candidate.get("out_of_scope")
                     and not candidate.get("plan_rejected")
-                    and str(candidate.get("state") or "") not in {"absent", "not_applicable"}
+                    and str(candidate.get("state") or "") == "needs_edit"
                     and str(candidate.get("location") or "")):
                 same_location_targets.setdefault(str(candidate.get("location")), []).append(candidate)
         ambiguous_locations = set()

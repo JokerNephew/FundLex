@@ -376,9 +376,10 @@ def test_compare_result_view_supports_pair_navigation_and_mobile_switching(brows
 
     page.route("**/api/**", handle)
     try:
-        response = page.goto(live_app + "/compare", wait_until="networkidle")
+        # FL-D846：链路拆三路由，直接进入比对工作台 /compare/<taskId>
+        response = page.goto(live_app + f"/compare/{task_id}", wait_until="networkidle")
         assert response and response.ok
-        page.get_by_role("heading", name="合同对比").first.wait_for(state="visible")
+        page.get_by_role("heading", name="React Compare 结果测试").first.wait_for(state="visible")
         page.get_by_text("共 2 处差异 · 修改 1 · 新增 1 · 删除 0").wait_for(state="visible")
         # Word view is the default: revision rail + merged document + source documents.
         assert page.locator('.compare-word-layout').count() == 1
@@ -409,9 +410,11 @@ def test_compare_result_view_supports_pair_navigation_and_mobile_switching(brows
         assert metrics["documentWidth"] <= metrics["viewport"]
         assert metrics["bodyWidth"] <= metrics["viewport"]
 
-        next_pair = page.get_by_role("button", name="下一组", exact=True)
+        # FL-D846：上一组/下一组按钮已由合同组 chip 切换条取代
+        next_pair = page.locator('.compare-pair-status').nth(1)
         next_pair.wait_for(state="visible")
         next_pair.click()
+        page.wait_for_url(re.compile(r".*pair=compare-browser-pair-2.*"))
         page.get_by_text("共 1 处差异 · 修改 0 · 新增 1 · 删除 0").wait_for(state="visible")
         assert page.locator('[data-diff-id="D2"]').count() >= 1
         assert not page_errors, page_errors
@@ -455,7 +458,11 @@ def test_compare_first_upload_seals_and_refetches_explicit_task(browser, live_ap
         if path == f"/compare/tasks/{task_id}" and route.request.method == "GET":
             return json_route(route, task)
         if path == f"/compare/tasks/{task_id}/uploads":
-            return json_route(route, {"receipts": [{"client_id": "left", "status": "accepted"}, {"client_id": "right", "status": "accepted"}]})
+            # FL-D859 后页面按 client_id 匹配回执文件位（服务端恒回显），
+            # mock 须从 multipart 体的 client_ids 字段回显真实 id。
+            match = re.search(r'name="client_ids"[^[]*(\[[^\]]*\])', route.request.post_data or "")
+            client_ids = json.loads(match.group(1)) if match else []
+            return json_route(route, {"receipts": [{"client_id": cid, "status": "accepted"} for cid in client_ids]})
         if path == f"/compare/tasks/{task_id}/seal":
             return json_route(route, task)
         return route.continue_()

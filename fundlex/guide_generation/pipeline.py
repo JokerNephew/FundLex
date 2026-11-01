@@ -21,6 +21,7 @@ from ..model import ModelError
 from ..store import RunStore, engine_build
 from .authoring import AuthoringConfig, build_local_candidates, families_to_guide_items, induce_families
 from .corpus_catalog import sync_corpus
+from .corpus_segmenter import PARSER_VERSION as _CONTRACT_PARSER_VERSION
 from .coverage import run_coverage_gate
 from .discovery import DiscoveryConfig, discover
 from .vector import VectorIndexError, build_dense_retriever
@@ -361,6 +362,8 @@ class GuidePipeline:
         self.payload["corpus_sync"] = {
             "parsed": result.parsed, "reused": result.reused, "skipped": result.skipped,
             "errors": result.errors[:50],
+            "eligible_files": result.eligible_files,
+            "corpus_limit": self.config.corpus_limit,
         }
         self.payload["corpus_counts"] = snapshot.counts
         if self.dense_retriever is not None:
@@ -667,8 +670,17 @@ class GuidePipeline:
                 self.router, items, requirements, impacts, clauses, findings)
             total_calls += calls
             if not repaired:
+                # Persist per-item failure findings even when nothing was
+                # repaired, so a fully failed repair round stays auditable
+                # instead of only leaving an opaque round note (FL-D826).
+                if fixes:
+                    findings.extend(fixes)
+                    self.store.replace_findings(self.run_id, findings)
                 rounds.append({"round": round_no, "repaired": 0, "calls": calls,
-                               "reason": "repair_model_returned_nothing"})
+                               "reason": "repair_model_returned_nothing",
+                               "failures": sum(1 for item in fixes
+                                               if item.get("category") == "repair"
+                                               and item.get("severity") == "major")})
                 break
             repaired_ids = {item.guide_item_id for item in repaired}
             for finding in findings:
@@ -1090,7 +1102,7 @@ class GuidePipeline:
         self._stage("BUILD_CORPUS_SNAPSHOT",
                     sha256_json({"corpus_dir": self.config.corpus_dir,
                                  "limit": self.config.corpus_limit,
-                                 "parser": "contract-segmenter-1"}),
+                                 "parser": _CONTRACT_PARSER_VERSION}),
                     self.stage_snapshot)
         self._stage("DISCOVERY_REQUIREMENT_RETRIEVAL",
                     sha256_json({"snapshot": self.run_record.get("corpus_snapshot_id"),

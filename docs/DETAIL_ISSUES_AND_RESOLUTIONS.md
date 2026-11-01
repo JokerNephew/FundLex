@@ -8365,6 +8365,105 @@ H＝E×…
 - **注意**：source 整脚本会执行主入口（测试时误触过一次生产 prune 路径，root-only rm 被权限拦截无损）；后续函数级测试一律 sed 抽段执行。
 - **状态**：已解决（FL-D724 建议项关闭；另 FL-D724 的 worker 重启计数基线建议保留 open，择处）。
 
+## FL-D697 B05 五连首负：复合引用整段替换崩塌 + 合并多位点 audit 兄弟操作盲区（2026-11-01，loop-6 门槛 FAIL-1，qa-recall-miss）
+
+- **发现**：loop-6（9efe827）B05 五连后首负，8 holds、义务完成回摆 -13。两条独立机制缺陷：(a) `plan_composite_target` 对捆绑到多段落 composite 引用的**词级** replace（G02:0 old_text「A类基金份额」6 字）执行整段引用替换，p118(0..49)+p119(0..54) 两句定义被换成裸 token「A类基金份额」（destructive edit 源头不是模型 compose，是确定性 builder 无范围证明）；(b) G15+G16 在 p788/p1237 合并为 atomic_paragraph 编辑（G15 删 0..132、G16 插 133）数学拼接正确，但 audit 按单规则孤立复核 G16「追加」语义，要求 G15 已被独立 auditing completed 授权删除的原条款继续存在 → AUDIT_NOT_COMPLETED(fc EXECUTION)→RETRY_DETERMINISTIC 重放同一确定性 builder→无进展熔断→诚实扣件，相邻义务同窗口重盘回摆放大为 -13。
+- **机制修复**（NOT 规则级补丁）：(a) composite_replace 守卫——整段引用替换仅当适用 replace 操作的 old_text 覆盖整个 composite 引用才授权，否则 `RECALL_COMPOSITE_REPLACE_SCOPE_UNPROVEN` fail-closed 单目标扣件；G11 分支自带的 `_g11_bearer_end` 范围证明不受影响（recall.py:6560+ 区）。(b) `_audit_issues` 兄弟授权删除覆写——evidence_quote（可含省略号，逐分片校验）被同址**已完成**兄弟规则操作授权 old_text 覆盖时，丢失属授权移除而非本规则缺陷；无完成兄弟则保持 fail-closed（recall_pipeline.py:_audit_issues，全 8 个调用点接 planned）。
+- **mutation 测试**：`tests/test_loop6_repairs.py` 8 例（词级崩塌拒、整段授权放行、兄弟覆写生效/无兄弟/兄弟未完工两组 fail-closed、FL-D698 双 satisfied 不误判+needs_edit 对仍判、FL-D695 残余重盘后闸再发+无证据 fail-closed）。
+- **真实复验（2026-11-01，`/tmp/opencode/qa/loop6-fix-matrix/b05/`，$0.0315/27c/204s，HEAD c977573）**：同合同 delivery=complete、0 holds、miss 24/24 CLOSED_REPLAY、audit issues=∅、recovery actions=∅——G02 本轮 ALREADY_SATISFIED（事实判定无需分替）、G15/G16 ARTIFACT_VERIFIED（同一确定性合并编辑经兄弟上下文复核通过），-13 回摆形态全消。全量回归 2540/0/139。
+- **状态**：已修复并验证（适用版本 qa-recall-miss-20261031@c977573 起）。
+
+## FL-D698 B12 G05:2@p162 残余保守扣件：同址 satisfied 双计伪造 occurrence 歧义（2026-11-01，loop-6 门槛 FAIL-2，qa-recall-miss）
+
+- **发现**：loop-6 B12 G05:B3:O1 MISS_PLAN_GAP——同址双 satisfied 目标（T006 39..173 与 `resolve_absent_site_targets` 克隆 `{parent}-ABSENT-G05-2` 0..173）均无 occurrence identity → CLAIM_SITE_OCCURRENCE_UNRESOLVED → 保守扣件。两处 satisfied 是同一否定事实陈述两遍（删除字面已不在），无编辑可双计。
+- **机制修复**：claim_replay 两处歧义判定（义务循环 same_location_targets 与全局 duplicate_target_groups）只对 `needs_edit` 候选计入；absent/not_applicable/satisfied/already_satisfied 均不制造编辑位歧义。replay 站点证明与聚合逻辑不变。
+- **真实复验（2026-11-01，`/tmp/opencode/qa/loop6-fix-matrix/b12/`，$0.0294/25c/193s，HEAD c977573）**：B12 delivery=complete、0 holds；G05:B3:O1 无 occurrence 冲突。残余 G16:B1:O1 MISS_REPLAY_GATE replay PASS 为 FL-D651 跨层 seam（命名原因、非阻断），不属本条目。
+- **状态**：已修复并验证（c977573 起）。
+
+## FL-D695 更新（loop-6 残余）：业务轮重盘整体替换冲掉反证+已执行目标——重盘后反证闸二次挂点（2026-11-01，qa-recall-miss）
+
+- **发现**：loop-6 B15 反证闸第一轮生效（~b:T002 G09、~b:T003 G11 flip 且 G09 已执行+audit R0 completed），但业务轮 `entry.targets` 整体替换（recall_pipeline:5447-5458 区），第二轮模型重判 G09 absent→#1:T011，被反证翻转的目标连已审计执行一并冲掉 → G09:B1:O1 OPEN「verified site missing」。
+- **机制修复**：业务轮 `_collect_targets` 重建+survey 后、rebind/locator 烧模型调用前，再次应用 `refute_absent_by_variant_evidence`，refutation 记录 extend 入 report。
+- **真实复验矩阵（2026-11-01，HEAD c977573）**：B15 两轮本树跑均未复现 absent 重判形态（T3 locator 直接锚定 p159/p164/p165 变体 span，闸无需实发）；第一轮因 inventory 模型静默（18 targets vs 常态 26-34）+第二轮 G11 抖动未 complete（见 FL-D794）；loop-6 冻结树同日下午 B15 complete（34 targets，G09/G11/G12 全 FOUND），本树 B15-rerun 亦捞出 G09/G12——同形态未再发≠已证实修复在所有方差下兜住，留 loop-7 全波观察。
+- **状态**：修复已实施+mutation 验证；真实形态未再发但样本不足，loop-7 全波回归收口判定。
+
+## FL-D794 FL-D793 复发：B15 G11 compose MODEL_SCHEMA_INVALID 双连→计划级 unresolved 无业务级再试（2026-11-01，loop-6 修后真实复验发现，观察项）
+
+- **发现**：loop-6 修后 B15 第二跑（`/tmp/opencode/qa/loop6-fix-matrix/b15-rerun/`，$0.0392/37c/341s）：G11 #1~b:T003@p164 needs_edit 后 compose 连续不过 schema（gateway 层有限重试已耗尽）→ 目标 unresolved（reason MODEL:MODEL_SCHEMA_INVALID），audit「AFTER==BEFORE」如实拦截 → G11:B1:O1 MISSING/OPEN+G11:B1:O2 PLAN_GAP → 9 holds 诚实 incomplete。与 FL-D793 同形态跨树复发（loop-6 曾判零出现销案）。
+- **归类**：模型 schema 抖动 + 计划级软失败缺少业务轮后续再试通道（MODEL_SCHEMA_INVALID 属 SOFT_STOP，目标直接 unresolved 后恢复循环未对其再融资）。后果按设计诚实扣件，无误 complete。
+- **对照证据**：同日 loop-6 冻结树 B15 complete（`/tmp/opencode/qa/loop6-fix-matrix/b15-frozen/`，$0.0327/25c/227s，G11 p164 FOUND+CLOSED）——抖动单发性仍成立，首次跨树复发说明频率高于「罕见」。
+- **下一步**：统计 loop-7 全波 G11 compose schema 失败率；≥2 波复发即升级为机制条目（compose 校验失败 deterministic tier1/fixed-text 回退，或业务轮对 MODEL: 软失败的有限再盘）。
+- **状态**：观察项（已复发一次，未升级解剖）。
+
+## FL-D820 指引生成运行必败：语料目录位于 /home 受 systemd ProtectHome 沙箱拦截（2026-11-01，主线，用户真实任务暴露）
+
+- **发现日期**：2026-11-01（用户在生产提交指引生成 run `a552520c…fe19`，FAILED，主线追查）。
+- **问题与影响**：`FUNDLEX_GUIDE_CORPUS_DIR=/home/opencode/data/funds_word`，但 `fundlex-guide-worker.service` 沙箱 `ProtectHome=true + ProtectSystem=strict`——服务 mount namespace 内 /home 不可见，`stage_snapshot/sync_corpus` 扫语料即 `PermissionError [Errno 13] '/home/opencode/data/funds_word'`，run 必然失败。影响：指引生成功能在生产**任何 run 都会在语料同步阶段失败**（前三阶段 INGEST/EXTRACT/VERIFY 完成，SNAPSHOT 死亡）。普通用户无权诊断。
+- **误导排查的陷阱**：以 `runuser -u fundlex` 直接测 ACL 时**读取成功**（514 份 glob+读字节全通）——runuser 不带 systemd confinement；只有 `systemd-run --uid=fundlex -p ProtectHome=true -p ProtectSystem=strict` 同款沙箱才能复现。教训：排查服务 EACCES 必须用同款 confinement 复现，不能信裸 shell。
+- **处理方法（已实施）**：①语料整目录拷贝至沙箱白名单路径 `/var/lib/fundlex/corpus/funds_word`（78M，chown fundlex:fundlex）；②`/etc/fundlex-recall.env` 的 `FUNDLEX_GUIDE_CORPUS_DIR` 改指新路径（前值备份 `…env.bak-20261101-gg`）；③重启 fundlex-guide-worker（active）。
+- **验证结果**：同款沙箱 `systemd-run` 内实测：新路径 glob=514+读文件 OK；旧路径复现出与生产**逐字一致**的 Errno 13（根因 100% 确认）。
+- **遗留/下一步**：①「对指引生成功能全面检查开发测试优化」专项线已开（用户第 4 点），含：部署形态样例运行冒烟（发布守门加跑一跑 PILOT run 断此回归类）、`pipeline.py` 默认 corpus 回退 `<repo>/funds_word` 在发布树无此目录时的行为策略（应显式报配置缺失而非静默空语料/GE 误导）、cron/健康检查。②ACL 层（/home/opencode 对 fundlex --x）保留作纵深但不再承载功能。③同形态隐患排查：其他服务若引用 /home 路径须同查（已知 compare 语料在树内 var/，未见引用 /home）。
+- **状态**：主体已解决（待全面检查线收尾复验一次真实 run 端到端）。
+
+## FL-D830 预算类错误码用户文案与 FL-D445 政策一致性裁决（2026-11-01，主线）
+
+- **背景**：前端批3 文案审查挂起——`MODEL_GLOBAL_CALL_BUDGET_EXCEEDED`/`MODEL_COST_BUDGET_EXCEEDED` 的"预算已用尽"用户文案与 FL-D445（真实模型无预算门槛）冲突。
+- **主线实查**：两码仅在 `enforce_limits=True` 时触发（model_budget.py reserve）；生产 `/etc/fundlex-recall.env` 未设 `FUNDLEX_MODEL_ENFORCE_LIMITS`（model.py/roles.py 读该 flag 默认关）→ 生产为纯账本观测模式，两码不可达，政策一致。
+- **裁决**：①用户文案改为中性系统错误（不出现"预算/额度/已用尽"），政策下该状态不应存在，真出现=配置事故不给用户政策冲突解释——前端 FL-D830 执行；②`enforce_limits` 死路径及入口的政策一致性深层清理挂引擎侧待办（`jobs.py`/`model_router.py`/`delivery.py`/`recovery/types.py` 的旁路名单保留属容错合理，不拆）。
+- **状态**：裁决已下，前端执行中；深层清理保持 open（低优先，不阻塞）。
+
+## FL-D699 释义容器型 composite 内的恒等类替换被计划面永久扣件：实例化恒等⇒satisfied-noop（2026-11-01，loop-7 残存单因子 B05，qa-recall-miss）
+
+- **发现**：loop-7（ada83eb）唯一 FAIL=B05 5 holds 诚实扣件。FL-D697a 容器守卫精确事前拒证（`RECALL_COMPOSITE_REPLACE_SCOPE_UNPROVEN`，破坏性编辑结构性排除）、G16 兄弟盲区支消退；残余机制缺陷：rebind_clause_continuation 把 G02:0 词级替换绑到 p118+p119 释义容器 composite，守卫拒整段替换（正确），但 G02:0 实例化新文本=A类基金份额==旧引用（subscription_group=["A"] 硬事实）——恒等替换本应判定已满足，却无通道闭合 → G02:B1:O1 MISS_PLAN_GAP 永久扣件（统计 -13）。主线裁决归族 FL-D650/683（模型生成面挥发触发的形状），要求机制化 span/no-op 约束而非提示词调优。
+- **机制修复**：plan 阶段 composite 分支在 `plan_composite_target` 前判恒等——`target_class_ops_identity`（recall.py）：class_substitution 规则、三群组事实均 VERIFIED、目标认领的适用 replace 操作逐一 instantiate_slots==old_text（逐操作粒度，混合型产品只坍缩恒等支、不动实工支）→ 目标转 satisfied-noop（ledger reason `class_substitution_identity_noop`），复用 FL-D052/FL-D106 硬事实边界与 R033 `class_operation_binding` 先例。
+- **mutation 测试**（`tests/test_loop6_repairs.py` 增 3 例，累计 11）：恒等闭合/混合事实不坍缩+守卫仍 fail-closed/非类替换规则与未验证事实拒坍缩。
+- **真实复验矩阵（2026-11-01，`/tmp/opencode/qa/loop8-fix-matrix/`，HEAD 686f080）**：**B05 complete**（0 holds、24/24 CLOSED_REPLAY、audit issues=∅、recovery=∅，$0.0311/25c——本轮模型直接判 G02 satisfied，恒等坍缩无需实发，病灶形态由 mutation 用例按 loop-7 ledger 形状离线覆盖）；**B12 complete**（0 holds、24/24 CLOSED，$0.0229/23c）；**B15 complete**（0 holds、21/21 CLOSED，$0.0265/23c）。全量回归 2543/0/139。
+- **状态**：已修复并验证（qa-recall-miss-20261031@686f080 起）；恒等坍缩实发留 loop-8 全波观察（复合 rebind 形态再现时判定路径）。
+
+## FL-D860 经 API 新建的调度会话默认绑定失效模型 deepseek-v4.1-flash，静默空转（2026-11-01，主线）
+
+- **发现日期**：2026-11-01（巡线发现 qa-gg-audit/qa-compare-ux 两新线 73min 零产出排查确诊）。
+- **问题与影响**：`POST /api/session` 创建的会话继承 serve 全局默认模型 `fundlex/deepseek-v4.1-flash`；该模型在 worker 会话中**每条 assistant 消息 1~2s 完成且 content 为空**——不报错、不产出、不执行任何工具调用，表面"处理成功 idle"。两线停滞约 1.5h（无状态文件、无 git 动作）。健康八线均为创建时指定 `hon-maas/kimi-k3` 故正常。
+- **证据**：`/api/session/<id>/message` 中 assistant message `model={"id":"deepseek-v4.1-flash","providerID":"fundlex"}`、created→completed≈1.2s、content=[]×连续多条；对照健康线前端 l8yCbACU=`hon-maas/kimi-k3`；serve 配置 `/home/opencode/.config/opencode/opencode.json` `"model": "fundlex/deepseek-v4.1-flash"`。
+- **处理方法**：①根治口径——**一切经 API 新建的调度会话必须在 create payload 显式钉模型**：`{"model":{"id":"kimi-k3","providerID":"hon-maas","variant":"high"}}`（schema 为 Model.Ref：`{"id","providerID"[,"variant"]}`，`"hon-maas/kimi-k3"` 字符串或 `{providerID,modelID}` 均 400）；②prompt 体内带 model 字段与 PATCH /api/session 均改不了既建会话模型（实证无效）；③两线以新会话重建（gg=XMWmAw4/ux=OhgIvj8），钉模型后 150s 内验证到真实产出（assistant content 非空+状态文件落盘）；④废弃僵尸会话 A4vO9d5/nHOKfnt 不再发令。
+- **状态**：已解决（调度 SOP 更新）；遗留建议：serve 全局默认模型应改成健康模型或 flash 修复，挂运维待办。
+
+## FL-D670 第二波边界清单单列：不可解析 0 / 受保护 0 / 货币市场 3 留分母 / 零目标 16 留分母（2026-11-01，第二波标签线）
+
+- **发现日期**：2026-11-01（响应主线「第二波 100 份准备激活」预告令，对既有冻结产物做边界复核并单列清单）。
+- **结论（非问题，属边界口径登记）**：第二波 100 份全部进入修改分母——①语料 514 份顶层 docx 全部可解析（parse_errors=0、无 .doc）；②入样 0 份受保护（protected_cases=[]，逐案 protected=false）；③货币市场 3 份（W2D52/W2D67/W2D71）作为指引「明确排除类型」分层样本**保留分母**，由盲读标签逐条裁适用性；④16 份零目标案（全部判 satisfied/not_applicable，预期修改数=0）**保留分母**，引擎对其产生任何修改应按过度修改计；⑤excluded_from_modification_denominator=[]。清单工件 `docs/evidence/boundary-second-batch-20261031.json`（sha256 `1703702101b3846bd6416c238601408a181b1d88d3454437d427d3983778ef1d`），纯确定性推导自冻结 selection/labels/verification（推导前 sha 自校验通过）。
+- **处理方法**：边界情形不剔分母、不预排除，全部经盲读裁决并留证据；清单供评分工位对齐分母口径。
+- **状态**：已登记并完成（边界清单随标签冻结一并就绪，等主线放行令跑评测）。
+- **变更记录**：2026-11-01 新增（第二波标签线，固定子池 FL-D670..679 首用）。
+
+## FL-D861 B01 G12/G13@p207 悬空残句非阻塞 review_items 带标交付（2026-11-01，主线登记）
+
+- **来源**：loop-8 观察项（feat-recall 报）：B01 一案 G12/G13@p207 存在悬空残句，引擎按 review_assisted 语义以**非阻塞 review_items 带标交付**（自 loop-6 在树的语义），不阻塞 complete、不计 fc/wrong。
+- **主线裁决**：行为符合设计语义（可交付但向用户明示需人工复核点），登记为已知形态观察项；第二波/留出复现时再评估是否升级机制。号段：recall 域新池 FL-D862~869 已发 feat-recall。
+- **状态**：观察项 open。
+
+## FL-D888 主线验收口径再次失守：以 grep 指纹/测试绿代替逐页面用户视角验收（2026-11-01，用户投诉，开放）
+
+- **发现日期**：2026-11-01（用户对发布#4 界面八连投诉，全部核实属实）。
+- **问题与影响**：主线第三轮"人话文案清零/全站统一/删除废话"的验收采用代码 grep 指纹+测试套件+子线汇报，未逐页面（含深口子页面）以用户视角走查。后果：①规则开关子页「展开人读详情」漏改（生产 app.js:1311 实锤，声称"清零"不成立）②列表字体/按钮不一致第三次被用户抓出 ③结果页口语化措辞、废话文案（compare.html:718）残留 ④指引版本对比真实 bug 未发现即发布 ⑤「全页面+子页面」清单本身遗漏规则开关/版本对比两个子页面——清单漏=没人改没人验。
+- **根因**：需求以抽象转述下发（"列表统一"），子线按各自理解执行；主线验收用文件证据代替肉眼对照——与上轮已登记的"不接受代码 token 对齐口径"教训同族复发。
+- **处理方法**：①用户八条逐条立案 FL-D880~887 返工令（验收=修复前后并排截图+用户原话断言+主线亲自在生产界面复验）；②返工先产出全页面/子视图清单再动工；③今后"删干净/改一致"类需求一律界面元素级清单对账，禁止抽象转述；④发布门槛加入"主线逐页面生产走查"步骤。
+- **状态**：open（返工令已发前端线，FL-D880~887 销号后发布#5）。
+
+## FL-D889 交接质控铁律：工单必须含用户原话逐字+实锤+终态+验收，禁止抽象压缩（2026-11-01，用户二次批评，生效中）
+
+- **用户原话**：「我希望每一个对话都能充分地尽职地完成他们分内的任务，所以你给他们交接工作时要说清楚，不要随便给一段prompt」；「我明明跟你说的很清楚了让你跟他们说清楚，为什么你要说的这么简略呢」
+- **问题**：主线向子线下发需求时把用户的具体表述压缩成抽象词（典型案例：用户三次说「修改列表字体加粗/查看红字无框 vs 比对列表不加粗/黑字有框」，工单只写「列表统一」四个字），子线按各自理解执行后落空；FL-D888 验收失守与本条同族（传递端失了真，验收端才查不出）。
+- **铁律（立即生效，写入看板供全部后续工单遵守）**：每份子线工单必须包含五要素——①用户/上游原话逐字引用 ②现场实锤（文件:行号/现状文案/现象） ③期望终态的精确描述（可断言） ④验收标准（界面证据，非测试绿） ⑤禁止项与汇报格式。禁止把需求压缩成抽象短语下发。
+- **状态**：已执行（FL-D880~887 完整版交接已按五要素重发）；后续工单逐份自检。
+
+## FL-D920 简化用户需求=绝对大忌（用户最后通牒级，2026-11-01，生效中）
+
+- **用户原话**：「我跟你说过了你不要简化我的要求，如果你觉得一个会话无法完成单个任务你就拆分了之后交给多个对话，但是你简化我的要求是绝对的大忌，再被我发现一次我就要停止你的模型订阅了」
+- **本次触犯**：第七轮「所有代码所有页面挨个检查」下达后，主线给比对线的工单字面写成「compare 域穷尽普查」，把"所有"在字面上切小；此前还有 FL-D889 的抽象压缩、历史「列表统一」式缩写——属同族惯犯。
+- **铁律（最高级，覆盖 FL-D889）**：用户指令原文逐字进工单，禁止任何形式的范围缩水/抽象化/概括；单会话吃不下就**增开会话分摊**，不得用"域""重点""优先"等词缩小字面范围；每条需求必须有穷举式载体（本次起=docs/COVERAGE_MATRIX_20261101.md：549 文件+21 页面域逐格指派，零漏项），完成判定=矩阵逐格签认。
+- **已执行纠正**：增开 EN2/PL2 两条审计线（总会话 10 条），九线全部按矩阵重发总则追加令。
+- **状态**：生效中；再犯即用户终止订阅，主线无任何辩解余地。
 ## FL-D899 V2 前端全站普查与直接修（总指挥令，2026-11-01，qa-frontend-v2 树）
 
 - **问题与影响**：V1 侧"声称完成"整改大量落空（哈希外泄/小字/列表不一致/组件丑），V2（frontend/src，React）与 V1 并行存在但从未以「用户挑刺」四关标准（①技术内容外泄 ②小字/啰嗦 ③与全站令牌不一致 ④组件丑/信息层级混乱）核过——同类隐患恐同样存在。

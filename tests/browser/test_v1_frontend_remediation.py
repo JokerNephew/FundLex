@@ -289,7 +289,7 @@ def test_compare_generate_late_response_cannot_save_the_previous_pair(browser, l
 
         page.locator("#compare-selection-generate").click()
         assert held, "generate request should be held"
-        page.locator("#compare-next-pair").click()
+        page.locator('[data-compare-pair="1"]').click()
         page.locator("#compare-pair-title").filter(has_text="P2").wait_for()
         page.locator("#compare-selection-progress").filter(has_text="待选择").wait_for()
         page.wait_for_timeout(300)
@@ -325,7 +325,7 @@ def test_compare_stale_task_404_clears_previous_identity_cards(browser, live_dev
         page.locator("#compare-task-name").filter(has_text="任务不可用").wait_for()
         assert "读取任务失败" in page.locator("#compare-task-status").inner_text()
         assert page.locator("#compare-pair-list").inner_text().strip() == ""
-        back = page.locator("[data-compare-back-list]")
+        back = page.locator("#compare-task-status [data-compare-back-list]")
         assert back.is_visible()
         back.click()
         page.wait_for_url(re.compile(r".*#compare\?.*mode=list.*"))
@@ -335,7 +335,9 @@ def test_compare_stale_task_404_clears_previous_identity_cards(browser, live_dev
 
 def test_compare_word_style_reader_renders_merged_redline_and_display_modes(browser, live_dev):
     _app, base = live_dev
-    context = browser.new_context(viewport={"width": 1440, "height": 1000})
+    context = browser.new_context(viewport={"width": 1600, "height": 1000})
+    # 1600px：FL-D843 起比对区为页面内嵌 region（受应用框宽约束），rail 拖宽后
+    # 源文档栏可分配宽度受总宽钳制，扩大视口保留「拖大可调宽」断言空间。
     context.add_init_script("localStorage.setItem('fundlex-dev-user','compare-word-style')")
     page = context.new_page()
     page_errors: list[str] = []
@@ -385,19 +387,16 @@ def test_compare_word_style_reader_renders_merged_redline_and_display_modes(brow
         open_dev(page, base, "#compare?mode=detail&id=T&pair=P1")
         page.locator("#compare-word-merged-pane .compare-ins").filter(has_text="新条款").wait_for()
         assert page.locator("#compare-word-merged-pane .compare-del").inner_text() == "旧条款"
-        assert page.locator("#compare-revision-count").inner_text() == "1"
+        assert page.locator("#compare-revision-count-rail").inner_text() == "1"
         assert page.locator("#compare-merged-title").inner_text() == "Word 样式"
         assert page.locator("#compare-coverage-chip").is_visible()
         assert "2 项未覆盖" in page.locator("#compare-coverage-summary").inner_text()
         page.locator("#compare-coverage-summary").click()
         assert "header" in page.locator("#compare-coverage-list").inner_text()
         assert page.locator("#compare-coverage-list").is_visible()
-        assert page.locator("#compare-viewer").get_attribute("role") == "dialog"
-        box = page.locator("#compare-viewer").bounding_box()
-        assert box and box["x"] >= 10 and box["y"] >= 10
-        assert box["width"] <= 1430 and box["height"] <= 990
-        assert page.locator("#compare-viewer-backdrop").is_visible()
-        assert page.evaluate("document.body.classList.contains('compare-fullscreen-open')") is True
+        # FL-D843：比对结果区为页面内嵌 region（无 dialog/backdrop/全屏锁）
+        assert page.locator("#compare-viewer").get_attribute("role") == "region"
+        assert page.evaluate("document.body.classList.contains('compare-fullscreen-open')") is False
         rail = page.locator(".compare-word-revisions")
         rail_width = rail.bounding_box()["width"]
         splitter = page.locator("#compare-rail-splitter")
@@ -410,10 +409,11 @@ def test_compare_word_style_reader_renders_merged_redline_and_display_modes(brow
         page.wait_for_timeout(150)
         assert rail.bounding_box()["width"] >= rail_width + 20
 
-        page.locator("#compare-close-viewer").click()
+        # FL-D843：无关闭按钮，退出经「← 返回比对任务列表」回列表再进入
+        page.locator("[data-compare-back-list]").click()
         assert page.locator("#compare-viewer").is_hidden()
-        assert page.evaluate("document.body.classList.contains('compare-fullscreen-open')") is False
-        # FL-D813：compare-pair-list 常显（details 已删）无需展开
+        page.locator('[data-compare-task="T"]').click()
+        page.locator("#compare-viewer").wait_for(state="visible")
         page.wait_for_selector('#compare-pair-list > *', state='attached')
         page.locator('[data-compare-pair="0"]').click()
         page.locator("#compare-viewer").wait_for(state="visible")
@@ -1036,7 +1036,7 @@ def test_compare_failed_pair_shows_structured_failure_diagnostics(browser, live_
         open_dev(page, base, "#compare?mode=detail&id=T")
         error = page.locator(".compare-pair-status.is-failed .compare-pair-error")
         error.wait_for()
-        assert error.inner_text() == "处理失败：文本比对环节出错，请重新创建合同组"
+        assert error.inner_text() == "处理失败：文本比对环节出错，请新建对比任务后重试；若仍失败请联系支持"
         paused = page.locator(".compare-pair-status", has_text="暂停组")
         assert paused.locator(".compare-pair-state").inner_text().startswith("已暂停")
         assert page.locator(".compare-pair-status.is-failed .compare-pair-state").inner_text() == "失败"

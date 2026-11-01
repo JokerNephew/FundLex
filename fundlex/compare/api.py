@@ -20,6 +20,28 @@ _VIEW_CACHE_LOCK = Lock()
 _VIEW_CACHE_MAX = 4
 
 
+def _upload_rejection_code(name: str, data: bytes) -> str:
+    """Recover the precise rejection cause the shared HTTP guard flattens (FL-D853).
+
+    The injected ``validate_upload`` raises ``HTTPException`` with only a prose
+    message, so the encrypted/.doc/wrong-format distinctions were collapsed into
+    a single misleading ``COMPARE_INVALID_DOCX``.  Re-running the shared
+    validator on this already-rejected payload is cheap and restores the
+    machine-readable cause without depending on English message text.
+    """
+    from ..upload_validation import UploadValidationError, validate_docx_upload
+    try:
+        validate_docx_upload(name, data)
+    except UploadValidationError as exc:
+        return {"LEGACY_DOC_UNSUPPORTED": "LEGACY_DOC_UNSUPPORTED",
+                "ENCRYPTED_DOCX": "COMPARE_ENCRYPTED_DOCX",
+                "UNSUPPORTED_FILE_FORMAT": "COMPARE_UNSUPPORTED_FORMAT",
+                }.get(exc.code, "COMPARE_INVALID_DOCX")
+    except Exception:
+        pass
+    return "COMPARE_INVALID_DOCX"
+
+
 class CompareFileManifest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     client_id: str = Field(min_length=1, max_length=128)
@@ -77,14 +99,22 @@ class CompareSelectionGenerate(BaseModel):
     result_sha256: str = Field(min_length=1, max_length=128)
 
 
+def _view_cache_get(cache_key: str):
+    """Return the cached rendered view for ``cache_key`` or ``None`` (FL-D854)."""
+    if not cache_key:
+        return None
+    with _VIEW_CACHE_LOCK:
+        cached = _VIEW_CACHE.get(cache_key)
+        if cached is not None:
+            _VIEW_CACHE.move_to_end(cache_key)
+        return cached
+
+
 def _render_view(pair_result: dict[str, Any], left_path: Path, right_path: Path,
                  *, cache_key: str = "") -> tuple[str, str, str, list[dict[str, Any]]]:
-    if cache_key:
-        with _VIEW_CACHE_LOCK:
-            cached = _VIEW_CACHE.get(cache_key)
-            if cached is not None:
-                _VIEW_CACHE.move_to_end(cache_key)
-                return cached
+    cached = _view_cache_get(cache_key)
+    if cached is not None:
+        return cached
     from . import parser
     from .align import align_documents
     from .render import render_compare_document, render_merged_document
@@ -123,6 +153,10 @@ def register_compare_routes(application, compare_store: CompareStore, user_depen
                             user: str = Depends(user_dependency)):
         if idempotency_key is not None and (not idempotency_key.strip() or len(idempotency_key) > 128):
             raise HTTPException(422, "invalid idempotency key")
+        # The registration-time max_pairs bound is enforced here (FL-D855);
+        # the store keeps its own hard bound as a second defence.
+        if len(payload.pairs) > max_pairs:
+            raise HTTPException(422, "COMPARE_TOO_MANY_PAIRS")
         return call(compare_store.create, user, payload.name,
                     [item.model_dump() for item in payload.pairs], idempotency_key)
 
@@ -167,9 +201,7 @@ def register_compare_routes(application, compare_store: CompareStore, user_depen
                     validate_upload(name, data)
                 except HTTPException as exc:
                     if exc.status_code == 415:
-                        error = ("LEGACY_DOC_UNSUPPORTED"
-                                 if "legacy word .doc" in str(exc.detail).lower()
-                                 else "COMPARE_INVALID_DOCX")
+                        error = _upload_rejection_code(name, data)
                     else:
                         error = "COMPARE_UPLOAD_REJECTED"
                 if error is None:
@@ -210,6 +242,9 @@ def register_compare_routes(application, compare_store: CompareStore, user_depen
             files = {f["side"]: f for f in compare_store.pair_inputs(pair_id)}
             lp = compare_store.store.object_path(files["left"]["object_key"])
             rp = compare_store.store.object_path(files["right"]["object_key"])
+            # FL-D854 评估结论：缓存命中也必须保留全量完整性校验——fails-closed
+            # 测试（test_compare_system_review）要求源对象被改动时即返回 409，
+            # size 活性门无法发现同长度篡改，故不采用分级校验。
             for side in ("left", "right"):
                 f, path = files[side], (lp if side == "left" else rp)
                 if (not path.is_file() or path.stat().st_size != f["size"]
