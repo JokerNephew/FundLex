@@ -40,13 +40,13 @@ export function RevisionPanel({
   }, [activeRevisionId])
   return <div className="fundlex-revision-panel">
     <div className="fundlex-revision-panel__heading">
-      <div><h2>修订清单</h2><p className="fundlex-muted">共 {revisions.length} 条 · 待处理 {counts.pending} · 接受 {counts.accept} · 拒绝 {counts.reject}</p></div>
+      <div><h2>修订清单</h2><p className="fundlex-muted">共 {revisions.length} 处改动 · {counts.pending} 待决定 · {counts.accept} 接受 · {counts.reject} 拒绝</p></div>
       <div className="fundlex-revision-panel__bulk">
         <Button type="button" disabled={busy || previousDisabled} onClick={onPrevious}>上一条</Button>
         <Button type="button" disabled={busy || nextDisabled} onClick={onNext}>下一条</Button>
         <Button type="button" disabled={busy || !revisions.length} onClick={() => onBulkDecision('accept')}>全部接受</Button>
         <Button type="button" variant="danger" disabled={busy || !revisions.length} onClick={() => onBulkDecision('reject')}>全部拒绝</Button>
-        <Button type="button" variant="quiet" disabled={busy || !revisions.length} onClick={() => onBulkDecision('pending')}>全部待处理</Button>
+        <Button type="button" variant="quiet" disabled={busy || !revisions.length} onClick={() => onBulkDecision('pending')}>全部待定</Button>
       </div>
     </div>
     {revisions.length ? <div className="fundlex-revision-list">{revisions.map((revision) => <RevisionCard

@@ -17,11 +17,11 @@ export function formatDate(value?: string) {
 }
 
 function taskSummary(task: { status: string; total?: number; completed?: number; exceptions?: number; pending_upload?: number }) {
-  if (task.status === 'failed') return '处理失败，请打开任务查看原因。'
-  if (task.status === 'paused') return '任务已暂停，可从详情页恢复处理。'
+  if (task.status === 'failed') return '处理失败，点进去看哪份出了问题。'
+  if (task.status === 'paused') return '已暂停，点进去恢复。'
   if (task.pending_upload) return `${task.pending_upload} 份合同仍待上传。`
-  if (task.status === 'completed_with_exceptions') return `${task.exceptions ?? 0} 份合同需要关注未完成项。`
-  if (task.status === 'completed' && task.exceptions) return `${task.exceptions} 份合同需要关注未完成项。`
+  if (task.status === 'completed_with_exceptions') return `还有 ${task.exceptions ?? 0} 份没改完，要人工核一眼。`
+  if (task.status === 'completed' && task.exceptions) return `还有 ${task.exceptions} 份没改完，要人工核一眼。`
   if (task.status === 'completed') return `已完成 ${task.completed ?? 0}/${task.total ?? 0} 份合同。`
   return `正在处理 ${task.completed ?? 0}/${task.total ?? 0} 份合同。`
 }
@@ -50,7 +50,7 @@ export function TasksPage() {
     const s = stats.data
     return [
       { label: '处理中', value: s?.active_tasks, note: '个任务进行中' },
-      { label: '待处理合同', value: s?.pending_contracts, note: '等待处理服务完成' },
+      { label: '待处理合同', value: s?.pending_contracts, note: '等前面的任务处理完' },
       { label: '异常合同', value: s?.exception_contracts, note: `需人工处理 · 失败 ${s?.failed_contracts ?? '—'}` },
       { label: '本月处理合同', value: s?.processed_contracts, note: `完成率 ${typeof s?.completion_rate === 'number' ? `${Math.round(s.completion_rate * 100)}%` : '—'}` },
     ]
@@ -64,7 +64,7 @@ export function TasksPage() {
       <div className="stats-grid">{statValues.map((item) => <Card key={item.label}><span className="muted">{item.label}</span><strong className="stat-value">{item.value ?? '—'}</strong><small>{item.note}</small></Card>)}</div>
       )}
       <p className="muted stats-connection" data-testid="stats-connection">{connectionText}{Boolean(stats.error) && <> · <Button type="button" variant="quiet" onClick={() => void stats.refetch()}>重试统计</Button></>}</p>
-      <Card><form className="action-row" onSubmit={submitSearch} role="search"><label className="muted">搜索任务<input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="按任务名称搜索" /></label><label className="muted">状态<Select value={status} onChange={(event) => { setStatus(event.target.value as TaskStatus | ''); setPage(1) }}><option value="">全部状态</option><option value="queued">排队中</option><option value="running">处理中</option><option value="paused">已暂停</option><option value="completed">已完成</option><option value="completed_with_exceptions">已完成（含异常）</option><option value="failed">失败（含失败合同）</option></Select></label><label className="muted">指引<Select value={guideVersionId} onChange={(event) => { setGuideVersionId(event.target.value); setPage(1) }}><option value="">全部指引</option>{guides.data?.available?.map((guide) => <option key={guide.id} value={guide.id}>{guide.filename}</option>)}</Select></label><label className="muted">排序<Select value={sort} onChange={(event) => { setSort(event.target.value); setPage(1) }}><option value="newest">最新创建</option><option value="oldest">最早创建</option><option value="name">名称 A-Z</option><option value="name_desc">名称 Z-A</option></Select></label><Button type="submit" variant="primary">搜索</Button></form></Card>
+      <Card><form className="action-row" onSubmit={submitSearch} role="search"><label className="muted">搜索任务<input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="按任务名称搜索" /></label><label className="muted">状态<Select value={status} onChange={(event) => { setStatus(event.target.value as TaskStatus | ''); setPage(1) }}><option value="">全部状态</option><option value="queued">排队中</option><option value="running">处理中</option><option value="paused">已暂停</option><option value="completed">已完成</option><option value="completed_with_exceptions">已完成（部分需核对）</option><option value="failed">处理失败</option></Select></label><label className="muted">指引<Select value={guideVersionId} onChange={(event) => { setGuideVersionId(event.target.value); setPage(1) }}><option value="">全部指引</option>{guides.data?.available?.map((guide) => <option key={guide.id} value={guide.id}>{guide.filename}</option>)}</Select></label><label className="muted">排序<Select value={sort} onChange={(event) => { setSort(event.target.value); setPage(1) }}><option value="newest">最新创建</option><option value="oldest">最早创建</option><option value="name">名称 A-Z</option><option value="name_desc">名称 Z-A</option></Select></label><Button type="submit" variant="primary">搜索</Button></form></Card>
       <Card><div className="page-heading"><div><h2>任务清单</h2></div><Button onClick={() => void tasks.refetch()} disabled={tasks.refreshing}>{tasks.refreshing ? '刷新中…' : '刷新'}</Button></div>{tasks.error ? <ErrorState error={tasks.error} onRetry={() => void tasks.refetch()} /> : tasks.loading && !tasks.data ? <Spinner /> : !items.length ? <div className="empty-state">{search || status || guideVersionId ? '没有符合筛选条件的任务。' : <>还没有任务。<br /><Link to="/tasks/new">创建第一个合同任务</Link></>}</div> : <><div className="table-scroll"><table className="data-table"><thead><tr><th>任务</th><th>状态</th><th>行动提示</th><th>合同</th><th>指引快照</th><th>创建时间</th></tr></thead><tbody>{items.map((task) => <tr key={task.id}><td><Link to={`/tasks/${task.id}`}>{task.name}</Link></td><td><StatusBadge value={task.status} /></td><td>{taskSummary(task)}</td><td>{task.completed ?? 0}/{task.total ?? '—'}<div className="muted">异常 {task.exceptions ?? 0}</div></td><td>{task.guide_snapshot || task.ruleset_version ? '修改指引已锁定' : '—'}</td><td>{formatDate(task.created_at)}</td></tr>)}</tbody></table></div><Pagination page={tasks.data?.page ?? page} pageSize={tasks.data?.page_size ?? pageSize} total={tasks.data?.total ?? 0} onChange={setPage} onPageSizeChange={(size) => { setPageSize(size); setPage(1) }} /></>}</Card>
   </>
 }

@@ -38,13 +38,13 @@ function Evidence({ value }: { value: unknown }) {
 }
 
 function downloadLabel(kind: string, delivery?: string): string {
-  if (delivery === 'incomplete' && kind === 'selected_final') return '工作文件（人工选择，未完成）'
-  if (delivery === 'incomplete' && kind === 'selected_redline') return '工作文件修订痕迹（人工选择，未完成）'
+  if (delivery === 'incomplete' && kind === 'selected_final') return '选择版（未完成）'
+  if (delivery === 'incomplete' && kind === 'selected_redline') return '选择版-带修改标记（未完成）'
   return ({
-    report_md: 'Markdown 报告', report_json: 'JSON 报告', final: '最终版合同',
-    redline: '修订版合同（全量痕迹）', selected_final: '选择版合同', selected_redline: '选择版修订痕迹',
-    working_final: '工作文件（未完成）', working_redline: '工作文件修订痕迹（未完成）',
-    evaluation_final: '评测修改版合同', evaluation_redline: '评测修订痕迹',
+    report_md: '文本报告', report_json: '原始数据（JSON）', final: '最终版',
+    redline: '带修改标记版', selected_final: '选择版', selected_redline: '选择版-带修改标记',
+    working_final: '修改版（未完成）', working_redline: '修改版-带修改标记（未完成）',
+    evaluation_final: '评测版（非正式）', evaluation_redline: '评测版-带修改标记',
   } as Record<string, string>)[kind] || kind
 }
 
@@ -53,10 +53,10 @@ function downloadExtension(kind: string): string {
 }
 
 function detailStatus(document: TaskDocument): string {
-  if (document.delivery_status === 'complete') return '交付完成'
-  if (document.delivery_status === 'incomplete') return '结果不完整，需人工核对'
-  if (document.delivery_status === 'diagnosed') return '只读诊断完成，仅提供报告，未交付修改后的合同'
-  if (document.delivery_status?.startsWith('evaluation_')) return '评测结果，不能作为正式合同'
+  if (document.delivery_status === 'complete') return '文件已完整交付'
+  if (document.delivery_status === 'incomplete') return '没改完，需要人工核对'
+  if (document.delivery_status === 'diagnosed') return '只生成了报告，没有改后的合同'
+  if (document.delivery_status?.startsWith('evaluation_')) return '这是评测产物，不是正式合同'
   if (document.delivery_status === 'not_generated') return '未生成可交付文件'
   return field(document.delivery_status, '未确认')
 }
@@ -88,7 +88,7 @@ function Summary({ document, report }: { document: TaskDocument; report?: Record
   const total = document.target_counts?.total ?? targets.length
   const completed = document.target_counts?.completed ?? targets.filter((target) => ['modified_verified', 'planned', 'satisfied', 'not_applicable', 'superseded'].includes(text(target.status || target.state)) || target.out_of_scope).length
   const unresolved = document.target_counts?.unresolved ?? targets.filter((target) => !target.out_of_scope && ['unresolved', 'unsupported', 'needs_edit'].includes(text(target.status || target.state))).length
-  return <Card><h2>交付概览</h2><dl className="fundlex-detail-grid"><dt>资格</dt><dd><StatusBadge value={document.eligibility} /></dd><dt>处理状态</dt><dd><StatusBadge value={document.job_status} /></dd><dt>交付</dt><dd><StatusBadge value={document.delivery_status} /></dd><dt>交付说明</dt><dd>{detailStatus(document)}</dd><dt>目标完成</dt><dd>{total ? `${completed} / ${total}` : '—'}</dd><dt>仍需核对</dt><dd>{unresolved || '0'}</dd></dl></Card>
+  return <Card><h2>交付概览</h2><dl className="fundlex-detail-grid"><dt>资格</dt><dd><StatusBadge value={document.eligibility} /></dd><dt>处理状态</dt><dd><StatusBadge value={document.job_status} /></dd><dt>交付</dt><dd><StatusBadge value={document.delivery_status} /></dd><dt>说明</dt><dd>{detailStatus(document)}</dd><dt>已改完</dt><dd>{total ? `${completed} / ${total}` : '—'}</dd><dt>待人工核对</dt><dd>{unresolved || '0'}</dd></dl></Card>
 }
 
 function EditRows({ edit }: { edit: Record<string, unknown> }) {
@@ -113,10 +113,10 @@ function ClauseChangeSection({ report }: { report: Record<string, unknown> }) {
   })
   const restEdits = edits.filter((_, editIndex) => !usedEdits.has(editIndex))
   const total = targets.length + restEdits.length
-  return <Card><h2>条款改动{total ? ` · ${total} 项` : ''}</h2>{total ? <div className="fundlex-target-list">
-    {blocks.map(({ target, index, matched }) => { const status = text(target.status || target.state); return <details key={String(target.target_id || index)} className="fundlex-target"><summary><strong>{field(target.title || target.rule_id, `条款 ${index + 1}`)}</strong><StatusBadge value={status} /></summary><dl className="fundlex-detail-grid"><dt>位置</dt><dd>{field(target.location)}</dd><dt>目标原文</dt><dd><Evidence value={target.quote || target.original_text} /></dd></dl>{matched.length ? matched.map((edit, editIndex) => <EditRows key={String(edit.edit_id || editIndex)} edit={edit} />) : <p className="meta-line">该目标没有逐段对照，处理结果见右上标记。</p>}</details> })}
-    {restEdits.map((edit, index) => <details key={String(edit.edit_id || `edit-${index}`)} className="fundlex-target"><summary><strong>{field(edit.rule_id, `修改 ${index + 1}`)} · {field(edit.location)}</strong><span className="ui-tag">{operationLabel(edit.operation)}</span></summary><EditRows edit={edit} /></details>)}
-  </div> : <p className="fundlex-muted">报告没有返回条款改动明细。</p>}</Card>
+  return <Card><h2>改了哪些条款{total ? ` · ${total} 处` : ''}</h2>{total ? <div className="fundlex-target-list">
+    {blocks.map(({ target, index, matched }) => { const status = text(target.status || target.state); return <details key={String(target.target_id || index)} className="fundlex-target"><summary><strong>{field(target.title || target.rule_id, `条款 ${index + 1}`)}</strong><StatusBadge value={status} /></summary><dl className="fundlex-detail-grid"><dt>位置</dt><dd>{field(target.location)}</dd><dt>合同原文</dt><dd><Evidence value={target.quote || target.original_text} /></dd></dl>{matched.length ? matched.map((edit, editIndex) => <EditRows key={String(edit.edit_id || editIndex)} edit={edit} />) : <p className="meta-line">这条没有前后对照，状态见标签。</p>}</details> })}
+    {restEdits.map((edit, index) => <details key={String(edit.edit_id || `edit-${index}`)} className="fundlex-target"><summary><strong>修改 {index + 1} · {field(edit.location)}</strong><span className="ui-tag">{operationLabel(edit.operation)}</span></summary><EditRows edit={edit} /></details>)}
+  </div> : <p className="fundlex-muted">报告没有返回逐条修改明细。</p>}</Card>
 }
 
 function ExceptionSection({ report }: { report: Record<string, unknown> }) {
@@ -124,7 +124,7 @@ function ExceptionSection({ report }: { report: Record<string, unknown> }) {
   const summary = (report.user_summary || {}) as Record<string, unknown>
   const summaryIssues = objectList(summary.issues)
   const all = [...issues, ...summaryIssues]
-  return <Card><h2>异常点 · {all.length} 项</h2>{all.length ? <div className="fundlex-exception-list">{all.map((item, index) => <details key={`${exceptionKey(item, index)}-${index}`} className="fundlex-exception"><summary><span><strong>例外 {index + 1}</strong> · {field(item.title || item.rule_id || item.description, '需人工核对')}</span><small>{exceptionLocation(item)}</small></summary><dl className="fundlex-exception-meta"><dt>位置</dt><dd>{exceptionLocation(item)}</dd><dt>诊断来源</dt><dd>{exceptionSource(item)}</dd></dl><p>{field(item.business_reason || item.reason || item.review_note || item.description, '请结合原文与指引人工核对。')}</p><Evidence value={item.quote || item.evidence_quote} /></details>)}</div> : <p className="fundlex-muted">没有登记异常点。</p>}</Card>
+  return <Card><h2>还要人工核 · {all.length} 处</h2>{all.length ? <div className="fundlex-exception-list">{all.map((item, index) => <details key={`${exceptionKey(item, index)}-${index}`} className="fundlex-exception"><summary><span><strong>第 {index + 1} 处</strong> · {field(item.title || item.rule_id || item.description, '需人工核对')}</span><small>{exceptionLocation(item)}</small></summary><dl className="fundlex-exception-meta"><dt>位置</dt><dd>{exceptionLocation(item)}</dd><dt>诊断来源</dt><dd>{exceptionSource(item)}</dd></dl><p>{field(item.business_reason || item.reason || item.review_note || item.description, '请结合原文与指引人工核对。')}</p><Evidence value={item.quote || item.evidence_quote} /></details>)}</div> : <p className="fundlex-muted">都改完了，没有待核对项。</p>}</Card>
 }
 
 function DownloadButtons({ taskId, document, kinds }: { taskId: string; document: TaskDocument; kinds: Array<[string, string]> }) {
@@ -144,13 +144,13 @@ function DownloadButtons({ taskId, document, kinds }: { taskId: string; document
 function DownloadSection({ taskId, document }: { taskId: string; document: TaskDocument }) {
   const downloads = document.downloads || {}
   const kinds = Object.entries(downloads).filter(([kind, url]) => Boolean(url) && !kind.startsWith('report_') && !kind.startsWith('evaluation_'))
-  return <Card><h2>交付文件</h2>{kinds.length ? <DownloadButtons taskId={taskId} document={document} kinds={kinds} /> : <div className="fundlex-download-empty"><p>当前没有可下载文件。</p><p className="fundlex-muted">文件会在处理服务完成并通过复核后开放；不完整结果请先查看下方异常点。</p></div>}{(document.delivery_status === 'incomplete' || document.delivery_status === 'not_generated') && <p className="fundlex-detail-warning">当前交付状态为“{detailStatus(document)}”，工作文件不能直接视为最终合同。</p>}</Card>
+  return <Card><h2>交付文件</h2>{kinds.length ? <DownloadButtons taskId={taskId} document={document} kinds={kinds} /> : <div className="fundlex-download-empty"><p>当前没有可下载文件。</p><p className="fundlex-muted">处理完成并复核通过后开放下载。</p></div>}{(document.delivery_status === 'incomplete' || document.delivery_status === 'not_generated') && <p className="fundlex-detail-warning">当前交付状态为“{detailStatus(document)}”，带“未完成”标记的文件不能直接当最终合同用。</p>}</Card>
 }
 
 function AdvancedSection({ taskId, document }: { taskId: string; document: TaskDocument }) {
   const downloads = document.downloads || {}
   const kinds = Object.entries(downloads).filter(([kind, url]) => Boolean(url) && (kind.startsWith('report_') || kind.startsWith('evaluation_')))
-  return <details className="advanced-details"><summary>高级详情</summary><dl className="fundlex-detail-grid"><dt>原件 SHA-256</dt><dd><code>{field(document.source_sha256)}</code></dd><dt>指引版本</dt><dd><code>{field(document.guide_snapshot?.version_id)}</code></dd></dl>{kinds.length ? <DownloadButtons taskId={taskId} document={document} kinds={kinds} /> : null}</details>
+  return <>{kinds.length ? <DownloadButtons taskId={taskId} document={document} kinds={kinds} /> : null}</>
 }
 
 export function DocumentDetailPage() {
@@ -165,7 +165,7 @@ export function DocumentDetailPage() {
   if (report.loading && !report.data) return <Card><Spinner label="正在读取报告" /></Card>
   const reportData = (report.data && typeof report.data === 'object' ? report.data : undefined) as Record<string, unknown> | undefined
   return <div className="fundlex-document-detail">
-    <header className="page-heading"><div><p><Link to={`/tasks/${taskId}`}>← 返回任务</Link></p><h1>{document.name}</h1><p>修改与交付结果</p></div><div className="action-row"><Link to={`/tasks/${taskId}/documents/${document.document_id}/review`}><Button variant="primary" disabled={!document.downloads?.working_redline && !document.downloads?.redline}>打开修订复核</Button></Link><StatusBadge value={document.delivery_status} /></div></header>
+    <header className="page-heading"><div><p><Link to={`/tasks/${taskId}`}>← 返回任务</Link></p><h1>{document.name}</h1><p>修改与交付结果</p></div><div className="action-row"><Link to={`/tasks/${taskId}/documents/${document.document_id}/review`}><Button variant="primary" disabled={!document.downloads?.working_redline && !document.downloads?.redline}>逐条确认修改</Button></Link><StatusBadge value={document.delivery_status} /></div></header>
     <Summary document={document} report={reportData} />
     <DownloadSection taskId={taskId || ''} document={document} />
     {reportData ? <>
@@ -181,5 +181,5 @@ export function DocumentDetailPage() {
 function EvidenceSection({ report }: { report: Record<string, unknown> }) {
   const qualification = (report.qualification || report.eligibility || {}) as Record<string, unknown>
   const evidence = objectList(qualification.evidence || report.qualification_evidence)
-  return <Card><h2>业务依据</h2><p>{field(qualification.basis || qualification.reason || report.qualification_reason, '报告未提供资格说明。')}</p>{Boolean(qualification.fund_type_quote) && <Evidence value={qualification.fund_type_quote} />}{evidence.length ? <div className="fundlex-evidence-list">{evidence.map((item, index) => <Evidence key={index} value={item} />)}</div> : <p className="meta-line">暂无独立证据引文。</p>}</Card>
+  return <Card><h2>为什么判定可处理</h2><p>{field(qualification.basis || qualification.reason || report.qualification_reason, '报告未提供判定说明。')}</p>{Boolean(qualification.fund_type_quote) && <Evidence value={qualification.fund_type_quote} />}{evidence.length ? <div className="fundlex-evidence-list">{evidence.map((item, index) => <Evidence key={index} value={item} />)}</div> : <p className="meta-line">没有更多原文依据。</p>}</Card>
 }

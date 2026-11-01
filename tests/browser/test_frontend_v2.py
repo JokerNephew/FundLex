@@ -166,8 +166,8 @@ def test_model_roles_and_confirmed_connection_test(browser, live_app, monkeypatc
         cards = form.locator(".ui-card")
         assert cards.count() == 2
         primary = cards.nth(0)
-        expect(primary).to_contain_text("执行模型")
-        expect(cards.nth(1)).to_contain_text("检查模型")
+        expect(primary).to_contain_text("修改模型")
+        expect(cards.nth(1)).to_contain_text("复核模型")
         primary.get_by_role("button", name="修改配置").click()
         primary.get_by_label("使用方式").select_option("personal")
         primary.get_by_label("访问密钥（API Key）").fill("browser-fixture-test-key")
@@ -400,10 +400,10 @@ def test_compare_result_view_supports_pair_navigation_and_mobile_switching(brows
         page.locator('.compare-word-layout').wait_for(state="visible")
         page.set_viewport_size({"width": 390, "height": 844})
         page.locator('.compare-word-view .compare-mobile-switch').wait_for(state="visible")
-        assert page.get_by_role("button", name="比较的文档").count() == 1
+        assert page.get_by_role("button", name="对照结果").count() == 1
         page.locator('.compare-diff-item').first.evaluate("node => node.click()")
         page.wait_for_timeout(350)
-        page.get_by_role("button", name="原文档").click()
+        page.get_by_role("button", name="原合同").click()
         assert page.locator('.compare-word-sources').is_visible()
         metrics = page.evaluate("""() => ({ viewport: innerWidth, documentWidth: document.documentElement.scrollWidth, bodyWidth: document.body.scrollWidth })""")
         assert metrics["documentWidth"] <= metrics["viewport"]
@@ -518,7 +518,7 @@ def test_new_task_manifest_search_filter_pagination_and_compare_entry(browser, l
         page.wait_for_url(re.compile(r"/compare$"))
         page.get_by_role("heading", name="合同对比").first.wait_for()
         page.get_by_role("button", name="＋ 新建对比任务").wait_for()
-        assert "原版 → 对比版" in page.locator("body").inner_text()
+        page.get_by_text("还没有合同对比任务").wait_for()
     finally:
         context.close()
 
@@ -545,7 +545,7 @@ def test_new_task_invalid_replacement_removes_old_upload_row(browser, live_app, 
         page.get_by_role("button", name="替换").click()
         page.wait_for_timeout(100)
         page.locator('input[type=file][accept*="docx"]').last.set_input_files(str(invalid))
-        page.get_by_text("只支持 DOCX 文件。", exact=False).wait_for()
+        page.get_by_text("只收 DOCX 文件", exact=False).wait_for()
         assert "原合同.docx" not in page.locator(".upload-manifest-table").inner_text()
         assert "替换说明.txt" in page.locator(".upload-manifest-table").inner_text()
         assert page.get_by_role("button", name="创建任务并上传").is_disabled()
