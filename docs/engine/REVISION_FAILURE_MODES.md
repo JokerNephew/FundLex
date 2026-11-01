@@ -41,7 +41,7 @@ FM-04 短引文                          FM-12 摘要区排除                  
 | FM-05 | **指引适用性只写在标题**：operation condition=none，不适配合同跑全套义务 | ② | FL-D863（BH04 八连饿死） | CLOSED（条件词表机器化承载+重认证） |
 | FM-06 | **条件桩饿死**：中性 facts 桩使全部条件化规则 UNKNOWN，恢复通路静默失效 | ②④ | FL-D863 后续（summary_copy_targets stub） | CLOSED（生产两通路接真实 facts） |
 | FM-07 | **极性链不完备**：无字母归属句/豁免句式/零绑定证明缺环 → 前提 UNKNOWN 连发 | ④ | FL-D862（BH07 22 连发） | CLOSED（三补环+抽取开工闸） |
-| FM-08 | **空组无完结通道**：组级缺位已证但绑定操作无 satisfied-noop 归宿 | ⑤ | FL-D869（BH07 二阶残余 4 holds） | **OPEN**（机制已定，待实施） |
+| FM-08 | **空组无完结通道**：组级缺位已证但绑定操作无 satisfied-noop 归宿 | ⑤ | FL-D869（BH07 二阶残余 4 holds） | **CLOSED**（ad70cd6+877383b；BH07-v3 实跑 complete：empty_group_noop×2） |
 | FM-09 | **双 scope 分歧**：门/probe 独立标题扫描 ≠ 调用方已解析 RuleScope，形态差异即饿死 | ③ | FL-D866（BH05 LOF g06_subsection_scope_missing） | CLOSED（回退调用方边界，绝不全域） |
 | FM-10 | scope 先选一个叶子漏改正文同类条款；误写摘要 | ③ | FL-D439（景宁 p155） | CLOSED |
 | FM-11 | scope 过界：扩展到释义区与兄弟规则同段 overlap；修复目标不查 scope | ③ | FL-D412（G04/G02）、FL-D413 | CLOSED |
@@ -65,7 +65,7 @@ FM-04 短引文                          FM-12 摘要区排除                  
 | FM-29 | 同址 satisfied 双计伪造 occurrence 歧义 | ⑦ | FL-D698（B12 G05:2@p162） | CLOSED |
 | FM-30 | 单轮 inventory absent 判定摇摆把可执行义务变全案无产物 | ⑤⑦ | FL-D695（B15 G09@p159） | CLOSED（变体证据反证闸） |
 | FM-31 | 业务轮重盘整体替换冲掉反证+已执行目标 | ⑤ | FL-D695 loop-6 残余 | CLOSED（重盘后反证闸二次挂点） |
-| FM-32 | **纯枚举句缺位无证书**：类别句为枚举形态（非费制分组原型句），替换会造损坏文本，无任何完结通道 | ⑤⑥ | FL-D869（BH07 二阶） | **OPEN**（设计已定：枚举句缺位证书，真原型句 fail-closed） |
+| FM-32 | **纯枚举句缺位无证书**：类别句为枚举形态（非费制分组原型句），替换会造损坏文本，无任何完结通道 | ⑤⑥ | FL-D869（BH07 二阶） | **CLOSED**（enumerated_absence 证书；BH07-v3 实跑 complete；费义素句在场仍 fail-closed，消费端 mutation 在案） |
 | FM-33 | 合成遗漏：义务站点从未入计划（p244 合成遗漏） | ③ | FL-D791/696 loop-5（B12 G12+G13） | CLOSED |
 | FM-34 | append 被 approval 绕过结构站点，在无关段落重复插入 | ⑥⑦ | FL-D510 | CLOSED |
 | FM-35 | P6 评分器把缺失义务/残留删除句判为完成（评测侧假绿） | ⑦评 | FL-D450 | CLOSED（评分口径修正） |
@@ -182,7 +182,7 @@ CLOSED = 有真实复验证据收口；MATERIAL = 仅作证机制存在；OPEN =
 
 | # | 缺口 | 编号 | 下一步 |
 |---|---|---|---|
-| R1 | BH07 二阶：空组绑定完结 + 枚举句缺位证书 | FL-D869（OPEN） | 机制已设计，待实施+mutation+真实复跑 |
+| R1 | BH07 二阶：空组绑定完结 + 枚举句缺位证书 | FL-D869（**CLOSED**） | ad70cd6 机制+5 mutation；v2 实跑暴露第三阶接线断裂（生产端产出 verdict、消费端 kind 白名单拒收）；877383b 接线修复+2 消费端测试；**BH07-v3 实跑 complete 0-hold 闭环**。教训已录：机制修复必须含『生产→消费』端到端 acceptance 测试，单边 mutation 会造全绿假象 |
 | R2 | 指引质量门：标题含条件词而 condition=none 发 warning | FM-05 复发防呆 | 待主线裁决是否入 build_guide 通道 |
 | R3 | compose 业务级限次重试 | FL-D794 | 待裁决（FL-D445 政策边界） |
 | R4 | 非范式标题模板的 scope 覆盖量化 | FM-02/09 | 等 500+ 语料剖析矩阵，定通用标题正则层是否有必要 |
@@ -192,6 +192,8 @@ CLOSED = 有真实复验证据收口；MATERIAL = 仅作证机制存在；OPEN =
 *FL-D897 登记：本文件即大修框架交付物之一；FL-D866~869 为留出首验四家族的机制修复与残余登记（详见集中问题记录）。*
 
 ---
+
+**FM-38 机制生产-消费接线断裂**（2026-11-01 补，BH07-v2 实跑暴露，FL-D869 第三阶）：修复机制在上游正确产出证据（离线探针可复现），但下游消费白名单/契约未同步接入 → 真实路径静默回落旧失败，单边 mutation 全绿。规则：凡新增证据 kind/状态/代码，必须同提交接入所有消费端白名单并配『生产→消费』acceptance 测试；真实复跑为最终验收，mutation 绿不作数。
 
 ## 5. 语料交叉验证回填（2026-11-01，主线 542 合同类型学剖析 CORPUS_TYPOLOGY_20261101.md，R6 收口）
 

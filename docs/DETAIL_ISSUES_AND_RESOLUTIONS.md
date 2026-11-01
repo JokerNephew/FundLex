@@ -7623,3 +7623,10 @@ H＝E×…
   4. SWEEP_CHUNK_LIMIT gap 只记一次（3553-3557，注释自认），多轮 cap 后续次数不可见，观测损失。
 - **处置**：网关卡明确线程安全契约；扫窗键补 locations；等值过滤显式化；gap 改为计数聚合。低优先级，随小修批次。
 - **状态**：发现登记，待实施。
+
+## FL-D869 补充（2026-11-01 晚，第三阶接线断裂，BH07-v2 真实复跑暴露）
+
+- **发现（生产端实锤）**：BH07-v2 真实复跑（修复后首验）仍 incomplete，G02/G04 四 holds 原样未消（另新出 G14×3 flap，单列观察）。离线探针（真实合同+真实 facts 重建）证实 `absent_delete_coverage` **正确产出**四 per-op 记录（enumerated_absence×2 + empty_group_noop×2），但消费端 `_absent_coverage_evidence`（generation/effects.py:238）的 kind 白名单只有 `*_site_scan`，三态 verdict kind 一律拒收→闸门仍答 `verified site missing`。生产上游正确、下游拒收，mutation 全绿假象（旧测试只测生产端）。
+- **处理（877383b 已实施）**：kind 白名单接入三态（通用机制，对任意产此记录的规则生效；fail-closed 判定本体不变）；新增两条消费端测试（records 在场→四 op PASS/VERIFIED_ABSENT；费义素句在场→无 record→仍 CLAIM_OPERATION_UNPROVEN），29/29 绿。
+- **真实验证已闭环（BH07-v3，877383b）**：delivery_status=**complete**，unresolved=[]；G02:0/G02:1/G04:0/G04:1 四 op 经 claim_replay:VERIFIED_ABSENT 关闭为 ALREADY_SATISFIED（enumerated_absence×2+empty_group_noop×2 证据链与离线探针一致）；7 项真实编辑照常通过 ARTIFACT_VERIFIED；G14:3 SEMANTIC_VERIFIED、G14:4/5 alternative_wording_absent —— **G14 v1→v2 flap 未复现**（维持观察判定：模型面抽样波动，非机制缺陷，不单列条目）。账本 bh07-v3-ledger.sqlite，cost 0.0227/17 calls。
+- **状态**：已解决并验证（适用版本 ad70cd6+877383b；dev/mutation/真实三路闭环）。全量回归守门在途回执后封板。
