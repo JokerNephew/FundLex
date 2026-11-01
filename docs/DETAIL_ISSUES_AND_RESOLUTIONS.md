@@ -8605,6 +8605,7 @@ H＝E×…
 - **finalize_second_batch_labels_20261031.py 两处**（低）：L713 `+2` 致窗口 -4/+6 不对称；L550 未知 rule_id `RULE_IDS.index` 裸崩（一期工具仅记 issue）。
 - **prepare_second_batch_run_20261031.py / verify_downloaded_artifacts.py / p6_label.py L378**（低）：无保护 KeyError/schema 假设。
 - **controlled/其他低危**：v2_compare L85 段级 delta 错位 + L253 死计算；p6_package 死函数（规约不计）。
+- **并入低危（组A/B/C 余项）**：`production_v1_e2e_20261026.py` L148/155 无 `wait_for` 即断言（SPA 渲染竞态假失败）+ 固定任务名无随机后缀可能挂陈旧任务取错证据；`p6_select.py` L74 manifest 三字段 split 对含空格文件名脆性；`p6_trace_report.py` L37 死常量 + L168 注释引用不存在逻辑；`p6_package.py` L?? `cli as _clip` 遮蔽（签名一致，行为等价，规约记录）。
 
 ## 【报主线立号】EVAL 审计组A+B：资源/环境脆性族（2026-11-01，qa-feat-recall 复验确认，号尽）
 
