@@ -111,6 +111,6 @@ V1 `view-compare` 页面域按矩阵属 FE 前端主线；本线仅就 compare.*
 
 - 基线：qa/full-audit-20261031@379a498（本线 b257e46 已并入 92aa408，rebase 等于主线 HEAD）。
 - 方法：真实 app+真实 worker+真实浏览器 14 状态截图（P1 空态/列表、P2 新建/选文件反馈、P3 word/classic/选择条/下载行/chip 切组/覆盖 popover/深链/失败组/待上传/移动端），记录见附录「比对链路重设计生产级走查记录」。
-- 走查发现并修复：FL-D980（覆盖警告机读 token 直露→双端 coverageWarningLabel）、FL-D981（失败组话术重复补救语）、FL-D982（下载按钮裸 kind+文件名缺扩展名）。复拍验证通过。
+- 走查发现并修复：FL-D980（覆盖警告机读 token 直露→双端 coverageWarningLabel）、FL-D983（失败组话术重复补救语，原号 FL-D981 与 EN1 撞号改号）、FL-D984（下载按钮裸 kind+文件名缺扩展名，原号 FL-D982 同改号）。复拍验证通过。
 - 复用协同单交付：docs/frontend/COMPARE_SCROLL_REUSE_NOTES.md（供 FL-D891 指引版本比对复用 rAF 联动滚动+splitter）。
 - 回归：vitest 24/24、tsc/eslint/build 绿、浏览器 remediation 16/16、frontend_v2 11/11、frontend_fixes+scroll_perf 16/16。

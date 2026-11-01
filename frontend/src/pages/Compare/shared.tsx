@@ -84,7 +84,7 @@ export function pairFailureLabel(pair: ComparePair): string {
   if (pair.error_code === 'COMPARE_PAIR_INCOMPLETE') {
     const bad = (['left', 'right'] as const).map((side) => ({ side, file: pair[side] })).filter((item) => !item.file || item.file.upload_status !== 'accepted')
     if (!bad.length) return '该组文件不完整，请稍后重试'
-    // FL-D981：文件级原因已自带「新建对比任务上传」补救，尾句只补结论不重复。
+    // FL-D983：文件级原因已自带「新建对比任务上传」补救，尾句只补结论不重复。
     return bad.map((item) => `${item.side === 'left' ? '合同A' : '合同B'}：${item.file?.error_code ? uploadErrorLabel(item.file.error_code) : '未成功上传'}`).join('；') + '。该组已判失败，须新建任务补救。'
   }
   const failure = pair.diagnostics?.failure
