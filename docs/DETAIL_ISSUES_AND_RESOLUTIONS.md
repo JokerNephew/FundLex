@@ -8373,3 +8373,4 @@ H＝E×…
 - **登记不动工**：令牌档案增补 --text-display 档与 app.css 其余散色收编、CompareCard 元信息字段名「解析器版本」裁决（附录 1-3）；任务入口双轨/导航分组错配归 FL-D891/896（附录 4-5）。附录：`docs/frontend/DETAIL_APPEND_V2_AUDIT_20261101.md`。
 - **验证**：tsc 0 错 / vitest 24/24 / build ✓；after 截图 `/tmp/opencode/qa/shots-v2-after/`（01 列表无噪音行与快照列、03 表头与文案、04 索引列、22/23 查看器 kicker）；python 浏览器全套回归（FUNDLEX_BROWSER_TESTS=1, FUNDLEX_AUTH_MODE=dev）**101/101 通过**（422s，tests/browser/ 全套，-x 串行）。
 - **状态**：已解决（直接修批实施且四闸全绿：tsc 0/vitest 24/24/build/浏览器 101/101；登记项附录 1-5 保持 open 待主线裁决）。
+- **变更记录 2026-11-01（第七轮·全覆盖令，只读复审计）**：按 `docs/COVERAGE_MATRIX_20261101.md`（主线 3cab25b）对 V2 全部 10 页面域 + 50 文件（矩阵 49 + 自产 lib/issueText.ts）在同一基线 3fce104 上逐项签认零遗漏，未改任何代码；新发现 18 项编号 V2M-01～V2M-18（裁决级 3：V2M-01 ApiError 裸错误码冒泡 / V2M-02 `--accent*` 死引用 6 处 / V2M-07 路由与初始化兜底；直接修建议级 7；登记观察级 8），登记于 `docs/frontend/V2_COVERAGE_SIGNOFF_20261101.md`（不占本册号段），修复待下轮令后并入本条目。
