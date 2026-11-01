@@ -8240,13 +8240,18 @@ H＝E×…
 
 - **问题与影响**：全端 15+ 种散写 transition（`.12s/.15s/.16s/.05s` 混杂、ease 与默认缓动混排）、一处 `none!important`、2 处 width/height 盒尺寸 transition（布局抖动源）、无时长/缓动令牌。
 - **处理方法**：动效令牌表收敛（三档时长+唯一缓动+允许属性集）。
-- **状态**：已登记，随批1 施工。
+- **变更记录 2026-11-01（批2 施工）**：全端散写清零——V1 app.css 6 处+compare.css 4 处+V2 app.css 9 处裸 transition 全部收编 `--dur-fast/--dur-press + --ease-standard`（.12s/.15s/.16s 并值 120ms；btn 按压 transform 50ms 单独 --dur-press）；toast-in `.18s ease-out`→`--dur-med+唯一缓动`（第二缓动消灭）；grep 校验三端无裸时长 transition 残留。
+- **例外记档**：`.review-splitter/.compare-column-splitter` 伪元素 width/height 过渡保留（position:absolute 伪元素不改布局、无抖动源；理由与位置已写入令牌源 §2 例外注记）。
+- **验证**：浏览器计算样式断言 10/10——V1 btn `0.12s,0.12s,0.05s`+唯一缓动/toast `0.2s`，V2 btn/页面进场/表格行同值，reduced-motion 仿真双端过渡与动画全关。
+- **状态**：已解决（批2 验收）。
 
 ## FL-D810 弹层/页面切换无动效 + 孤立动画语言（2026-11-01，qa-frontend 第三轮）
 
 - **问题与影响**：全部弹层显隐瞬切、页面切换瞬切，与 toast-in/feishu-pulse/spin 三套孤立动画并存——断裂感；prefers-reduced-motion 仅 toast 一处。
 - **处理方法**：弹层背板 fade 200ms+面板 250/150ms；页面进场 200ms；加载动画收编；reduced-motion 全站。
-- **状态**：已登记，随批1 施工。
+- **变更记录 2026-11-01（批2 施工）**：V2 `@keyframes view-in`（opacity+translateY(4px), --dur-med）挂 `.main-content > *`（路由切换重挂载触发、页内数据刷新不重放——React 节点复用保证克制）；`panel-in`（translateY(-4px)）挂通知面板弹层。V1 决策记档：**页面级进场不实施**——V1 全量 innerHTML 重渲染架构下页内刷新（筛选/翻页）会重放整页动画，违背"克制微动效"用户口径；V1 反馈动效由 toast/按钮/控件态承担。reduced-motion 双端强化为 `transition:none+animation:none!important` 全局（V2 原 .01ms hack 统一口径）；无限循环动画（spin/feishu-pulse）按令牌属允许类，RM 下同样关闭。弹层背板/抽屉 250/150ms 规格随批4 结果页重构落地（当前 V1/V2 无模态弹层组件，仅 toast/下拉面板，已动效化）。
+- **验证**：浏览器断言 V2 view-in/panel-in 名称+时长+缓动、RM 下 animationName=none。
+- **状态**：已解决（批2 验收；抽屉/模态规格落地挂批4）。
 
 ## FL-D811 徽标规格双形态 + V2 二次覆盖（2026-11-01，qa-frontend 第三轮）
 

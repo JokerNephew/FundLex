@@ -23,7 +23,9 @@
 
 - **允许动画属性集**：`background-color, border-color, color, box-shadow, opacity, transform`。**禁止 width/height 盒尺寸过渡**（布局抖动）。
 - 弹层：背板 fade 200ms；面板开合 250ms 进 / 150ms 出。页面/视图进场：opacity+translateY(4px) 200ms。
-- `@media (prefers-reduced-motion: reduce)`：关闭全部动画与过渡。
+- `@media (prefers-reduced-motion: reduce)`：双端 `transition:none;animation:none!important` 全局关闭（批2 统一，替代 V2 原 .01ms hack）。
+- **实施记档（批2，2026-11-01）**：全端裸 transition 清零（V1 app.css 6 处/compare.css 4 处/V2 app.css 9 处收编）；toast-in 200ms 唯一缓动；V2 `@keyframes view-in`（4px,200ms，路由级）/`panel-in`（下拉面板）；V1 页面级进场不实施（全量重渲染会重放整页动画，违背克制原则，V1 反饶由 toast/控件态承担）。
+- **唯一例外**：`.review-splitter/.compare-column-splitter` 伪元素 width/height 过渡——绝对定位伪元素、不改布局、无抖动源，盒尺寸禁令不适用于此；时长仍为 --dur-fast。
 
 ## 3. 表单控件（input/select/textarea 全状态矩阵）
 
