@@ -21,16 +21,16 @@
 
 ### V2（10 页面域+全部子路由/状态）→ V2 线
 
-- [ ] Auth
-- [ ] Compare(列表/新建/任务)
-- [ ] DocumentDetail
-- [ ] Guides
-- [ ] NewTask
-- [ ] Review
-- [ ] Settings
-- [ ] TaskDetail
-- [ ] Tasks
-- [ ] Users
+- [x] Auth ✅（V2M-01/07 波及）
+- [x] Compare(列表/新建/任务) ✅（V2M-17/19/21；V2M-02/03/10 已修-第二棒；单体已重构为四文件一并签认）
+- [x] DocumentDetail ✅（V2M-01 波及，无独立发现）
+- [x] Guides ✅（V2M-11/12/14/16）
+- [x] NewTask ✅（V2M-01 波及，无独立发现）
+- [x] Review ✅（V2M-01 波及，无独立发现）
+- [x] Settings ✅（V2M-13）
+- [x] TaskDetail ✅（V2M-05/06/18）
+- [x] Tasks ✅（无发现）
+- [x] Users ✅（V2M-01 波及，无独立发现）
 
 ## B. 全部文件（逐文件）
 
@@ -47,55 +47,55 @@
 | frontend/guide_generation.js | FE 前端主线 | ☐ |
 | frontend/index.html | FE 前端主线 | ☐ |
 | frontend/logic-demo.html | FE 前端主线 | ☐ |
-| frontend/src/api/client.ts | V2 V2线 | ☐ |
-| frontend/src/api/endpoints.ts | V2 V2线 | ☐ |
-| frontend/src/api/hooks.ts | V2 V2线 | ☐ |
-| frontend/src/api/index.ts | V2 V2线 | ☐ |
-| frontend/src/api/queryClient.ts | V2 V2线 | ☐ |
-| frontend/src/app/App.tsx | V2 V2线 | ☐ |
-| frontend/src/app/index.ts | V2 V2线 | ☐ |
-| frontend/src/components/document/DocumentAnchor.tsx | V2 V2线 | ☐ |
-| frontend/src/components/document/DocumentMarker.tsx | V2 V2线 | ☐ |
-| frontend/src/components/document/DocumentNavigator.tsx | V2 V2线 | ☐ |
-| frontend/src/components/document/DocumentViewer.tsx | V2 V2线 | ☐ |
-| frontend/src/components/document/SplitPane.tsx | V2 V2线 | ☐ |
-| frontend/src/components/document/index.ts | V2 V2线 | ☐ |
-| frontend/src/components/layout/AppShell.tsx | V2 V2线 | ☐ |
-| frontend/src/components/layout/index.ts | V2 V2线 | ☐ |
-| frontend/src/components/review/RevisionCard.tsx | V2 V2线 | ☐ |
-| frontend/src/components/review/RevisionPanel.tsx | V2 V2线 | ☐ |
-| frontend/src/components/review/RevisionTypes.ts | V2 V2线 | ☐ |
-| frontend/src/components/review/index.ts | V2 V2线 | ☐ |
-| frontend/src/components/ui/Button.tsx | V2 V2线 | ☐ |
-| frontend/src/components/ui/Card.tsx | V2 V2线 | ☐ |
-| frontend/src/components/ui/Select.tsx | V2 V2线 | ☐ |
-| frontend/src/components/ui/Spinner.tsx | V2 V2线 | ☐ |
-| frontend/src/components/ui/StatusBadge.tsx | V2 V2线 | ☐ |
-| frontend/src/components/ui/index.ts | V2 V2线 | ☐ |
-| frontend/src/main.tsx | V2 V2线 | ☐ |
-| frontend/src/pages/Auth/index.tsx | V2 V2线 | ☐ |
-| frontend/src/pages/Compare/ComparePage.tsx | V2 V2线 | ☐ |
-| frontend/src/pages/DocumentDetail/DocumentDetailPage.tsx | V2 V2线 | ☐ |
-| frontend/src/pages/DocumentDetail/index.ts | V2 V2线 | ☐ |
-| frontend/src/pages/Guides/CompareCard.tsx | V2 V2线 | ☐ |
-| frontend/src/pages/Guides/index.tsx | V2 V2线 | ☐ |
-| frontend/src/pages/NewTask/index.tsx | V2 V2线 | ☐ |
-| frontend/src/pages/Review/ReviewPage.tsx | V2 V2线 | ☐ |
-| frontend/src/pages/Review/index.ts | V2 V2线 | ☐ |
-| frontend/src/pages/Settings/ModelSettings.tsx | V2 V2线 | ☐ |
-| frontend/src/pages/Settings/index.tsx | V2 V2线 | ☐ |
-| frontend/src/pages/TaskDetail/TaskDetailIndexPage.tsx | V2 V2线 | ☐ |
-| frontend/src/pages/TaskDetail/index.tsx | V2 V2线 | ☐ |
-| frontend/src/pages/Tasks/index.tsx | V2 V2线 | ☐ |
-| frontend/src/pages/Users/index.tsx | V2 V2线 | ☐ |
-| frontend/src/stores/auth.ts | V2 V2线 | ☐ |
-| frontend/src/stores/index.ts | V2 V2线 | ☐ |
-| frontend/src/stores/workspace.ts | V2 V2线 | ☐ |
-| frontend/src/styles/app.css | V2 V2线 | ☐ |
-| frontend/src/styles/index.css | V2 V2线 | ☐ |
-| frontend/src/styles/tokens.css | V2 V2线 | ☐ |
-| frontend/src/types/api.ts | V2 V2线 | ☐ |
-| frontend/src/types/index.ts | V2 V2线 | ☐ |
+| frontend/src/api/client.ts | V2 V2线 | ✅ V2M-01 |
+| frontend/src/api/endpoints.ts | V2 V2线 | ✅ 无发现 |
+| frontend/src/api/hooks.ts | V2 V2线 | ✅ 无发现 |
+| frontend/src/api/index.ts | V2 V2线 | ✅ 无发现 |
+| frontend/src/api/queryClient.ts | V2 V2线 | ✅ 无发现 |
+| frontend/src/app/App.tsx | V2 V2线 | ✅ V2M-07 |
+| frontend/src/app/index.ts | V2 V2线 | ✅ 无发现 |
+| frontend/src/components/document/DocumentAnchor.tsx | V2 V2线 | ✅ 无发现 |
+| frontend/src/components/document/DocumentMarker.tsx | V2 V2线 | ✅ 无发现 |
+| frontend/src/components/document/DocumentNavigator.tsx | V2 V2线 | ✅ 无发现 |
+| frontend/src/components/document/DocumentViewer.tsx | V2 V2线 | ✅ 无发现 |
+| frontend/src/components/document/SplitPane.tsx | V2 V2线 | ✅ 无发现 |
+| frontend/src/components/document/index.ts | V2 V2线 | ✅ 无发现 |
+| frontend/src/components/layout/AppShell.tsx | V2 V2线 | ✅ V2M-08 |
+| frontend/src/components/layout/index.ts | V2 V2线 | ✅ 无发现 |
+| frontend/src/components/review/RevisionCard.tsx | V2 V2线 | ✅ V2M-09 |
+| frontend/src/components/review/RevisionPanel.tsx | V2 V2线 | ✅ 无发现 |
+| frontend/src/components/review/RevisionTypes.ts | V2 V2线 | ✅ 无发现 |
+| frontend/src/components/review/index.ts | V2 V2线 | ✅ 无发现 |
+| frontend/src/components/ui/Button.tsx | V2 V2线 | ✅ 无发现 |
+| frontend/src/components/ui/Card.tsx | V2 V2线 | ✅ 无发现 |
+| frontend/src/components/ui/Select.tsx | V2 V2线 | ✅ 无发现 |
+| frontend/src/components/ui/Spinner.tsx | V2 V2线 | ✅ 无发现 |
+| frontend/src/components/ui/StatusBadge.tsx | V2 V2线 | ✅ 无发现 |
+| frontend/src/components/ui/index.ts | V2 V2线 | ✅ 无发现 |
+| frontend/src/main.tsx | V2 V2线 | ✅ 无发现 |
+| frontend/src/pages/Auth/index.tsx | V2 V2线 | ✅ 无独立发现（V2M-01 波及） |
+| frontend/src/pages/Compare/ComparePage.tsx | V2 V2线 | ✅ 已重构为 CompareListPage/CompareNewPage/CompareTaskPage/shared 四文件（均已逐行签认）；V2M-17/19/21 |
+| frontend/src/pages/DocumentDetail/DocumentDetailPage.tsx | V2 V2线 | ✅ 无独立发现（V2M-01 波及） |
+| frontend/src/pages/DocumentDetail/index.ts | V2 V2线 | ✅ 无发现 |
+| frontend/src/pages/Guides/CompareCard.tsx | V2 V2线 | ✅ V2M-12/14；已登记-裁决3 |
+| frontend/src/pages/Guides/index.tsx | V2 V2线 | ✅ V2M-11/14/16 |
+| frontend/src/pages/NewTask/index.tsx | V2 V2线 | ✅ 无独立发现（V2M-01 波及） |
+| frontend/src/pages/Review/ReviewPage.tsx | V2 V2线 | ✅ 无独立发现（V2M-01 波及） |
+| frontend/src/pages/Review/index.ts | V2 V2线 | ✅ 无发现 |
+| frontend/src/pages/Settings/ModelSettings.tsx | V2 V2线 | ✅ V2M-15（V2M-01 波及） |
+| frontend/src/pages/Settings/index.tsx | V2 V2线 | ✅ V2M-13（V2M-01 波及） |
+| frontend/src/pages/TaskDetail/TaskDetailIndexPage.tsx | V2 V2线 | ✅ 无发现 |
+| frontend/src/pages/TaskDetail/index.tsx | V2 V2线 | ✅ V2M-05/06/18（V2M-01 波及） |
+| frontend/src/pages/Tasks/index.tsx | V2 V2线 | ✅ 无独立发现（V2M-01 波及） |
+| frontend/src/pages/Users/index.tsx | V2 V2线 | ✅ 无独立发现（V2M-01 波及） |
+| frontend/src/stores/auth.ts | V2 V2线 | ✅ 无发现 |
+| frontend/src/stores/index.ts | V2 V2线 | ✅ 无发现 |
+| frontend/src/stores/workspace.ts | V2 V2线 | ✅ 无发现 |
+| frontend/src/styles/app.css | V2 V2线 | ✅ V2M-04（V2M-02/03 已修-第二棒） |
+| frontend/src/styles/index.css | V2 V2线 | ✅ 无发现 |
+| frontend/src/styles/tokens.css | V2 V2线 | ✅ 无发现 |
+| frontend/src/types/api.ts | V2 V2线 | ✅ 无发现 |
+| frontend/src/types/index.ts | V2 V2线 | ✅ 无发现 |
 | frontend/status_labels.js | FE 前端主线 | ☐ |
 | frontend/tests/client.test.ts | FE 前端主线 | ☐ |
 | frontend/tests/compare.test.tsx | FE 前端主线 | ☐ |

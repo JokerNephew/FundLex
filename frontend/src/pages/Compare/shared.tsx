@@ -243,17 +243,17 @@ export function CompareReader({ view, selectedPair, viewQuery, activeDiff, visib
         </div>
         <div className={`compare-word-layout ${showSources ? '' : 'is-sources-hidden'}`.trim()} data-markup={markup}>
           <section className="compare-word-document" aria-labelledby="compare-merged-title">
-            <div className="compare-word-pane-head"><div><span className="compare-word-pane-kicker">比较的文档</span><strong id="compare-merged-title">{pairLabel}</strong><small>{mergedName}</small></div><span className="compare-word-legend" aria-label="修订标记说明"><i className="compare-legend-ins">插入</i><i className="compare-legend-del">删除</i></span></div>
-            <div ref={mergedRef} className="compare-word-pane compare-merged-pane"><SafeCompareDocument html={view?.merged?.html || view?.right.html || ''} label="比较的文档" activeDiffId={activeDiff?.id} onDiff={selectPairDiff} /></div>
+            <div className="compare-word-pane-head"><div><span className="compare-word-pane-kicker">对照结果</span><strong id="compare-merged-title">{pairLabel}</strong><small>{mergedName}</small></div><span className="compare-word-legend" aria-label="修订标记说明"><i className="compare-legend-ins">插入</i><i className="compare-legend-del">删除</i></span></div>
+            <div ref={mergedRef} className="compare-word-pane compare-merged-pane"><SafeCompareDocument html={view?.merged?.html || view?.right.html || ''} label="对照结果" activeDiffId={activeDiff?.id} onDiff={selectPairDiff} /></div>
           </section>
           {showSources && <aside className="compare-word-sources" aria-label="源文档">
             <section className="compare-word-source" aria-labelledby="compare-source-left-title">
-              <div className="compare-word-pane-head"><div><span className="compare-word-pane-kicker">原文档</span><strong id="compare-source-left-title">{leftName}</strong><small>只读源文档</small></div><button className="compare-word-close" type="button" onClick={() => setShowSources(false)} aria-label="关闭源文档">×</button></div>
-              <div ref={leftRef} className="compare-word-pane"><SafeCompareDocument html={view?.left.html || ''} label="原文档" activeDiffId={activeDiff?.id} onDiff={selectPairDiff} /></div>
+              <div className="compare-word-pane-head"><div><span className="compare-word-pane-kicker">原合同</span><strong id="compare-source-left-title">{leftName}</strong><small>只读源文档</small></div><button className="compare-word-close" type="button" onClick={() => setShowSources(false)} aria-label="关闭源文档">×</button></div>
+              <div ref={leftRef} className="compare-word-pane"><SafeCompareDocument html={view?.left.html || ''} label="原合同" activeDiffId={activeDiff?.id} onDiff={selectPairDiff} /></div>
             </section>
             <section className="compare-word-source" aria-labelledby="compare-source-right-title">
-              <div className="compare-word-pane-head"><div><span className="compare-word-pane-kicker">修订的文档</span><strong id="compare-source-right-title">{rightName}</strong><small>只读源文档</small></div><button className="compare-word-close" type="button" onClick={() => setShowSources(false)} aria-label="关闭源文档">×</button></div>
-              <div ref={rightRef} className="compare-word-pane"><SafeCompareDocument html={view?.right.html || ''} label="修订的文档" activeDiffId={activeDiff?.id} onDiff={selectPairDiff} /></div>
+              <div className="compare-word-pane-head"><div><span className="compare-word-pane-kicker">改后的合同</span><strong id="compare-source-right-title">{rightName}</strong><small>只读源文档</small></div><button className="compare-word-close" type="button" onClick={() => setShowSources(false)} aria-label="关闭源文档">×</button></div>
+              <div ref={rightRef} className="compare-word-pane"><SafeCompareDocument html={view?.right.html || ''} label="改后的合同" activeDiffId={activeDiff?.id} onDiff={selectPairDiff} /></div>
             </section>
           </aside>}
         </div>
