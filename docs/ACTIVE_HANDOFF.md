@@ -1602,10 +1602,10 @@ dev20 v2 闭环：修复循环直到 §7 门槛（无已确证严重错误、无
 - FL-D685 回复 e3d6135；FL-D688 addendum 已写入 loop-2 compare（var/ 不入库）；FL-D584/585/586/587/588/589 条目在册。
 
 ## 在途
-- 无后台进程。**loop-6（9efe827）评完：343/87.9%、fc=0、wrong=0、kept=0、actual 17/20；B19 六波首 complete（+19）；表面 FAIL，FL-D792 归属待主线**。账本第 8 段 $0.5976/526c/66min。
-- 消退实证：B12 G12/G13+T014 形状零出现（FL-D791/696 愈）；B15 G09 absent 消退（FL-D695）；FL-D793 未复发销案。
-- 残余：**FL-D697**（B05 破坏性编辑被 audit 拦截→无产物，模型回摆）；**FL-D698**（B12 G05:2@p162 保守扣件）；FL-D695 更新（B15 残余 G05+G09）。
-- **待命**：主线勘误——loop-6 FAIL 机制修复令误投本会话（收件人=recall-miss 线），本线无视、不动作。**FL-D792 主线裁决已登记：归属 FL-D696 收口（编号碰撞已裁）**。等 recall-miss 修复并入后主线发 **loop-7 冻结令**。号段余 FL-D699。
+- HEAD 522afea（merge ada83eb；DETAIL 冲突按规程解；loop6_repairs 8+plan_rejected 4+fl_d791 6 = 18 绿）。
+- **loop-7 冻结 `qa-wave1-dev-v2-20261101-loop7` dev20 在跑**（后台 sh_194d362ff001Ou8FwqPG9x0oys）。七段对比脚本已备。
+- 跑完：评分 → 七段表 → 门槛（fc=0/B02 保/B05 恢复 complete/B12 G05:2@p162 消退→complete/B15 残渣消退+T001 双实证/wrong=0/kept 不新增/≥89.5%）；观察项：FL-D794 G11 抖动计数、B15 absent 兜住率。
+- 达标主线即放留出 8 份+第二波 100 份。号段余 FL-D699。
 ## 下一步（可执行顺序）
 1. 已向主线报 loop-2 指标与残余归属（本次回复）。
 2. 回归绿 → 提交 FL-D588 代码 → 报主线。等 feat-guide B15 单与 B19 修复专单齐 → 新 freeze 跑 loop-3。编号 580-589 已用尽，已向主线请新段。
