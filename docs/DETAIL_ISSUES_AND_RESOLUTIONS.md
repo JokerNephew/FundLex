@@ -8221,6 +8221,31 @@ H＝E×…
 - **下一步**：统计 loop-7 全波 G11 compose schema 失败率；≥2 波复发即升级为机制条目（compose 校验失败 deterministic tier1/fixed-text 回退，或业务轮对 MODEL: 软失败的有限再盘）。
 - **状态**：观察项（已复发一次，未升级解剖）。
 
+## FL-D820 指引生成运行必败：语料目录位于 /home 受 systemd ProtectHome 沙箱拦截（2026-11-01，主线，用户真实任务暴露）
+
+- **发现日期**：2026-11-01（用户在生产提交指引生成 run `a552520c…fe19`，FAILED，主线追查）。
+- **问题与影响**：`FUNDLEX_GUIDE_CORPUS_DIR=/home/opencode/data/funds_word`，但 `fundlex-guide-worker.service` 沙箱 `ProtectHome=true + ProtectSystem=strict`——服务 mount namespace 内 /home 不可见，`stage_snapshot/sync_corpus` 扫语料即 `PermissionError [Errno 13] '/home/opencode/data/funds_word'`，run 必然失败。影响：指引生成功能在生产**任何 run 都会在语料同步阶段失败**（前三阶段 INGEST/EXTRACT/VERIFY 完成，SNAPSHOT 死亡）。普通用户无权诊断。
+- **误导排查的陷阱**：以 `runuser -u fundlex` 直接测 ACL 时**读取成功**（514 份 glob+读字节全通）——runuser 不带 systemd confinement；只有 `systemd-run --uid=fundlex -p ProtectHome=true -p ProtectSystem=strict` 同款沙箱才能复现。教训：排查服务 EACCES 必须用同款 confinement 复现，不能信裸 shell。
+- **处理方法（已实施）**：①语料整目录拷贝至沙箱白名单路径 `/var/lib/fundlex/corpus/funds_word`（78M，chown fundlex:fundlex）；②`/etc/fundlex-recall.env` 的 `FUNDLEX_GUIDE_CORPUS_DIR` 改指新路径（前值备份 `…env.bak-20261101-gg`）；③重启 fundlex-guide-worker（active）。
+- **验证结果**：同款沙箱 `systemd-run` 内实测：新路径 glob=514+读文件 OK；旧路径复现出与生产**逐字一致**的 Errno 13（根因 100% 确认）。
+- **遗留/下一步**：①「对指引生成功能全面检查开发测试优化」专项线已开（用户第 4 点），含：部署形态样例运行冒烟（发布守门加跑一跑 PILOT run 断此回归类）、`pipeline.py` 默认 corpus 回退 `<repo>/funds_word` 在发布树无此目录时的行为策略（应显式报配置缺失而非静默空语料/GE 误导）、cron/健康检查。②ACL 层（/home/opencode 对 fundlex --x）保留作纵深但不再承载功能。③同形态隐患排查：其他服务若引用 /home 路径须同查（已知 compare 语料在树内 var/，未见引用 /home）。
+- **状态**：主体已解决（待全面检查线收尾复验一次真实 run 端到端）。
+
+## FL-D830 预算类错误码用户文案与 FL-D445 政策一致性裁决（2026-11-01，主线）
+
+- **背景**：前端批3 文案审查挂起——`MODEL_GLOBAL_CALL_BUDGET_EXCEEDED`/`MODEL_COST_BUDGET_EXCEEDED` 的"预算已用尽"用户文案与 FL-D445（真实模型无预算门槛）冲突。
+- **主线实查**：两码仅在 `enforce_limits=True` 时触发（model_budget.py reserve）；生产 `/etc/fundlex-recall.env` 未设 `FUNDLEX_MODEL_ENFORCE_LIMITS`（model.py/roles.py 读该 flag 默认关）→ 生产为纯账本观测模式，两码不可达，政策一致。
+- **裁决**：①用户文案改为中性系统错误（不出现"预算/额度/已用尽"），政策下该状态不应存在，真出现=配置事故不给用户政策冲突解释——前端 FL-D830 执行；②`enforce_limits` 死路径及入口的政策一致性深层清理挂引擎侧待办（`jobs.py`/`model_router.py`/`delivery.py`/`recovery/types.py` 的旁路名单保留属容错合理，不拆）。
+- **状态**：裁决已下，前端执行中；深层清理保持 open（低优先，不阻塞）。
+
+## FL-D699 释义容器型 composite 内的恒等类替换被计划面永久扣件：实例化恒等⇒satisfied-noop（2026-11-01，loop-7 残存单因子 B05，qa-recall-miss）
+
+- **发现**：loop-7（ada83eb）唯一 FAIL=B05 5 holds 诚实扣件。FL-D697a 容器守卫精确事前拒证（`RECALL_COMPOSITE_REPLACE_SCOPE_UNPROVEN`，破坏性编辑结构性排除）、G16 兄弟盲区支消退；残余机制缺陷：rebind_clause_continuation 把 G02:0 词级替换绑到 p118+p119 释义容器 composite，守卫拒整段替换（正确），但 G02:0 实例化新文本=A类基金份额==旧引用（subscription_group=["A"] 硬事实）——恒等替换本应判定已满足，却无通道闭合 → G02:B1:O1 MISS_PLAN_GAP 永久扣件（统计 -13）。主线裁决归族 FL-D650/683（模型生成面挥发触发的形状），要求机制化 span/no-op 约束而非提示词调优。
+- **机制修复**：plan 阶段 composite 分支在 `plan_composite_target` 前判恒等——`target_class_ops_identity`（recall.py）：class_substitution 规则、三群组事实均 VERIFIED、目标认领的适用 replace 操作逐一 instantiate_slots==old_text（逐操作粒度，混合型产品只坍缩恒等支、不动实工支）→ 目标转 satisfied-noop（ledger reason `class_substitution_identity_noop`），复用 FL-D052/FL-D106 硬事实边界与 R033 `class_operation_binding` 先例。
+- **mutation 测试**（`tests/test_loop6_repairs.py` 增 3 例，累计 11）：恒等闭合/混合事实不坍缩+守卫仍 fail-closed/非类替换规则与未验证事实拒坍缩。
+- **真实复验矩阵（2026-11-01，`/tmp/opencode/qa/loop8-fix-matrix/`，HEAD 686f080）**：**B05 complete**（0 holds、24/24 CLOSED_REPLAY、audit issues=∅、recovery=∅，$0.0311/25c——本轮模型直接判 G02 satisfied，恒等坍缩无需实发，病灶形态由 mutation 用例按 loop-7 ledger 形状离线覆盖）；**B12 complete**（0 holds、24/24 CLOSED，$0.0229/23c）；**B15 complete**（0 holds、21/21 CLOSED，$0.0265/23c）。全量回归 2543/0/139。
+- **状态**：已修复并验证（qa-recall-miss-20261031@686f080 起）；恒等坍缩实发留 loop-8 全波观察（复合 rebind 形态再现时判定路径）。
+
 ## FL-D695 B15 loop-5 新回归：G09@p159 audit 翻转 needs_edit→absent（MISS_TARGET_RESOLUTION）→ 交付门诚实扣全案（complete→no artifact）（2026-11-01，qa-feat-recall）
 
 - **发现**：dev20 loop-5（9ebeacf，FL-D791+FL-D790）B15 从 loop-3/loop-4 二连 complete 翻 incomplete 且**无产物**（final.docx 缺）。

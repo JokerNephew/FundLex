@@ -6254,6 +6254,46 @@ def class_substitution_letter_stable(rule: dict, facts: Facts) -> bool:
     return checked
 
 
+def target_class_ops_identity(rule: dict, operation_ids: Sequence[str],
+                              facts: Facts) -> bool:
+    """Hard fact: every claimed applicable replace op instantiates to its own reference.
+
+    FL-D699: a class-substitution rule rebound onto a container (composite
+    definition clause) can carry instantiated replacements equal to the guide
+    reference term-by-term (the product's own classes already are the group the
+    rule asks for, e.g. subscription group ["A"] vs "A类基金份额").  An identity
+    replacement is a satisfied no-op by definition; planning an edit would either
+    rewrite text for no effect or trip the composite scope guard and leave the
+    obligation permanently open (B05 G02:0@p118 loop-7).  Same hard-fact guards
+    as ``class_substitution_letter_stable`` — verified group facts, no slot
+    issues — scoped to the operation ids the target actually claims, so a mixed
+    product (one branch identity, one branch real work) only collapses the
+    identity branch.
+    """
+    if not rule.get("class_substitution"):
+        return False
+    if any(facts.status_of(name) != "VERIFIED" for name in (
+            "share_class_structure", "subscription_fee_group", "service_fee_group")):
+        return False
+    claimed = {str(key) for key in (operation_ids or ())}
+    rule_id = str(rule.get("rule_id") or "")
+    checked = False
+    for index, operation in enumerate(rule.get("operations") or []):
+        if claimed and _declared_operation_key(rule_id, index, operation) not in claimed:
+            continue
+        if not condition_matches(operation.get("condition"), facts):
+            continue
+        if operation.get("op") != "replace":
+            return False
+        instantiated, issues = instantiate_slots(str(operation.get("new_text") or ""), facts)
+        if issues or not instantiated:
+            return False
+        if _compact(instantiated) != _compact(str(operation.get("old_text") or "")):
+            return False
+        checked = True
+    return checked
+
+
 def _condition_fact_names(condition: dict | None) -> set[str]:
     if not condition:
         return set()
@@ -9310,6 +9350,19 @@ def plan_edits(rules_by_id: dict[str, dict], targets: Sequence[Target], inspecti
                         raise RecallError("RECALL_SLOT_UNRESOLVED",
                                           {"rule": rule["rule_id"], "issues": issues})
                     break
+                if target_class_ops_identity(rule, target.operations, facts):
+                    # FL-D699: every claimed class-substitution op instantiates to
+                    # its own reference — the container already names the actual
+                    # classes.  Close as satisfied-noop instead of planning an
+                    # identity edit (which the FL-D697a guard would fail-closed
+                    # into a permanent obligation hold, B05 G02:0@p118 loop-7).
+                    target.state = "satisfied"
+                    target.reason = f"{target.reason}|CLASS_SUBSTITUTION_IDENTITY_NOOP"
+                    ledger.append({"target_id": target.target_id, "rule_id": target.rule_id,
+                                   "status": "satisfied",
+                                   "reason": "class_substitution_identity_noop",
+                                   "operation_keys": list(target.operations)})
+                    continue
                 composite_edits = plan_composite_target(rule, target, inspection, facts,
                                                         new_text=replacement)
                 for composite_edit in composite_edits:
