@@ -34,7 +34,11 @@ GUIDE_SCHEMA_VERSION = "guide-rules-v1"
 # tables); owner-facing validation details are Chinese sentences with the
 # technical string preserved in ``detail_tech`` (FL-D898/FL-D904).
 PARSER_VERSION = "guide-parse-2"
-GUIDE_PARSE_PROMPT_VERSION = "guide_parse_v1"
+# guide_parse_v2: spell out the group_kind/one_of_group consistency contract —
+# real-model runs kept producing ONE_OF mismatches (12 GUIDE_GROUP_INVALID in
+# one benchmark run, FL-D903), and the repair loop could not converge on the
+# ambiguous wording.
+GUIDE_PARSE_PROMPT_VERSION = "guide_parse_v2"
 GUIDE_VERIFY_PROMPT_VERSION = "guide_verify_v1"
 
 EMPHASIS_VALUES = ("plain", "red", "bold")
@@ -463,7 +467,7 @@ def validate_parsed_guide(source: GuideSource, parsed: dict) -> dict:
                                      f"{label}.group_kind must be explicit"))
             if (relation == "ONE_OF") != bool(operation.get("one_of_group")):
                 errors.append(_issue("GUIDE_GROUP_INVALID", rule_id,
-                                     f"该规则{at}的“择一招牌”与“择一分组”不一致",
+                                     f"该规则{at}的「择一关系」标记与「择一分组」填写不一致",
                                      f"{label}.one_of_group does not match group_kind"))
             required = {"append": ("new_text",), "replace": ("old_text", "new_text"),
                         "delete": ("old_text",), "noop": ("text",)}[kind]
@@ -547,6 +551,8 @@ _PARSE_INSTRUCTION = (
     "Each operation explicitly sets group_kind to INDEPENDENT, ALL_OF, ONE_OF or BRANCH. "
     "Set one_of_group only for historical wording alternatives of the SAME business obligation, "
     "never for independent operations belonging to the same rule. "
+    "Consistency rule: one_of_group is a non-empty string exactly when group_kind is ONE_OF; "
+    "for every other group_kind one_of_group is the empty string. "
     "section_hint names the business domain, one of 释义, 基金的基本情况, 基金份额的申购与赎回, "
     "基金费用与税收, 基金的收益与分配, 基金财产的清算. requirement is a faithful natural-language "
     "description of what must change; it never adds policy the guide does not state. operations contains one "
