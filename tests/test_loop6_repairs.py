@@ -715,3 +715,69 @@ def test_g02_identity_noop_ac_product(tmp_path):
     records = _g02_coverage(tmp_path, "g02i", paragraphs, facts)
     assert records["G02:0"]["kind"] == "identity_noop"
     assert records["G02:1"]["kind"] == "identity_noop"
+
+
+def test_g02_g04_verdicts_consumed_by_effect_gate(tmp_path):
+    """FL-D869 third-order wiring (BH07-v2 real re-run): the three-state
+    per-operation verdicts returned by absent_delete_coverage were rejected
+    by the effect gate because their kinds were not whitelisted, so the real
+    run still failed with "verified site missing".  The consumer must accept
+    the explicit records and close the obligations as VERIFIED_ABSENT."""
+    from types import SimpleNamespace
+    from fundlex.recall import absent_delete_coverage
+    from fundlex.generation.effects import evaluate_operation_effect
+    facts = _facts_multi_no_svc()
+    paragraphs = _g02_contract_paragraphs()
+    insp = _inspect(tmp_path, "g02consume", paragraphs)
+    guide = json.loads(_guide_path().read_text())
+    ledger = compile_obligations(guide)
+    apply_facts(ledger, facts)
+    rules_by_id = {rule["rule_id"]: rule for rule in guide["groups"]}
+    locations = frozenset(f"p{index}" for index in range(len(paragraphs)))
+    scopes = {"G02": SimpleNamespace(locations=locations),
+              "G04": SimpleNamespace(locations=locations)}
+    records = absent_delete_coverage(rules_by_id, [], insp, scopes, ledger,
+                                     facts=facts)
+    kinds = {key: value["kind"] for key, value in records.items()}
+    for operation_id, kind in (("G02:0", "enumerated_absence"),
+                               ("G02:1", "empty_group_noop"),
+                               ("G04:0", "enumerated_absence"),
+                               ("G04:1", "empty_group_noop")):
+        assert kinds.get(operation_id) == kind, (operation_id, kinds)
+    for record in ledger.records:
+        if record.spec.rule_id not in {"G02", "G04"}:
+            continue
+        effect = evaluate_operation_effect(
+            record, insp, insp, [], [], facts,
+            absent_coverage=records.get(record.spec.operation_id))
+        assert effect.state == "PASS", (record.obligation_id, effect.as_dict())
+        assert effect.artifact_status == "VERIFIED_ABSENT"
+
+
+def test_mutation_g02_effect_gate_unproven_without_record(tmp_path):
+    """Fail closed stays intact: a fee-regime sentence blocks the certificate,
+    and with no record the gate still answers CLAIM_OPERATION_UNPROVEN."""
+    from types import SimpleNamespace
+    from fundlex.recall import absent_delete_coverage
+    from fundlex.generation.effects import evaluate_operation_effect
+    facts = _facts_multi_no_svc()
+    paragraphs = _g02_contract_paragraphs(extra=(
+        "A类基金份额：指在投资者申购时收取申购费用，"
+        "不再从本类别基金财产中计提销售服务费的基金份额。",
+    ))
+    insp = _inspect(tmp_path, "g02closed", paragraphs)
+    guide = json.loads(_guide_path().read_text())
+    ledger = compile_obligations(guide)
+    apply_facts(ledger, facts)
+    rules_by_id = {rule["rule_id"]: rule for rule in guide["groups"]}
+    locations = frozenset(f"p{index}" for index in range(len(paragraphs)))
+    scopes = {"G02": SimpleNamespace(locations=locations),
+              "G04": SimpleNamespace(locations=locations)}
+    records = absent_delete_coverage(rules_by_id, [], insp, scopes, ledger,
+                                     facts=facts)
+    assert "G02:0" not in records and "G04:0" not in records
+    record = next(r for r in ledger.records if r.spec.operation_id == "G02:0")
+    effect = evaluate_operation_effect(record, insp, insp, [], [], facts,
+                                       absent_coverage=None)
+    assert effect.state == "OPEN"
+    assert effect.failure_code == "CLAIM_OPERATION_UNPROVEN"
