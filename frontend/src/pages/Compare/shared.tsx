@@ -57,6 +57,21 @@ export function uploadErrorLabel(code?: string | null): string {
   return (code && COMPARE_UPLOAD_ERROR_LABELS[code]) || code || '上传被拒'
 }
 
+// FL-D980：parser coverage warnings 是机读 token（后端协议，测试锁定），
+// 展示层必须译为「哪部分未纳入比对」的可读文案，不能直露 token。
+const COVERAGE_STORY_LABELS: Record<string, string> = { header: '页眉', footer: '页脚', footnote: '脚注', endnote: '尾注', comment: '批注' }
+const COVERAGE_MARKER_LABELS: Record<string, string> = { drawing: '图形/图片', pict: '图形', object: '嵌入对象', AlternateContent: '复合内容', txbxContent: '文本框', sym: '符号' }
+
+export function coverageWarningLabel(warning?: string | null): string {
+  const match = /^UNSUPPORTED_VISIBLE_CONTENT:(.+)$/.exec(String(warning || ''))
+  if (!match) return String(warning || '')
+  const parts = match[1].split(':')
+  if (parts[0] === 'table-wrapper') return `表格中的${COVERAGE_MARKER_LABELS[parts[1]] || parts[1] || '内容'}`
+  const story = COVERAGE_STORY_LABELS[parts[0]]
+  if (story) return parts[1] ? `${story}中的${COVERAGE_MARKER_LABELS[parts[1]] || '非文本内容'}` : `${story}内容`
+  return `正文中的${COVERAGE_MARKER_LABELS[parts[0]] || parts[0]}`
+}
+
 const COMPARE_FAILURE_STAGE_LABELS: Record<string, string> = {
   claim_setup: '开始处理', input_integrity: '文件检查', compare: '文本比对', heartbeat: '处理中', finish: '保存结果',
 }
@@ -69,7 +84,8 @@ export function pairFailureLabel(pair: ComparePair): string {
   if (pair.error_code === 'COMPARE_PAIR_INCOMPLETE') {
     const bad = (['left', 'right'] as const).map((side) => ({ side, file: pair[side] })).filter((item) => !item.file || item.file.upload_status !== 'accepted')
     if (!bad.length) return '该组文件不完整，请稍后重试'
-    return bad.map((item) => `${item.side === 'left' ? '合同A' : '合同B'}：${item.file?.error_code ? uploadErrorLabel(item.file.error_code) : '未成功上传'}`).join('；') + '。该组已判失败，请新建对比任务重新上传。'
+    // FL-D981：文件级原因已自带「新建对比任务上传」补救，尾句只补结论不重复。
+    return bad.map((item) => `${item.side === 'left' ? '合同A' : '合同B'}：${item.file?.error_code ? uploadErrorLabel(item.file.error_code) : '未成功上传'}`).join('；') + '。该组已判失败，须新建任务补救。'
   }
   const failure = pair.diagnostics?.failure
   if (!failure || failure.error_code !== pair.error_code) return '处理失败，请稍后重试'

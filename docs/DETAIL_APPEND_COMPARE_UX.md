@@ -221,3 +221,40 @@
 - **验证**：remediation 16/16 绿（现状即被测覆盖）。
 - **状态**：**已评估-不修复**（观察项）。
 - **变更记录**：2026-11-01 发现并登记。
+
+## 号段声明：FL-D980~989 归 compare-ux 线 dogfood/后续批次（2026-11-01）
+
+- 主线并行协调文档现有号段：FL-D921~939（EN2）、FL-D940~959（PL2）、FL-D960~979（监督线）；980 起空闲，compare-ux 取用 FL-D980~989。
+
+## FL-D980 覆盖不完整警告直露机读 token（dogfood 走查，2026-11-01 发现）
+
+- **发现日期**：2026-11-01（生产级走查 p3-pair2-coverage 截图：`UNSUPPORTED_VISIBLE_CONTENT:footer` 直出给用户）。
+- **问题与影响**：parser coverage warnings 是机读协议码（测试锁定：header/footer/footnote/endnote/comment 及各 marker 后缀、table-wrapper 前缀），V1 覆盖 chip popover 与 V2 CompareTaskPage popover 均原文渲染，用户看不懂"哪部分没比对到"。
+- **处理方法（已实施）**：V1 compare.js 与 V2 shared.tsx 各增 `coverageWarningLabel`——story 名译中文（页眉/页脚/脚注/尾注/批注）、marker 译中文（图形/文本框等）、table-wrapper 组合句式；后端协议与断言不动；test_v1_frontend_remediation.py L395 断言跟进为「页眉」。
+- **验证**：复跑走查截图 popover 显示「页脚内容」；remediation 16/16、frontend_v2 11/11、vitest 24/24 绿。
+- **状态**：**已修复并验证**。
+- **变更记录**：2026-11-01 走查发现→修复→回归绿。
+
+## FL-D981 失败组话术补救路径重复（dogfood 走查，2026-11-01 发现）
+
+- **发现日期**：2026-11-01（p3-failed-pair 截图：「…新建对比任务上传。该组已判失败，请新建对比任务重新上传。」一句话两遍"新建对比任务"）。
+- **问题与影响**：FL-D857 拼句时文件级原因自带补救语 + 尾句补救语重复。
+- **处理方法（已实施）**：V1 pairErrorLabel/V2 pairFailureLabel 尾句改「。该组已判失败，须新建任务补救。」。
+- **验证**：走查复拍话术通顺；remediation/frontend_v2 全绿。
+- **状态**：**已修复并验证**。
+- **变更记录**：2026-11-01 走查发现→修复→回归绿。
+
+## FL-D982 选择产物下载按钮直露裸 kind + 文件名缺扩展名（dogfood 走查，2026-11-01 发现）
+
+- **发现日期**：2026-11-01（p3-selection-downloads 截图首轮：按钮显示「final · v1」「redline · v1」）。
+- **问题与影响**：① 后端产物 kind 恒为 `final`/`redline`（store.SELECTION_KINDS），V1 标签表只配了旧 `selected_*` 键名从不命中，回退直露裸 kind；② 文件名模板 `kind.endsWith('docx')` 对 final/redline 不成立，下载文件名无 `.docx` 扩展名。
+- **处理方法（已实施）**：标签表补 `final`/`redline` 中文名（保留旧键防御）；文件名对 final/redline 追加 `.docx`。
+- **验证**：走查复拍显示「下载选择结果 DOCX · v1」「下载选择结果（带修订痕迹）DOCX · v1」；remediation 16/16 绿。
+- **状态**：**已修复并验证**。
+- **变更记录**：2026-11-01 走查发现→修复→回归绿。
+
+## 附：比对链路重设计生产级走查记录（dogfood，2026-11-01）
+
+- 环境：主线树 rebase qa/full-audit-20261031@379a498 + 本轮修复；真实 create_app+真实 CompareWorker 线程+真实浏览器（脚本 /tmp/opencode/qa/compare_dogfood.py，数据 python-docx 真实 DOCX 经真实 API 上传/密封/处理/选择/生成）。
+- 状态覆盖（14 截图，/tmp/opencode/qa/compare-dogfood-20261101/）：p1-empty（空态引导✅）、p1-list（三任务状态计数「已处理·1组失败/1组覆盖不完整」「上传中」✅）、p2-new-initial/selected（FL-D859 卡片反馈✅）、p3-workbench-word/classic（修订 rail、合并文档红线、连接线、chip 头部 ✅）、p3-selection-downloads（选择条+下载行）、p3-pair2-switched/coverage（chip 切组、覆盖 chip popover）、p3-deeplink-pair2（深链直达第二组✅）、p3-failed-task/failed-pair（失败组话术）、p3-pending-upload（待上传空态✅）、p3-mobile（移动端 rail 叠上、单行修订项✅）。
+- 走查产出问题：FL-D980/981/982 三项，均已修复并复拍验证；其余状态目检无新问题。

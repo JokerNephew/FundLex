@@ -33,6 +33,19 @@
     if(raw) return raw.split('/').filter(Boolean).slice(1).join('/') || fileName(file);
     return fileName(file);
   };
+  // FL-D980: parser coverage warnings 是机读 token（后端协议，测试锁定），
+  // 用户必须看到可读的「哪部分内容未纳入比对」，不能直露 token。
+  const COVERAGE_STORY_LABELS = {header:'页眉',footer:'页脚',footnote:'脚注',endnote:'尾注',comment:'批注'};
+  const COVERAGE_MARKER_LABELS = {drawing:'图形/图片',pict:'图形',object:'嵌入对象',AlternateContent:'复合内容',txbxContent:'文本框',sym:'符号'};
+  const coverageWarningLabel = w => {
+    const m = /^UNSUPPORTED_VISIBLE_CONTENT:(.+)$/.exec(String(w||''));
+    if(!m)return String(w||'');
+    const parts=m[1].split(':');
+    if(parts[0]==='table-wrapper')return `表格中的${COVERAGE_MARKER_LABELS[parts[1]]||parts[1]||'内容'}`;
+    const story=COVERAGE_STORY_LABELS[parts[0]];
+    if(story)return parts[1]?`${story}中的${COVERAGE_MARKER_LABELS[parts[1]]||'非文本内容'}`:`${story}内容`;
+    return `正文中的${COVERAGE_MARKER_LABELS[parts[0]]||parts[0]}`;
+  };
   function pairRow(pair = {}, index) {
     const selected = [pair.left?.name || fileName(pair._left), pair.right?.name || fileName(pair._right)].filter(Boolean).join(' / ');
     const sideCard=(side,title,badge)=>{
@@ -83,9 +96,11 @@
     if (p.error_code==='COMPARE_PAIR_INCOMPLETE') {
       const bad=['left','right'].map(side=>({side,file:p[side]})).filter(x=>!x.file||x.file.upload_status!=='accepted');
       if(!bad.length) return '该组文件不完整，请稍后重试';
+      // FL-D981: 文件级原因自带的「新建对比任务上传」补救与尾句重复，
+      // 尾句只补充「该组已判失败」的结论，不再重复补救路径。
       return bad.map(x=>{const tag=x.side==='left'?'合同A':'合同B';
         return x.file?.error_code?`${tag}：${uploadErrorLabel(x.file.error_code)}`:`${tag} 未成功上传`;
-      }).join('；')+'。该组已判失败，请新建对比任务重新上传。';
+      }).join('；')+'。该组已判失败，须新建任务补救。';
     }
     const failure=p.diagnostics?.failure;
     if (!failure || failure.error_code!==p.error_code) return `处理失败，请稍后重试`;
@@ -557,8 +572,10 @@
     const box=$('compare-selection-downloads'); if(!box)return;
     const artifacts=state.selectionDirty?[]:(state.selection?.artifacts||[]);
     if(!artifacts.length){box.replaceChildren();return;}
-    const labels={selected_final:'下载选择结果 DOCX',selected_redline:'下载选择结果（带修订痕迹）DOCX',selection_report_markdown:'下载选择报告（Markdown）',selection_report_json:'下载选择报告（JSON）'};
-    box.innerHTML=artifacts.map(item=>`<div class="compare-artifact"><button class="btn btn-sm" type="button" data-selection-download="${esc(item.download_url)}" data-selection-filename="${esc(`compare-v${item.version}-${item.kind}${item.kind.endsWith('docx')?'.docx':''}`)}" ${item.status==='stale'?'title="该版本已过期，仅作追溯"':''}>${esc(labels[item.kind]||item.kind)} · v${item.version}${item.status==='stale'?' · 已过期':''}</button></div>`).join('');
+    // FL-D982: 后端产物 kind 恒为 final/redline（store.SELECTION_KINDS），
+    // 旧标签表的 selected_* 键名从不命中，下载按钮直露裸 kind。
+    const labels={final:'下载选择结果 DOCX',redline:'下载选择结果（带修订痕迹）DOCX',selected_final:'下载选择结果 DOCX',selected_redline:'下载选择结果（带修订痕迹）DOCX',selection_report_markdown:'下载选择报告（Markdown）',selection_report_json:'下载选择报告（JSON）'};
+    box.innerHTML=artifacts.map(item=>{const isDocx=item.kind.endsWith('docx')||['final','redline'].includes(item.kind);return `<div class="compare-artifact"><button class="btn btn-sm" type="button" data-selection-download="${esc(item.download_url)}" data-selection-filename="${esc(`compare-v${item.version}-${item.kind}${isDocx?'.docx':''}`)}" ${item.status==='stale'?'title="该版本已过期，仅作追溯"':''}>${esc(labels[item.kind]||item.kind)} · v${item.version}${item.status==='stale'?' · 已过期':''}</button></div>`;}).join('');
   }
   function renderSelection() {
     const s=state.selection, node=$('compare-selection-progress'), buttons=document.querySelectorAll('#compare-selection-left-all,#compare-selection-right-all,#compare-selection-generate,#compare-selection-save,#compare-selection-pending');
@@ -1103,7 +1120,7 @@
       chipList.replaceChildren();
       if(incomplete){
         const intro=document.createElement('p'); intro.textContent='以下内容未纳入比较，请人工复核，不要据此确认全文无差异。'; chipList.append(intro);
-        if(warnings.length){const ul=document.createElement('ul'); warnings.forEach(warning=>{const li=document.createElement('li');li.textContent=warning;ul.append(li);});chipList.append(ul);}
+        if(warnings.length){const ul=document.createElement('ul'); warnings.forEach(warning=>{const li=document.createElement('li');li.textContent=coverageWarningLabel(warning);ul.append(li);});chipList.append(ul);}
       }
     }
     state.classicRendered=false; state.wordSourcesRendered=false; state.diffPositions=null;
