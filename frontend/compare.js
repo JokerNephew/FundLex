@@ -13,7 +13,21 @@
   const fileName = file => String(file?.name || '').replace(/\\/g, '/').split('/').pop();
   const legacyDoc = file => /\.doc$/i.test(fileName(file));
   const legacyDocMessage = files => `检测到 Word 97-2003 格式（.doc）文件：${files.map(fileName).join('、')}。请用 Word/WPS 打开后“另存为” .docx，再重新选择。`;
-  const uploadErrorLabel = code => code==='LEGACY_DOC_UNSUPPORTED'?'请将 .doc 另存为 .docx':code;
+  // FL-D856: every upload rejection code needs a readable cause and an honest
+  // recovery path — a rejected slot cannot be replaced pre-seal (manifest binds
+  // name+size), so the remedy is creating a fresh task.
+  // 与服务端 FUNDLEX_MAX_UPLOAD_BYTES 默认值一致；超限仍以服务端校验为准（FL-D859）。
+  const MAX_UPLOAD_BYTES = 25*1024*1024;
+  const uploadErrorLabel = code => ({
+    LEGACY_DOC_UNSUPPORTED:'请将 .doc 另存为 .docx 后重新选择',
+    COMPARE_ENCRYPTED_DOCX:'文件有密码保护，请解除密码后新建对比任务上传',
+    COMPARE_UNSUPPORTED_FORMAT:'仅支持 .docx 文件，请转换格式后新建对比任务上传',
+    COMPARE_INVALID_DOCX:'文件不是可用的 .docx 文档，请检查后新建对比任务上传',
+    COMPARE_UPLOAD_REJECTED:'文件未通过上传校验（可能超过大小限制），请处理后新建对比任务上传',
+    MANIFEST_ENTRY_NOT_FOUND:'上传文件与任务清单不匹配，请新建对比任务上传',
+    MANIFEST_FILE_MISMATCH:'替换文件与首次选择的文件名或大小不一致；如需更换文件，请新建对比任务上传',
+    UPLOAD_IDENTITY_CONFLICT:'该文件位已有其他文件；如需更换，请新建对比任务上传',
+  })[code] || code || '上传被拒';
   const relativePath = file => {
     const raw=String(file?.webkitRelativePath || '').replace(/\\/g, '/');
     if(raw) return raw.split('/').filter(Boolean).slice(1).join('/') || fileName(file);
@@ -64,9 +78,18 @@
   function pairErrorLabel(p) {
     if (p.viewError) return p.viewError;
     if (!p.error_code) return '';
+    // FL-D857: a sealed-incomplete pair carries no diagnostics; the truthful
+    // cause lives in the per-file rejection codes the payload already delivers.
+    if (p.error_code==='COMPARE_PAIR_INCOMPLETE') {
+      const bad=['left','right'].map(side=>({side,file:p[side]})).filter(x=>!x.file||x.file.upload_status!=='accepted');
+      if(!bad.length) return '该组文件不完整，请稍后重试';
+      return bad.map(x=>{const tag=x.side==='left'?'合同A':'合同B';
+        return x.file?.error_code?`${tag}：${uploadErrorLabel(x.file.error_code)}`:`${tag} 未成功上传`;
+      }).join('；')+'。该组已判失败，请新建对比任务重新上传。';
+    }
     const failure=p.diagnostics?.failure;
     if (!failure || failure.error_code!==p.error_code) return `处理失败，请稍后重试`;
-    return `处理失败：${failureStageLabel(failure.stage)}环节出错${failure.retryable?'，可重试':'，请重新创建合同组'}`;
+    return `处理失败：${failureStageLabel(failure.stage)}环节出错${failure.retryable?'，可重试':'，请新建对比任务后重试；若仍失败请联系支持'}`;
   }
   function renderPairs() {
     $('compare-pair-list').innerHTML=`<div class="compare-pair-statuses">${state.pairs.map((p,i)=>`<button type="button" role="tab" aria-selected="${p.id===state.selectedPairId?'true':'false'}" class="compare-pair-status ${p.id===state.selectedPairId?'is-selected':''} ${['succeeded','incomplete'].includes(p.status)?'is-done':''} ${p.status==='incomplete'?'is-incomplete':''} ${p.status==='failed'||p.viewError?'is-failed':''}" data-compare-pair="${i}"><span class="compare-pair-number">${String(i+1).padStart(2,'0')}</span><span class="compare-pair-main"><strong>${esc(p.label||`第 ${i+1} 组`)}</strong><small>合同A：${esc(p.left?.name||'未命名')} / 合同B：${esc(p.right?.name||'未命名')}</small></span><span class="compare-pair-state">${esc(statusLabel(p.status))}${p.summary?` · ${p.summary.total} 处`:''}</span>${p.error_code||p.viewError?`<span class="compare-pair-error" role="status">${esc(pairErrorLabel(p))}</span>`:''}</button>`).join('')}</div>`;
@@ -93,6 +116,9 @@
     const files=selectedFiles(), message=$('compare-upload-message');
     const legacy=files.flatMap(x=>[x.left,x.right]).filter(f=>f&&legacyDoc(f));
     if(legacy.length){message.textContent=legacyDocMessage(legacy);return;}
+    // FL-D859: 超大文件在客户端先拦截——服务端拒绝后同清单不可替换，只能新建任务。
+    const oversize=files.flatMap(x=>[x.left,x.right]).filter(f=>f&&f.size>MAX_UPLOAD_BYTES);
+    if(oversize.length){message.textContent=`单个文件最大 25MB，超出：${oversize.map(fileName).join('、')}。请压缩或拆分后重新选择。`;return;}
     if (!files.length || files.some(x=>!x.left||!x.right)) { message.textContent='每组都需要同时选择合同A和合同B的 DOCX 文件。'; return; }
     const identity=state.identityToken; const name=($('compare-name').value||'').trim()||`合同比对 ${new Date().toLocaleString('zh-CN',{hour12:false})}`; const pairs=files.map((x,i)=>{const leftId=`L${i}-${crypto.randomUUID()}`,rightId=`R${i}-${crypto.randomUUID()}`;return {client_pair_id:`P${i+1}`,label:`合同 ${i+1}`,left:{client_id:leftId,name:fileName(x.left),size:x.left.size},right:{client_id:rightId,name:fileName(x.right),size:x.right.size}};});
     const key=`compare-${Date.now()}-${crypto.randomUUID()}`; message.textContent='正在创建对比任务…'; $('compare-submit').disabled=true;
@@ -1178,7 +1204,12 @@
     $('compare-prev-diff')?.addEventListener('click',()=>focusDiff(state.diffIndex-1)); $('compare-next-diff')?.addEventListener('click',()=>focusDiff(state.diffIndex+1)); $('compare-selection-left-all')?.addEventListener('click',()=>setAllSelections('left')); $('compare-selection-right-all')?.addEventListener('click',()=>setAllSelections('right')); $('compare-selection-pending')?.addEventListener('click',()=>{const index=visibleDiffs().findIndex(item=>selectionDecision(item.id)==='pending');if(index>=0)focusDiff(index);}); $('compare-selection-save')?.addEventListener('click',()=>saveSelectionDraft()); $('compare-selection-generate')?.addEventListener('click',generateSelection); $('compare-active-only')?.addEventListener('change',drawLines); $('compare-diff-filter')?.addEventListener('change',()=>{state.diffIndex=0;renderDiffList();focusDiff(0);}); $('compare-diff-list')?.addEventListener('scroll',onDiffListScroll,{passive:true}); $('compare-retry')?.addEventListener('click',continueUploads); document.querySelectorAll('[data-word-pane]').forEach(btn=>btn.addEventListener('click',()=>setMobilePane(btn.dataset.wordPane))); $('compare-show-sources')?.addEventListener('change',e=>setSourcesVisible(e.target.checked)); $('compare-markup-mode')?.addEventListener('change',e=>setMarkupMode(e.target.value)); document.querySelectorAll('[data-compare-sources-close]').forEach(btn=>btn.addEventListener('click',()=>setSourcesVisible(false)));
       document.addEventListener('click',e=>{ const back=e.target.closest('[data-compare-back-list]');if(back){api.navigate?.('compare',{mode:'list'});return;}const task=e.target.closest('[data-compare-task]');if(task){openTask(task.dataset.compareTask);return;}const pair=e.target.closest('[data-compare-pair]');if(pair){openPair(Number(pair.dataset.comparePair));return;}const download=e.target.closest('[data-selection-download]');if(download){downloadSelection(download.dataset.selectionDownload,download.dataset.selectionFilename);return;}const diff=e.target.closest('[data-compare-diff]');if(diff&&!e.target.closest('input')){focusDiff(visibleDiffs().findIndex(x=>x.id===diff.dataset.compareDiff));return;}const mark=e.target.closest('#compare-word-merged-pane [data-diff-id],#compare-word-left-pane [data-diff-id],#compare-word-right-pane [data-diff-id],#compare-left-pane [data-diff-id],#compare-right-pane [data-diff-id]');if(mark){focusDiff(visibleDiffs().findIndex(x=>x.id===mark.dataset.diffId));return;}const remove=e.target.closest('[data-compare-remove]');if(remove){const index=Number(remove.dataset.compareRemove),row=remove.closest('.compare-pair-input');state.inputs.splice(index,1);row?.remove();if(!state.inputs.length){state.inputs=[{}];renderInputs();}else syncInputIndexes();return;} });
      document.addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&e.target.matches('#compare-word-merged-pane [data-diff-id],#compare-word-left-pane [data-diff-id],#compare-word-right-pane [data-diff-id],#compare-left-pane [data-diff-id],#compare-right-pane [data-diff-id]')){e.preventDefault();focusDiff(visibleDiffs().findIndex(x=>x.id===e.target.dataset.diffId));}});
-      document.addEventListener('change',e=>{const choice=e.target.closest('[data-selection-choice]');if(choice){chooseSelection(choice.dataset.diffId,choice.value);return;}const row=e.target.closest('.compare-pair-input');if(row&&e.target.matches('input[type=file]')){const i=Number(row.dataset.pairIndex),entry=state.inputs[i]||(state.inputs[i]={});entry[e.target.matches('[data-compare-left]')?'_left':'_right']=e.target.files?.[0]||null;row.querySelector('.compare-file-label').textContent=[entry._left?.name,entry._right?.name].filter(Boolean).join(' / ')||'尚未选择文件';return;}if(e.target.id==='compare-left-folder'||e.target.id==='compare-right-folder'){const side=e.target.id.includes('left')?'left':'right';state[`folder${side[0].toUpperCase()+side.slice(1)}`]=[...e.target.files].filter(f=>fileName(f).toLowerCase().endsWith('.docx')).sort((a,b)=>relativePath(a).localeCompare(relativePath(b)));const other=side==='left'?state.folderRight:state.folderLeft;if(!other?.length)return;const left=state.folderLeft||[],right=state.folderRight||[],map=new Map(right.map(f=>[relativePath(f),f])),used=new Set(),entries=left.map(f=>{const r=map.get(relativePath(f));if(r)used.add(r);return {_left:f,_right:r||null};});for(const f of right)if(!used.has(f))entries.push({_left:null,_right:f});state.inputs=entries;renderInputs();$('compare-upload-message').textContent=`已按相对路径配对 ${entries.filter(x=>x._left&&x._right).length} 组；${entries.filter(x=>!x._left||!x._right).length} 个文件未配对，可手工补齐。`;}});
+      document.addEventListener('change',e=>{const choice=e.target.closest('[data-selection-choice]');if(choice){chooseSelection(choice.dataset.diffId,choice.value);return;}const row=e.target.closest('.compare-pair-input');if(row&&e.target.matches('input[type=file]')){const i=Number(row.dataset.pairIndex),entry=state.inputs[i]||(state.inputs[i]={}),file=e.target.files?.[0]||null;entry[e.target.matches('[data-compare-left]')?'_left':'_right']=file;row.querySelector('.compare-file-label').textContent=[entry._left?.name,entry._right?.name].filter(Boolean).join(' / ')||'尚未选择文件';
+        // FL-D859: 选择文件后同步更新卡片文件名、has-file 态与按钮文案，
+        // 原实现只更新 sr-only 摘要，用户无法确认选择成功。
+        const card=e.target.closest('.compare-file-card');
+        if(card){const name=file?fileName(file):'';card.classList.toggle('has-file',!!name);const nameEl=card.querySelector('.compare-file-name');if(nameEl){nameEl.textContent=name||'尚未选择合同';nameEl.title=name;}const btn=card.querySelector('[data-compare-choose]');if(btn)btn.textContent=name?'更换文件':'选择文件';}
+        return;}if(e.target.id==='compare-left-folder'||e.target.id==='compare-right-folder'){const side=e.target.id.includes('left')?'left':'right';state[`folder${side[0].toUpperCase()+side.slice(1)}`]=[...e.target.files].filter(f=>fileName(f).toLowerCase().endsWith('.docx')).sort((a,b)=>relativePath(a).localeCompare(relativePath(b)));const other=side==='left'?state.folderRight:state.folderLeft;if(!other?.length)return;const left=state.folderLeft||[],right=state.folderRight||[],map=new Map(right.map(f=>[relativePath(f),f])),used=new Set(),entries=left.map(f=>{const r=map.get(relativePath(f));if(r)used.add(r);return {_left:f,_right:r||null};});for(const f of right)if(!used.has(f))entries.push({_left:null,_right:f});state.inputs=entries;renderInputs();$('compare-upload-message').textContent=`已按相对路径配对 ${entries.filter(x=>x._left&&x._right).length} 组；${entries.filter(x=>!x._left||!x._right).length} 个文件未配对，可手工补齐。`;}});
      bindCompareSplitter();
     bindPanelSplitters();
       for(const pane of allPanels()){

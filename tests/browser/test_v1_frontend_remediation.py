@@ -1036,7 +1036,7 @@ def test_compare_failed_pair_shows_structured_failure_diagnostics(browser, live_
         open_dev(page, base, "#compare?mode=detail&id=T")
         error = page.locator(".compare-pair-status.is-failed .compare-pair-error")
         error.wait_for()
-        assert error.inner_text() == "处理失败：文本比对环节出错，请重新创建合同组"
+        assert error.inner_text() == "处理失败：文本比对环节出错，请新建对比任务后重试；若仍失败请联系支持"
         paused = page.locator(".compare-pair-status", has_text="暂停组")
         assert paused.locator(".compare-pair-state").inner_text().startswith("已暂停")
         assert page.locator(".compare-pair-status.is-failed .compare-pair-state").inner_text() == "失败"
