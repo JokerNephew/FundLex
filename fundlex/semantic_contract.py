@@ -145,13 +145,18 @@ def _normalise_location(value: str, allowed: Iterable[str]) -> str:
 
 
 def semantic_candidate_context(inspection: Any, locations: Iterable[str],
-                               policy: SemanticPolicy, limit: int = 28000) -> str:
+                               policy: SemanticPolicy, limit: int = 28000,
+                               skipped: list[dict[str, Any]] | None = None) -> str:
     lines = [json.dumps(policy.as_context(), ensure_ascii=False, indent=1)]
     remaining = max(2000, limit - len(lines[0]))
     for location in locations:
         try:
             text = str(inspection.by_location(str(location)).text)
         except Exception:
+            # A location the model never saw is a silent blind spot; surface it
+            # through the rejected trail instead of swallowing it (FL-D927).
+            if skipped is not None:
+                skipped.append({"location": str(location), "reason": "context_load_failed"})
             continue
         line = f"[{location}] {text}"
         if len(line) > remaining:
@@ -308,8 +313,10 @@ def discover_semantic_targets(gateway: Any, rule: Mapping[str, Any],
                               facts: Any | None = None
                               ) -> tuple[list[SemanticTarget],
                                          list[dict[str, Any]], Any]:
+    skipped: list[dict[str, Any]] = []
     context = semantic_candidate_context(inspection, locations, policy,
-                                         limit=getattr(gateway, "max_context_chars", 28000))
+                                         limit=getattr(gateway, "max_context_chars", 28000),
+                                         skipped=skipped)
     result = None
     accepted: list[SemanticTarget] = []
     rejected: list[dict[str, Any]] = []
@@ -329,6 +336,7 @@ def discover_semantic_targets(gateway: Any, rule: Mapping[str, Any],
             value, rule, inspection, locations, policy, facts=facts)
         if accepted:
             break
+    rejected.extend(skipped)
     return accepted, rejected, result
 
 
@@ -363,6 +371,9 @@ def discover_for_rules(gateway: Any, inspection: Any, rules_by_id: Mapping[str, 
         policy = policies.get(str(rule_id))
         rule = rules_by_id.get(str(rule_id))
         if policy is None or rule is None:
+            # A configured-but-unresolvable rule id must be observable
+            # (FL-D927); a silent skip would disable the rule without a trace.
+            rejected.append({"rule_id": str(rule_id), "reason": "policy_or_rule_missing"})
             continue
         scope = (scopes or {}).get(str(rule_id))
         locations = sorted(str(item) for item in getattr(scope, "locations", ()) or ())
