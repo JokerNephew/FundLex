@@ -1605,6 +1605,7 @@ dev20 v2 闭环：修复循环直到 §7 门槛（无已确证严重错误、无
 - 无后台进程。**留出 8 份首验完：57/111 = 51.4%、fc=0、wrong=0、actual=reported=3/8；BH06 边界（DOCUMENT_PROTECTED，标签 0 目标不侵分母）→ 首验门槛未达，按令已如实报主线、不自行放第二波**。账本第 11 段 $0.2566/204c/30min。
 - 失败家族（新池启册）：**FL-D862**（BH07 FOF service_fee 事实前提 22 连发未实例化，dev 未现）；**FL-D863**（BH04 document-wide site recovery ×8 + BH05 G06 subsection scope_missing，版式适配）；**FL-D864**（BH02 QDII G18 单义务 replay 连坐 -19）；**FL-D865**（BH06 保护文档边界）。BH01/BH03/BH08 complete。
 - 等主线：留出首验判定（机制泛化修复 / 放第二波 / 分层口径）。号池余 FL-D866~869。引擎冻结 aa30eaf 不放松。
+- 已完成：项 7/8 自查作证 `docs/QA_ITEMS78_SELF_TESTIMONY_20261101.md`（机制面逐 commit 判定 + 唯一规则工件改动 08cb0e6 圈界披露 + 解析链路证据与两缺口 + 542 扩样台账）。
 ## 下一步（可执行顺序）
 1. 已向主线报 loop-2 指标与残余归属（本次回复）。
 2. 回归绿 → 提交 FL-D588 代码 → 报主线。等 feat-guide B15 单与 B19 修复专单齐 → 新 freeze 跑 loop-3。编号 580-589 已用尽，已向主线请新段。
