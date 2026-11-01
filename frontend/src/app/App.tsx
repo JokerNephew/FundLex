@@ -8,6 +8,7 @@ import { DocumentDetailPage } from '../pages/DocumentDetail/DocumentDetailPage'
 import { GuidesPage, GuideDetailPage } from '../pages/Guides'
 import { NewTaskPage } from '../pages/NewTask'
 import { SettingsPage } from '../pages/Settings'
+import { FeishuBindingPage } from '../pages/Settings/FeishuBinding'
 import { ModelSettingsPage } from '../pages/Settings/ModelSettings'
 import { TaskDetailPage } from '../pages/TaskDetail'
 import { TaskDetailIndexPage } from '../pages/TaskDetail/TaskDetailIndexPage'
@@ -40,6 +41,7 @@ function AppRoutes() {
     <Route path="/guides" element={<GuidesPage />} />
     <Route path="/guides/:guideId" element={<GuideDetailPage />} />
     <Route path="/settings" element={<SettingsPage />} />
+    <Route path="/feishu" element={<FeishuBindingPage />} />
     <Route path="/models" element={<ModelSettingsPage />} />
      <Route path="/users" element={<UsersPage />} />
      <Route path="/compare" element={<Suspense fallback={<Spinner label="正在加载合同对比" />}><CompareListPage /></Suspense>} />

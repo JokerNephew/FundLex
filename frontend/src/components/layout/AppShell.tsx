@@ -15,6 +15,7 @@ const configLinks = [
   ['/guides', '修改指引', 'book'],
   ['/models', '模型配置', 'settings'],
   ['/settings', '设置', 'settings'],
+  ['/feishu', '飞书绑定', 'link'],
 ] as const
 
 function NavIcon({ name }: { name: string }) {
@@ -24,6 +25,7 @@ function NavIcon({ name }: { name: string }) {
     book: <><path d="M5 4h6a2 2 0 0 1 2 2v14a2 2 0 0 0-2-2H5z" /><path d="M19 4h-6a2 2 0 0 0-2 2v14a2 2 0 0 1 2-2h6z" /></>,
     settings: <><path d="M4 6h16M4 12h16M4 18h16" /><path d="M8 3v6M16 9v6M10 15v6" /></>,
     compare: <><path d="M8 6h13M8 12h13M8 18h13" /><path d="M3 6h1M3 12h1M3 18h1" /></>,
+    link: <><path d="M10 14a4.5 4.5 0 0 0 6.4.4l3-3a4.5 4.5 0 0 0-6.4-6.4l-1.7 1.7" /><path d="M14 10a4.5 4.5 0 0 0-6.4-.4l-3 3a4.5 4.5 0 0 0 6.4 6.4l1.7-1.7" /></>,
     detail: <><rect x="4" y="3" width="16" height="18" rx="2" /><path d="M8 8h8M8 12h8M8 16h5" /></>,
   }
   return <svg viewBox="0 0 24 24" aria-hidden="true">{paths[name]}</svg>

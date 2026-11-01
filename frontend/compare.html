@@ -53,6 +53,10 @@
 <path d="M3.5 19.5c1.3-3.6 4.4-5 5.5-5s4.2 1.4 5.5 5"/>
 <path d="M16 6.5c1.6.3 2.6 1.5 2.6 2.9 0 1.2-.7 2.2-1.8 2.7M21 19.5c-.6-2.2-1.8-3.6-3.4-4.2"/>
 </symbol>
+<symbol id="i-link" viewBox="0 0 24 24">
+<path d="M10 14a4.5 4.5 0 0 0 6.4.4l3-3a4.5 4.5 0 0 0-6.4-6.4l-1.7 1.7"/>
+<path d="M14 10a4.5 4.5 0 0 0-6.4-.4l-3 3a4.5 4.5 0 0 0 6.4 6.4l1.7-1.7"/>
+</symbol>
 <symbol id="i-book" viewBox="0 0 24 24">
 <path d="M5 4h6a2 2 0 0 1 2 2v14a2 2 0 0 0-2-2H5z"/>
 <path d="M19 4h-6a2 2 0 0 0-2 2v14a2 2 0 0 1 2-2h6z"/>
@@ -122,6 +126,12 @@
 <use href="#i-settings"/>
 </svg>
 <span>设置</span>
+</button>
+<button class="nav-btn" data-nav="feishu">
+<svg>
+<use href="#i-link"/>
+</svg>
+<span>飞书绑定</span>
 </button>
 <button class="nav-btn" data-nav="users" id="nav-users" hidden>
 <svg>
@@ -801,7 +811,13 @@
 <div class="settings-account-row"><span>当前账号 <strong id="settings-current-user">—</strong></span><button class="btn btn-sm" type="button" data-action="open-password">修改密码</button></div>
 
 </div>
-<div class="section-title u-mt-4"><h2>飞书绑定</h2><small>绑定后可直接在飞书私聊机器人发送合同、提交任务</small></div>
+<div class="card card-pad u-mt-4">
+<div class="section-title"><h2>飞书绑定</h2><small>扫码绑定与解绑已移到独立页面，账户修改不再包含飞书内容</small></div>
+<button class="btn" type="button" data-nav="feishu">前往飞书绑定</button>
+</div>
+</section>
+    <section class="section" id="view-feishu" aria-label="飞书绑定">
+<div class="section-title"><h2>飞书绑定</h2><small>绑定后可直接在飞书私聊机器人发送合同、提交任务</small></div>
 <div class="feishu-binding-layout">
 <div class="card feishu-connect-card" id="feishu-connect-card" data-state="loading">
 <div class="feishu-status-row"><span class="feishu-app-icon" aria-hidden="true">↗</span><div><h2>连接你的飞书账号</h2><p>绑定到当前 FundLex 账号 <strong id="feishu-current-user">—</strong></p></div><span class="feishu-status-badge" id="feishu-binding-badge">读取中</span></div>

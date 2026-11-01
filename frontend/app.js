@@ -167,7 +167,7 @@
     for(const [key,,id] of filterDefinitions(scope)){const el=$(id);if(el)el.value=(FILTER_DEFAULTS[scope]||{})[key]??'';}
     renderFilterChips(scope);changed(scope);
   }
-  const VIEW_TITLES={workspace:'工作台',overview:'合同修改',import:'新建合同修改',task:'修改任务详情',document:'合同结果与修订审阅',guide:'我的指引',models:'模型配置',settings:'设置',users:'用户管理',compare:'合同比对',generation:'指引生成'};
+  const VIEW_TITLES={workspace:'工作台',overview:'合同修改',import:'新建合同修改',task:'修改任务详情',document:'合同结果与修订审阅',guide:'我的指引',models:'模型配置',settings:'设置',feishu:'飞书绑定',users:'用户管理',compare:'合同比对',generation:'指引生成'};
   function renderFooter(){const el=$('app-version');if(el)el.textContent=state.cap?.app_version?`v${state.cap.app_version}`:'—';}
   // Identity reset uses the same location renderer; there is no second title.
   function renderTopbarTitle(view){renderBreadcrumb(view);}
@@ -228,7 +228,7 @@
     renderBreadcrumb(view);if(!prior||prior.view!==view||prior.mode!==next.mode||prior.id!==next.id||prior.document!==next.document)document.querySelector('.main').scrollTop=0;
     document.dispatchEvent(new CustomEvent('fundlex:view',{detail:view}));dispatchRoute();
     if(!state.cap)return;
-    if(view==='users')loadUsers();if(view==='guide')loadGuides();if(view==='settings'){loadFeishuBinding();loadFeishuApp();}if(view==='models')loadModelSettings();
+    if(view==='users')loadUsers();if(view==='guide')loadGuides();if(view==='feishu'){loadFeishuBinding();loadFeishuApp();}if(view==='models')loadModelSettings();
     if(view==='overview'){restoreRevisionFilters();loadTasks();if(!state.taskGuides)loadTaskGuides(true);}
     if(view==='task'){if(!state.taskGuides)loadTaskGuides(true);if(next.id&&state.selected!==next.id)selectTask(next.id,false);else loadDocuments();}
     if(view==='document')openDocumentRoute(next);
@@ -281,12 +281,12 @@
     if(feishuBound)stopFeishuOAuth();
   }
   async function loadFeishuBinding(){
-    if(!state.cap||state.view!=='settings')return;
+    if(!state.cap||state.view!=='feishu')return;
     const t=ticket('feishu-binding');
     $('feishu-current-user').textContent=state.auth.user?.display_name||state.auth.user?.username||owner();
     $('feishu-binding-refresh').disabled=true;
-    try{const binding=await json('/api/integrations/feishu/binding');if(!current(t)||state.view!=='settings')return;renderFeishuBinding(binding);}
-    catch(e){if(!current(t)||state.view!=='settings'||e.name==='AbortError')return;stopFeishuOAuth();$('feishu-connect-card').dataset.state='error';$('feishu-binding-badge').textContent='读取失败';$('feishu-binding-state').textContent='暂时无法读取绑定状态，请刷新状态后重试。';$('feishu-oauth-btn').disabled=true;$('feishu-unbind-btn').hidden=true;}
+    try{const binding=await json('/api/integrations/feishu/binding');if(!current(t)||state.view!=='feishu')return;renderFeishuBinding(binding);}
+    catch(e){if(!current(t)||state.view!=='feishu'||e.name==='AbortError')return;stopFeishuOAuth();$('feishu-connect-card').dataset.state='error';$('feishu-binding-badge').textContent='读取失败';$('feishu-binding-state').textContent='暂时无法读取绑定状态，请刷新状态后重试。';$('feishu-oauth-btn').disabled=true;$('feishu-unbind-btn').hidden=true;}
     finally{if(current(t))$('feishu-binding-refresh').disabled=false;}
   }
   let modelProviders=[];
@@ -430,7 +430,7 @@
     if(feishuBound)return;
     state.tokens['feishu-binding']=(state.tokens['feishu-binding']||0)+1;
     stopFeishuOAuth();const epoch=state.epoch,session=feishuOAuthEpoch;
-    const valid=()=>identityCurrent(epoch)&&session===feishuOAuthEpoch&&state.view==='settings';
+    const valid=()=>identityCurrent(epoch)&&session===feishuOAuthEpoch&&state.view==='feishu';
     const button=$('feishu-oauth-btn'),panel=$('feishu-oauth-panel'),message=$('feishu-oauth-message'),link=$('feishu-oauth-link');
     button.disabled=true;panel.hidden=false;message.textContent='正在生成个人二维码…';
     try{
@@ -583,8 +583,8 @@
   }
   async function loadFeishuApp(quiet=false){
     if(!quiet){feishuApp.code='';feishuApp.codeExpiry=0;}
-    try{const data=await feishuAppRequest('/api/integrations/feishu/app');if(state.view!=='settings')return;feishuAppRender(data,quiet);}
-    catch(e){if(state.view!=='settings')return;if(!quiet&&(state.auth.token||owner()))flash(e.message||'读取飞书企业连接失败，请稍后重试。');}
+    try{const data=await feishuAppRequest('/api/integrations/feishu/app');if(state.view!=='feishu')return;feishuAppRender(data,quiet);}
+    catch(e){if(state.view!=='feishu')return;if(!quiet&&(state.auth.token||owner()))flash(e.message||'读取飞书企业连接失败，请稍后重试。');}
   }
   function openFeishuAppWizard(){
     stopFeishuOAuth();
@@ -685,7 +685,7 @@
     }catch(e){flash(e.message||'移除失败，请稍后重试。');}
     finally{button.disabled=false;}
   }
-  document.addEventListener('fundlex:view',e=>{if(e.detail!=='settings'){stopFeishuOAuth();state.tokens['feishu-binding']=(state.tokens['feishu-binding']||0)+1;$('feishu-binding-refresh').disabled=false;closeFeishuAppWizard();}});
+  document.addEventListener('fundlex:view',e=>{if(e.detail!=='feishu'){stopFeishuOAuth();state.tokens['feishu-binding']=(state.tokens['feishu-binding']||0)+1;$('feishu-binding-refresh').disabled=false;closeFeishuAppWizard();}});
   document.addEventListener('fundlex:identity-reset',()=>{stopFeishuOAuth();feishuBound=false;$('feishu-connect-card').dataset.state='loading';$('feishu-binding-badge').textContent='读取中';$('feishu-binding-state').textContent='正在读取绑定状态…';$('feishu-current-user').textContent='—';$('feishu-binding-message').textContent='';$('feishu-unbind-btn').hidden=true;$('feishu-oauth-btn').hidden=false;$('feishu-oauth-btn').disabled=true;document.querySelector('[data-action="feishu-unbind-confirm"]').disabled=false;closeFeishuAppWizard();feishuApp.data=null;feishuApp.code='';feishuApp.codeExpiry=0;feishuApp.localStep=1;feishuApp.confirmRemove=false;$('feishu-app-entry').hidden=false;$('feishu-app-summary').hidden=true;});
   async function loadCapabilities() {
     const t=ticket('cap'),wasReady=!!state.cap;
@@ -700,7 +700,7 @@
       hideLogin();renderAuthUI();state.cap=cap;renderFooter();
       if(!state.importMode)state.importMode='revision';
       $('upload-limit').textContent=`仅接收 DOCX（.doc 请先用 Word/WPS 另存为 .docx） · 单文件 ≤ ${size(cap.upload_limits.max_file_bytes)}`;
-      renderImport();if(state.view==='settings'){loadFeishuBinding();loadFeishuApp();}if(state.view==='models')loadModelSettings();
+      renderImport();if(state.view==='feishu'){loadFeishuBinding();loadFeishuApp();}if(state.view==='models')loadModelSettings();
       if(!wasReady&&state.view==='overview')restoreRevisionFilters();
       if(!wasReady)dispatchRoute();
       if(state.view==='document'&&!state.detail)openDocumentRoute(state.route);
