@@ -30,7 +30,10 @@ Q = lambda local: f"{{{W}}}{local}"
 
 GUIDE_SCHEMA_VERSION = "guide-rules-v1"
 PARSER_VERSION = "guide-parse-1"
-GUIDE_PARSE_PROMPT_VERSION = "guide_parse_v1"
+#: v2: the generic instruction no longer embeds the bundled guide's 15-group
+#: human-reading hint (FL-D931); that sentence now lives in
+#: :const:`_BUILTIN_GUIDE_COMPANION_NOTE` for built-in-guide parses only.
+GUIDE_PARSE_PROMPT_VERSION = "guide_parse_v2"
 GUIDE_VERIFY_PROMPT_VERSION = "guide_verify_v1"
 
 EMPHASIS_VALUES = ("plain", "red", "bold")
@@ -462,8 +465,17 @@ _PARSE_INSTRUCTION = (
     "exclusive branches; never collapse two branches into one or invent a branch. Put ambiguity notes in "
     "notes. Keep requirement to one or two sentences and notes to a brief phrase, using an empty string when "
     "nothing is ambiguous; old_text_variants copies only the guide sentences that locate the target, not whole "
-    "paragraphs when a shorter contiguous sentence exists. The 15-group human reading of this guide is a "
-    "reference only: derive the groups from the source itself."
+    "paragraphs when a shorter contiguous sentence exists. Derive the groups from the source itself, not from "
+    "any expected group count."
+)
+
+#: Bundled-guide-only companion note (FL-D931): the 15-group human reading is
+#: a property of the built-in brief; custom uploads take a different shape,
+#: so the generic instruction must not hint at any fixed group count. Pass this
+#: note via ``companion_note`` only when parsing the built-in guide source.
+_BUILTIN_GUIDE_COMPANION_NOTE = (
+    "The 15-group human reading of this guide is a reference only: derive the "
+    "groups from the source itself."
 )
 
 _PARSE_REPAIR_INSTRUCTION = (
@@ -650,13 +662,16 @@ def _verify_context(source: GuideSource, parsed: dict, limit: int) -> str:
 # Parse, validate, verify
 # ---------------------------------------------------------------------------
 
-def parse_guide(source: GuideSource, gateway: Any, *, repair_context: str | None = None) -> dict:
+def parse_guide(source: GuideSource, gateway: Any, *, repair_context: str | None = None,
+                companion_note: str | None = None) -> dict:
     context = _parse_context(source, repair_context)
     limit = _context_limit(gateway)
     if len(context) > limit:
         raise GuideError("GUIDE_CONTEXT_LIMIT", {"context_chars": len(context), "limit": limit})
     instruction = _PARSE_INSTRUCTION if not repair_context \
         else _PARSE_INSTRUCTION + "\n" + _PARSE_REPAIR_INSTRUCTION
+    if companion_note:
+        instruction += "\n" + companion_note
     result = _model_call(gateway, task_type="guide_parse", bounded_context=context,
                          response_schema=_PARSE_SCHEMA, instruction=instruction,
                          prompt_version=GUIDE_PARSE_PROMPT_VERSION)
@@ -761,7 +776,8 @@ def _model_summary(gateway: Any, rounds: int) -> dict:
     return summary
 
 
-def build_guide_document(source: GuideSource, gateway: Any, *, max_repair_rounds: int = 2) -> dict:
+def build_guide_document(source: GuideSource, gateway: Any, *, max_repair_rounds: int = 2,
+                         companion_note: str | None = None) -> dict:
     if max_repair_rounds < 0:
         raise GuideError("GUIDE_BUILD_ARGUMENT_INVALID", {"max_repair_rounds": max_repair_rounds})
     repair_context: str | None = None
@@ -772,7 +788,8 @@ def build_guide_document(source: GuideSource, gateway: Any, *, max_repair_rounds
     verification: dict = {}
     clean = False
     while True:
-        parsed = parse_guide(source, gateway, repair_context=repair_context)
+        parsed = parse_guide(source, gateway, repair_context=repair_context,
+                             companion_note=companion_note)
         validation = validate_parsed_guide(source, parsed)
         verification = verify_guide(source, parsed, gateway)
         rounds += 1
