@@ -102,3 +102,7 @@
 - ✅ recall-miss r5 → aa30eaf（FL-D699 恒等类替换坍缩；21 测绿）；loop-8 冻结令已发
 - ✅ 前端第三轮全量 → 4173dec（设计令牌/输入下拉/动效/三禁令/列表统一/文案人话化/FL-D818 结果页重构；主线复验 vitest24/build/浏览器80 全绿+并排对照亲验）
 - 在跑：loop-8 dev20；gg-audit（扩权后观察中）；compare-ux 方案阶段
+
+### 2026-11-01 13:0x 会话映射勘误（FL-D860）
+- ~~A4vO9d5 / nHOKfnt~~（僵尸，deepseek-flash 空转）→ 重建：**XMWmAw4**=gg-audit、**OhgIvj8**=compare-ux（均钉 hon-maas/kimi-k3#high，已见产出）
+- 调度 SOP：API 建会话必须显式钉模型（Model.Ref 对象）

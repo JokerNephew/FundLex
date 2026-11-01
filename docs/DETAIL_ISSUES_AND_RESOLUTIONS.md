@@ -8419,3 +8419,11 @@ H＝E×…
 - **mutation 测试**（`tests/test_loop6_repairs.py` 增 3 例，累计 11）：恒等闭合/混合事实不坍缩+守卫仍 fail-closed/非类替换规则与未验证事实拒坍缩。
 - **真实复验矩阵（2026-11-01，`/tmp/opencode/qa/loop8-fix-matrix/`，HEAD 686f080）**：**B05 complete**（0 holds、24/24 CLOSED_REPLAY、audit issues=∅、recovery=∅，$0.0311/25c——本轮模型直接判 G02 satisfied，恒等坍缩无需实发，病灶形态由 mutation 用例按 loop-7 ledger 形状离线覆盖）；**B12 complete**（0 holds、24/24 CLOSED，$0.0229/23c）；**B15 complete**（0 holds、21/21 CLOSED，$0.0265/23c）。全量回归 2543/0/139。
 - **状态**：已修复并验证（qa-recall-miss-20261031@686f080 起）；恒等坍缩实发留 loop-8 全波观察（复合 rebind 形态再现时判定路径）。
+
+## FL-D860 经 API 新建的调度会话默认绑定失效模型 deepseek-v4.1-flash，静默空转（2026-11-01，主线）
+
+- **发现日期**：2026-11-01（巡线发现 qa-gg-audit/qa-compare-ux 两新线 73min 零产出排查确诊）。
+- **问题与影响**：`POST /api/session` 创建的会话继承 serve 全局默认模型 `fundlex/deepseek-v4.1-flash`；该模型在 worker 会话中**每条 assistant 消息 1~2s 完成且 content 为空**——不报错、不产出、不执行任何工具调用，表面"处理成功 idle"。两线停滞约 1.5h（无状态文件、无 git 动作）。健康八线均为创建时指定 `hon-maas/kimi-k3` 故正常。
+- **证据**：`/api/session/<id>/message` 中 assistant message `model={"id":"deepseek-v4.1-flash","providerID":"fundlex"}`、created→completed≈1.2s、content=[]×连续多条；对照健康线前端 l8yCbACU=`hon-maas/kimi-k3`；serve 配置 `/home/opencode/.config/opencode/opencode.json` `"model": "fundlex/deepseek-v4.1-flash"`。
+- **处理方法**：①根治口径——**一切经 API 新建的调度会话必须在 create payload 显式钉模型**：`{"model":{"id":"kimi-k3","providerID":"hon-maas","variant":"high"}}`（schema 为 Model.Ref：`{"id","providerID"[,"variant"]}`，`"hon-maas/kimi-k3"` 字符串或 `{providerID,modelID}` 均 400）；②prompt 体内带 model 字段与 PATCH /api/session 均改不了既建会话模型（实证无效）；③两线以新会话重建（gg=XMWmAw4/ux=OhgIvj8），钉模型后 150s 内验证到真实产出（assistant content 非空+状态文件落盘）；④废弃僵尸会话 A4vO9d5/nHOKfnt 不再发令。
+- **状态**：已解决（调度 SOP 更新）；遗留建议：serve 全局默认模型应改成健康模型或 flash 修复，挂运维待办。
