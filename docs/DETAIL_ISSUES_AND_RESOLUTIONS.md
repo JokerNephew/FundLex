@@ -8555,3 +8555,23 @@ H＝E×…
 - **历史教训对照**：同 08cb0e6（loop2→2b 规则工件改动致 loop2→3 增量混淆）已圈界的披露标准——本次在冻结时即显著披露，不事后追认。
 - **状态**：已披露（生效中）；第二轮报告强制并排标注。
 - **变更记录**：2026-11-01 新增。
+
+## FL-D867 评分量具三处潜伏缺陷（p6_score.py，现行波次评分无历史影响但须修）（2026-11-01，qa-feat-recall，EVAL 全覆盖审计组C）
+
+- **发现（审计员候选+主审计复验确认）**：①L542 段落哈希消歧读 `site.get("scope")`——`target_site()` 规范化产物只有 `site_scope` 键（L101），该查找恒 dead，仅因现行 labels 501/501 带顶层 `scope` 键在 `target.get("scope")` 兜底生效；labels 若仅带 `site_scope` 则 body/summary 消歧**静默失效**（同名段落错站当证据）。②L575 附近 `original_paragraphs[original_index]` 无越界检查：label 声明段落索引越界或源解析失败（`original_paragraphs=[]`）直接 IndexError 崩溃而非 graceful unknown。③L956-958 vs 930-933 `site_scoped_targets` 先累加死代码后重算，且重算用 `case["targets"]` 直接取键与前文容错不一致（label 缺 `targets` 键即 KeyError）；L887 `plain` 死赋值。
+- **历史影响核验**：labels 61a2c514 冻结件 501 target 全带顶层 `scope` → v1~loop8 全部历史评分**不受①影响**；②③未被触发。属潜伏族非现行错误。
+- **状态**：open，报主线立修（量具属主线资产，本线不改）。
+- **变更记录**：2026-11-01 新增。
+
+## FL-D868 评测脚本入口自举/默认路径漂移家族（5 文件入口 ImportError-by-path + 1 默认指向不存在件）（2026-11-01，qa-feat-recall，EVAL 组C）
+
+- **发现（复验确认）**：`score_first_batch_20261029.py` L21 `DEFAULT_SELECTION` 指向不存在的 `var/recall-first-evaluation/first-batch-20261028/...`（实际件在 `docs/evidence/`，实测 ls 证实）——默认参数运行即 FileNotFoundError（本线历次均显式传参，未触雷）。`production_first_batch_e2e_20261028.py` L29 / `real_contract_e2e_20261023.py` L48 / `real_resume.py` L7 / `sample_corpus_audit.py` L14：顶层 `from fundlex…/tools.evaluation…` 无 `sys.path` 引导，按文件路径直跑即 ImportError（同目录 p6_trace_report/remediation_probe 有引导，不一致）。
+- **关联低危**：`remediation_probe_20261028.py` L112（`next(iter(...))` 空集 StopIteration 出 try + L113 无条件再赋=死语句；L175-176 apply_facts 作用于全新对象返回值丢弃=无效调用）。
+- **状态**：open，报主线（入口规范：统一 `python -m` 或统一 sys.path 引导；废弃默认指向修正或删除）。
+- **变更记录**：2026-11-01 新增。
+
+## FL-D869 评测统计/校验弱口径家族（pilot_compare 可负统计 + 冻结校验子串假通过 + replay_checkpoints 静默 fallback）（2026-11-01，qa-feat-recall，EVAL 组C）
+
+- **发现（复验确认）**：①`pilot_compare.py` L127-133 `overlapping_gold_targets_not_exact += overlapping-located`：located 含 `satisfied` 候选、overlapping 排除之——target 仅被 satisfied 命中时贡献 **-1**（统计可为负，口径错）。②L55 `assert digest in json.dumps(frozen)`：子串包含式冻结校验，digest 十六进制出现在冻结记录任意字段即假通过（形同虚设风险）。③`replay_checkpoints.py` L42-44 task 级 fallback 只追加 `self.fallbacks` 而 main() 从不输出——重放可能静默用错上下文缓存且无证据；L32 `max_calls=1000` 死上限。
+- **状态**：open，报主线（统计口径与冻结校验强度属评测可信度面）。
+- **变更记录**：2026-11-01 新增。
