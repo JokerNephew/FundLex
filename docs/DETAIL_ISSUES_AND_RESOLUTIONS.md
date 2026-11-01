@@ -8258,3 +8258,18 @@ H＝E×…
 - loop-6 B15 G09 判定形态迁移：loop-5 的 `absent`→MISS_TARGET_RESOLUTION 在本轮**消失**（变体证据反证生效实证），残余为 G09 CLAIM_REPLAY_FAILED + G05:0/G05:2 双支 OPEN_OBLIGATION（含模型自述「按G05应将调低赎回费率改为调低销售服务费率」理由文本）→ 仍保守扣全案，T001 executed 无从达成。
 - 另 FL-D793（G11 schema 单发抖动）按冻结令核查：loop-6 全波 unresolved 无 G11，**未复发，自然销案**。
 - FL-D696 追加实证：B19 六波首次 complete（+19）——plan_rejected replay 防双计对长期开放的「恢复重复目标 vs satisfied 子集」冲突收口。
+
+## FL-D697 更新（loop-7）：容器校验机制精确拦截实证 — B05 G02 复合引用替换被判 SCOPE_UNPROVEN 诚实扣件；B12/B15 双消，单 B05 未愈（2026-11-01，qa-feat-recall）
+
+- **机制实证（正面）**：loop-7 B05 unresolved 出现新码 `RECALL_COMPOSITE_REPLACE_SCOPE_UNPROVEN@p118` + `CLAIM_OPERATION_NOT_PLANNED`（orphan_evidence）——FL-D697 容器校验**按设计精确介入**：模型本轮仍生成 G02 定义容器整换（与 loop-6 同源的生成面回摆），新校验拒绝为其证明作用域 → 验证层交付门诚实扣全案。loop-6 的 G16 兄弟操作盲区支本轮消退（G16 两站点 needs_edit 未入 unresolved，未阻塞；R033 satisfied 消歧在案）。
+- **未愈面**：B05 仍 incomplete 无产物（-13），为全波唯一 incomplete。**根因属性与 loop-6 一致：模型生成面对 G02 释义容器持续产出整换式编辑**（FL-D650/683 回摆族），校验从「事后 wrong」升级为「事前拒证」，诚实形态不变、谎报风险已被结构性排除，但统计损失未消。
+- **同波对照（双消实证）**：B12 complete（G05:2@p162 消退，FL-D698）；B15 complete（G05:0/G05:2+G09 replay 残渣消退，FL-D695 残余修复）。
+- **状态**：open（B05 模型生成面回摆支），归主线判定归族/再修量级；本线不动。
+- **变更记录**：2026-11-01 loop-6 新增 → 2026-11-01 loop-7 更新（机制拦截实证 + G16 支消退，G02 生成面残余）。
+
+## FL-D698 收口实证 + FL-D695 残余修复收口实证（loop-7，2026-11-01，qa-feat-recall）
+
+- **FL-D698**：B12 unresolved 全清零 → complete（19/19），G05:2@p162 同址 satisfied 双计歧义不再出现。
+- **FL-D695（残余修复）**：B15 complete（15/15）；T001（G03 append@基金份额类别）双实证——内部 replay 闭合过交付门 + 量具 p6-score-4 读实际 final.docx 判「appended policy text present at its declared site (p215)」。
+- 两机制无损邻案：全波 wrong=0、kept=0、fc=0；69 处 absent 单发判定均被变体反证兜住未致扣件（详见 FL-D695 登记与 loop-7 报告）。
+- **状态**：dev20 口径实证收口；留出验收待主线放行。
