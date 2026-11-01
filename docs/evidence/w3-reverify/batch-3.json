@@ -1,0 +1,43 @@
+{
+ "script": "tools/evaluation/w3_reverify_second_batch_labels_20261101.py",
+ "batch": 3,
+ "cases": [
+  "W2D41",
+  "W2D42",
+  "W2D43",
+  "W2D44",
+  "W2D45",
+  "W2D46",
+  "W2D47",
+  "W2D48",
+  "W2D49",
+  "W2D50",
+  "W2D51",
+  "W2D52",
+  "W2D53",
+  "W2D54",
+  "W2D55",
+  "W2D56",
+  "W2D57",
+  "W2D58",
+  "W2D59",
+  "W2D60"
+ ],
+ "labels_sha256": "423c6944687a6006d493d3f8dff4b4cb32593cc6acc26c2e2b3fb423622a88f5",
+ "selection_sha256": "32b36f02a9c6cafebee7a73fcda0791c707ac62d07fe67bb57e91daafc6187d9",
+ "envelope_problems": [],
+ "problems": [
+  "W2D41: rule_coverage[8] evidence_quote CONTENT not in source (G09/target): '赎回金额为按实际确认的有效赎回份额乘以当日对应份额类别的基金份额净值并扣除相应的'",
+  "W2D43: rule_coverage[15] evidence_quote CONTENT not in source (G16/satisfied): '（2）直销机构以外的其他销售机构'",
+  "W2D51: rule_coverage[36] evidence_quote CONTENT not in source (G15/target): '基金销售服务费每日计算，逐日累计至每月月末，按月支付，由基金管理人向基金托管人发'"
+ ],
+ "warnings": [],
+ "counts": {
+  "cases": 20,
+  "targets": 285,
+  "coverage_entries": 880,
+  "cases_with_targets": 20,
+  "uncertain_entries": 4,
+  "ineligible_cases": []
+ }
+}
