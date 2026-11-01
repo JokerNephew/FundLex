@@ -94,22 +94,26 @@ def _remove_deleted_rows_and_cells(root: etree._Element) -> None:
             _remove(cell)
 
 
-def _accept_deleted_paragraph_marks(root: etree._Element) -> None:
-    """Join paragraphs whose paragraph mark was deleted.
+def _join_marked_paragraphs(root: etree._Element,
+                            marker_names: tuple[str, ...]) -> None:
+    """Join paragraphs whose paragraph mark carries one of ``marker_names``.
 
-    Word represents this as ``pPr/rPr/del``.  When there is a following
-    paragraph in the same story, accepting the deletion moves the first
-    paragraph's content into that paragraph.  A final paragraph has no
-    following target, so its marker is simply removed.
+    Accepting a deleted paragraph mark (``pPr/rPr/del``) and rejecting an
+    inserted one (``pPr/rPr/ins``) are the same operation: the mark disappears
+    and the paragraph's content flows into the following paragraph.  When
+    there is a following paragraph in the same story the first paragraph's
+    content moves into it.  A final paragraph has no following target, so its
+    marker is simply removed.
     """
     for paragraph in list(root.iter(Q("p"))):
         p_pr = paragraph.find(Q("pPr"))
         r_pr = p_pr.find(Q("rPr")) if p_pr is not None else None
         marker = None
         if r_pr is not None:
-            marker = r_pr.find(Q("del"))
-            if marker is None:
-                marker = r_pr.find(Q("moveFrom"))
+            for name in marker_names:
+                marker = r_pr.find(Q(name))
+                if marker is not None:
+                    break
         if marker is None:
             continue
         following = paragraph.getnext()
@@ -129,6 +133,152 @@ def _accept_deleted_paragraph_marks(root: etree._Element) -> None:
             following.insert(target_index, child)
             target_index += 1
         _remove(paragraph)
+
+
+def _accept_deleted_paragraph_marks(root: etree._Element) -> None:
+    """Join paragraphs whose paragraph mark was deleted.
+
+    Word represents this as ``pPr/rPr/del``.  Accepting the deletion removes
+    the mark, so the paragraph joins the following one.
+    """
+    _join_marked_paragraphs(root, ("del", "moveFrom"))
+
+
+def _reject_inserted_rows_and_cells(root: etree._Element) -> None:
+    """Drop rows/cells a reviewer inserted; rejecting restores their absence.
+
+    Mirror of :func:`_remove_deleted_rows_and_cells` for the rejected view.
+    The insertion markers (``trPr/ins``, ``trPr/moveTo``, ``tcPr/cellIns``)
+    ride along with the removed subtree, so the marker itself needs no
+    separate pass.
+    """
+    for row in list(root.iter(Q("tr"))):
+        tr_pr = row.find(Q("trPr"))
+        if tr_pr is not None and (tr_pr.find(Q("ins")) is not None
+                                 or tr_pr.find(Q("moveTo")) is not None):
+            _remove(row)
+    for cell in list(root.iter(Q("tc"))):
+        tc_pr = cell.find(Q("tcPr"))
+        if tc_pr is not None and tc_pr.find(Q("cellIns")) is not None:
+            _remove(cell)
+
+
+def _unwrap_deleted(node: etree._Element) -> None:
+    """Restore deleted content: delText/delInstrText become live text again."""
+    for element in node.iter():
+        if element.tag == Q("delText"):
+            element.tag = Q("t")
+        elif element.tag == Q("delInstrText"):
+            element.tag = Q("instrText")
+    _unwrap(node)
+
+
+def _restore_property_change(change: etree._Element) -> None:
+    """Reject a property change by restoring the snapshot it records.
+
+    Every ``*PrChange`` element stores the previous properties as a child
+    element of the same tag as its container (``pPrChange`` holds the old
+    ``w:pPr``, and so on).  Rejecting swaps the current properties for that
+    snapshot.  Revision markers embedded in the snapshot describe the old
+    view's mark state only; they carry no runs in Word output and are dropped
+    rather than resurrected.  A snapshot that does carry content runs is not
+    a Word shape we can restore honestly, so it fails closed.
+    """
+    parent = change.getparent()
+    if parent is None:
+        raise DocxError("REVISION_STRUCTURE_INVALID")
+    old = next((child for child in change if isinstance(child.tag, str)), None)
+    if old is None or old.tag != parent.tag:
+        raise DocxError("REVISION_PROPERTY_RESTORE_UNSUPPORTED")
+    stale: list[etree._Element] = []
+    for element in old.iter():
+        if not isinstance(element.tag, str) or not element.tag.startswith("{" + W + "}"):
+            continue
+        if _local(element) in REVISION_TAGS:
+            if any(isinstance(child.tag, str)
+                   and _local(child) in {"r", "t", "delText", "instrText", "delInstrText"}
+                   for child in element.iter()):
+                raise DocxError("REVISION_PROPERTY_RESTORE_UNSUPPORTED")
+            stale.append(element)
+    for element in stale:
+        holder = element.getparent()
+        if holder is not None:
+            holder.remove(element)
+    for child in list(parent):
+        parent.remove(child)
+    for index, child in enumerate(list(old)):
+        old.remove(child)
+        parent.insert(index, child)
+
+
+def _transform_reject(parent: etree._Element, *, inside_deleted: bool = False) -> None:
+    """Mirror of :func:`_transform` for rejecting every tracked change.
+
+    ``inside_deleted`` marks recursion into a deletion wrapper: its
+    ``delText``/``delInstrText`` is original content that must survive so the
+    outer unwrap can convert it back to live text.
+    """
+    for node in list(parent):
+        if not isinstance(node.tag, str):
+            continue
+        if not node.tag.startswith("{" + W + "}"):
+            _transform_reject(node, inside_deleted=inside_deleted)
+            continue
+        local = _local(node)
+        if local == "cellMerge":
+            # Restoring un-merged cells needs the pre-merge grid, which Word
+            # does not record here.  Fail closed rather than guess topology.
+            raise DocxError("REVISION_CELL_MERGE_UNSUPPORTED")
+        if local in _INSERT_WRAPPERS:
+            # Inserted content (or an inserted paragraph/row mark) is absent
+            # from the original: drop the wrapper together with its content.
+            # Paragraph-mark joins already happened in
+            # :func:`_join_marked_paragraphs`, so a surviving marker here is
+            # the last-paragraph case and is simply discarded.
+            _remove(node)
+            continue
+        if local in _DELETE_WRAPPERS:
+            # Rejecting a deletion restores the original text.  Resolve inner
+            # changes first: inserted content nested inside disappears, nested
+            # deletions unwrap back to live text.
+            _transform_reject(node, inside_deleted=True)
+            _unwrap_deleted(node)
+            continue
+        if local in _DELETE_CONTENT:
+            if inside_deleted:
+                continue
+            _remove(node)
+            continue
+        if local in _RANGE_MARKERS or local in {"cellIns", "cellDel"}:
+            _remove(node)
+            continue
+        if local in _PROPERTY_CHANGES:
+            _restore_property_change(node)
+            continue
+        _transform_reject(node, inside_deleted=inside_deleted)
+
+
+def _reject_revisions(root: etree._Element) -> int:
+    """Reject every existing Word revision, restoring the original document.
+
+    Mirror of :func:`_accept_revisions`: inserted content/marks disappear,
+    deleted content is restored as live text, property snapshots are swapped
+    back in.  Consumers that offer a rejected-view base must call through
+    this single implementation, like the accept view mandates above.
+    """
+    revision_nodes = [
+        node for node in root.iter()
+        if isinstance(node.tag, str)
+        and node.tag.startswith("{" + W + "}")
+        and _local(node) in REVISION_TAGS
+    ]
+    _reject_inserted_rows_and_cells(root)
+    # Paragraph-mark insertions must join while the marker still identifies
+    # the merged-away paragraph; the marker itself is then removed with the
+    # paragraph or, for a final paragraph, by the transform below.
+    _join_marked_paragraphs(root, ("ins", "moveTo"))
+    _transform_reject(root)
+    return len(revision_nodes)
 
 
 def _transform(parent: etree._Element) -> None:

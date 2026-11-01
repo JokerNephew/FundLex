@@ -1,0 +1,53 @@
+{
+  "generated_at": "2026-11-01T19:04:57Z",
+  "model": "kimi-k3",
+  "token_ledger": {
+    "logical_calls": 2,
+    "prompt_tokens": 1074,
+    "completion_tokens": 1323,
+    "total_tokens": 2397,
+    "estimated_cost_usd": 0.0009549000000000001
+  },
+  "results": [
+    {
+      "file": "广发ESG责任投资混合型证券投资基金基金合同.docx",
+      "status": "PASS",
+      "location": "p120",
+      "old": "58、基金份额类别：本基金将基金份额分为A类和C",
+      "replacement": "58、基金份额类别：本基金将基金份额分为A类基金份额和C类基金份额；不同类别基金份额在申购费、销售服务费等销售费用的收取安排上可能存在差异，具体收费项目、费率标准及计提方式以本基金合同、招募说明书及相关公告载明为准，基金管理人、销售机构不得向投资者收取未予列明的销售费用。",
+      "model_elapsed_ms": 28584,
+      "model_metrics": 1,
+      "artifacts": [
+        "广发ESG责任投资混合型-redline.docx",
+        "广发ESG责任投资混合型-final.docx"
+      ],
+      "checks": {
+        "battery": "PASS",
+        "foreign_revisions": 97,
+        "our_pairs": 1
+      },
+      "accept_view_sha256": "80f72ef8917467c7e8fc525dbc5c148acdd517ae3b343880ffd11745b07fd28a",
+      "reject_view_sha256": "ccf36527d07445ef476f3f2e8937f1bb712e745536c94cda14051ea2f7dad283"
+    },
+    {
+      "file": "广发中证A50交易型开放式指数证券投资基金联接基金合同20261020.docx",
+      "status": "PASS",
+      "location": "p122",
+      "old": "55、基金份额类别：本基金将基金份额分为A类和C",
+      "replacement": "55、基金份额类别：本基金将基金份额分为A类基金份额和C类基金份额；两类基金份额涉及的销售费用安排，按照法律法规、监管规定及本基金招募说明书、基金产品资料概要等法律文件的约定执行。",
+      "model_elapsed_ms": 22996,
+      "model_metrics": 2,
+      "artifacts": [
+        "广发中证A50交易型开放-redline.docx",
+        "广发中证A50交易型开放-final.docx"
+      ],
+      "checks": {
+        "battery": "PASS",
+        "foreign_revisions": 111,
+        "our_pairs": 1
+      },
+      "accept_view_sha256": "5a011bbd099c5e8d44354e1581e8258ce3b1358257ee219525a0ab927b8bdfc4",
+      "reject_view_sha256": "d74bd0742227a87031fa14ac6658a79e35a2e91a09b46102f2e134a313a836b3"
+    }
+  ]
+}

@@ -405,12 +405,33 @@ def _validate_overlay_structure(parts: Mapping[str, bytes], limits: ZipLimits) -
                 parent = marker.getparent()
                 parent_local = etree.QName(parent).localname if parent is not None and isinstance(parent.tag, str) else ""
                 if parent_local in {"rPr", "trPr", "pPr"}:
+                    # Paragraph-mark revisions (pPr/rPr/ins|del) attach to the
+                    # paragraph mark, carry no text and therefore shift no
+                    # projection offsets.  They are carried through the overlay
+                    # as opaque metadata, exactly like property-change
+                    # snapshots.  Row marks (trPr) and anything attached
+                    # directly to pPr change table/section topology and stay
+                    # rejected fail-closed.
+                    grandparent = parent.getparent()
+                    grandparent_local = (etree.QName(grandparent).localname
+                                         if grandparent is not None and isinstance(grandparent.tag, str) else "")
+                    if parent_local == "rPr" and grandparent_local == "pPr":
+                        continue
                     raise DocxError("EXISTING_REVISION_STRUCTURE_UNSUPPORTED",
                                     f"{name}:paragraph-or-row-mark:{local}:{marker.get(Q('id'), '')}")
                 nested = _nested_revision_marker(marker)
                 if nested is not None:
-                    raise DocxError("EXISTING_REVISION_STRUCTURE_UNSUPPORTED",
-                                    f"{name}:nested-revision:{local}:{nested.get(Q('id'), '')}")
+                    # Word legally nests inline revisions, e.g. a reviewer who
+                    # retracts part of their own insertion (ins > del).  The
+                    # outermost wrapper is one opaque foreign region: the
+                    # projection already handles both branches (ins text counts
+                    # but stays unwritable, del text never counts) and the
+                    # writer can never enter a foreign wrapper, so the region
+                    # needs no decomposition.  Moves keep their topology rules.
+                    nested_local = etree.QName(nested).localname
+                    if nested_local not in {"ins", "del"}:
+                        raise DocxError("EXISTING_REVISION_STRUCTURE_UNSUPPORTED",
+                                        f"{name}:nested-revision:{local}:{nested.get(Q('id'), '')}")
                 continue
             # Moves, cell/row insert/delete/merge, range markers and deleted
             # content markers cannot be carried through the supported writer.
@@ -935,17 +956,18 @@ def validate_edit_plan(source: str | Path, edits: Sequence[Mapping[str, Any]],
             raise DocxError("NOOP_EDIT", location)
         if not any(segment.start <= start and end <= segment.end for segment in paragraph.segments):
             raise DocxError("EDIT_CROSSES_BARRIER")
-        try:
-            paragraph_node, between, _, _, _ = _edit_region(tree, edit, limits,
-                                                            overlay=allow_existing_revisions)
-        except DocxError:
-            # Geometry/structure failures keep their existing enforcement at
-            # generation; validation only adds the bookmark pairing rule here.
-            between = None
-        if between is not None:
-            # Raises EDIT_BOOKMARK_RANGE_BROKEN when the surviving half of a
-            # bookmark range sits outside the edited paragraph.
-            _bookmark_dropped_partners(tree, paragraph_node, between)
+        # ``_edit_region`` is the single geometry implementation shared with
+        # the writer: both sides accept or reject identical structure, so its
+        # failures belong to validation as much as to generation.  Raising
+        # here (instead of deferring to generation) lets the pipeline's
+        # per-edit attribution (_drop_unvalidatable_edits) isolate one guilty
+        # edit — e.g. a span crossing a foreign revision — instead of losing
+        # the whole contract at the generation boundary (EN3-F4).
+        paragraph_node, between, _, _, _ = _edit_region(tree, edit, limits,
+                                                        overlay=allow_existing_revisions)
+        # Raises EDIT_BOOKMARK_RANGE_BROKEN when the surviving half of a
+        # bookmark range sits outside the edited paragraph.
+        _bookmark_dropped_partners(tree, paragraph_node, between)
         if not _safe_grapheme_boundary(paragraph.text, start) or not _safe_grapheme_boundary(paragraph.text, end):
             raise DocxError("GRAPHEME_BOUNDARY_INVALID")
         for existing_start, existing_end in occupied.setdefault(location, []):
@@ -1451,8 +1473,9 @@ class TrackedBaseNormalization:
     source_revisions: tuple[dict[str, str], ...]
 
 
-def normalize_tracked_base(data: bytes, *, limits: ZipLimits | None = None) -> TrackedBaseNormalization:
-    """Return the accepted-view (base) bytes for a task input DOCX.
+def normalize_tracked_base(data: bytes, *, limits: ZipLimits | None = None,
+                           disposition: str = "accept") -> TrackedBaseNormalization:
+    """Return a flattened-view (base) bytes for a task input DOCX.
 
     Task input normalization (2026-10-31 product decision): a contract that
     still carries another department's tracked changes enters the recall
@@ -1462,20 +1485,26 @@ def normalize_tracked_base(data: bytes, *, limits: ZipLimits | None = None) -> T
     package (main story, tables, SDT content, headers/footers, footnotes,
     endnotes and comments).  The original marks are *not* carried into the
     output; the engine's new revisions are the only tracked changes a delivery
-    ever shows.  A rejected-view (original) projection is intentionally not
-    offered this round.
+    ever shows.  ``disposition="reject"`` offers the mirrored rejected view
+    (original document before review marks) for engines/tests that need to
+    diff against the pre-review text: inserted content and marks disappear,
+    deleted content is restored, property changes are rolled back from their
+    snapshots.
 
     Inputs without any revision tag are returned byte-identical with
     ``had_tracked_changes False`` so the normal path keeps its exact behavior.
-    The transform reuses the Compare accept-all implementation and the same
-    full package validation before and after; the normalized package is written
+    The transform reuses the Compare accept-all implementation (and its
+    reject mirror) and the same full package validation before and after; the
+    normalized package is written
     through the deterministic ZIP writer, re-opened and must match the
     transformed parts exactly, like Compare input preparation.  Unsupported
     structures (for example a paragraph-mark merge the writer cannot join)
     fail closed with a typed ``DocxError`` instead of passing silently.
     """
-    from .compare.revisions import _accept_revisions, _write_normalized_package
+    from .compare.revisions import _accept_revisions, _reject_revisions, _write_normalized_package
 
+    if disposition not in {"accept", "reject"}:
+        raise ValueError(f"disposition must be 'accept' or 'reject', got {disposition!r}")
     limits = limits or ZipLimits()
     original_sha256 = _sha(data)
     parts = _read_parts_bytes(data, limits)
@@ -1492,7 +1521,10 @@ def normalize_tracked_base(data: bytes, *, limits: ZipLimits | None = None) -> T
         root = _xml(content, limits)
         if not _has_word_revisions(root):
             continue
-        accepted += _accept_revisions(root)
+        if disposition == "accept":
+            accepted += _accept_revisions(root)
+        else:
+            accepted += _reject_revisions(root)
         changed[name] = etree.tostring(root, encoding="UTF-8", xml_declaration=True)
     # Full validation rejects any Word revision tag left behind, so a missed
     # combination cannot leak tracked marks into the flattened base.
@@ -1629,26 +1661,35 @@ def generate_artifacts(source: str | Path, plan: ValidatedPlan, redline_path: st
             _accept_our_revisions(accepted, manifest)
         if etree.tostring(accepted, method="c14n") != etree.tostring(final_reopen, method="c14n"):
             raise DocxError("FINAL_REVISION_MISMATCH")
-        # With existing revisions the business baseline is the accepted view, not
-        # the raw XML (which still carries the other department's marks).
+        # Location-keyed verification coordinate systems.  Without foreign
+        # revisions the accepted trees and raw trees share paragraph indexing.
+        # With foreign revisions, paragraph-mark deletions physically MERGE
+        # paragraphs in accepted trees and shift every following ``p{n}`` key,
+        # so accepted-tree keys no longer match the plan's original-tree
+        # locations.  Overlay checks therefore anchor on the raw trees: the
+        # writer provably preserves the original topology outside edited
+        # paragraphs, and the final package is bound to accept-all(redline)
+        # by the canonical equality above, so raw-tree equivalence transfers
+        # to the final package (EN3-F5).
         baseline = original
         comparison = red_reopen
-        if allow_existing_revisions:
-            baseline = deepcopy(original)
-            _accept_all_revisions(baseline)
+        anchor_raw = allow_existing_revisions
+        if not anchor_raw:
             comparison = accepted
         edited = {str(edit["location"]) for edit in plan.edits}
         skeleton = _structure_snapshot(baseline, edited,
                                        body_dropped_bookmarks=body_dropped_bookmarks)
         if skeleton != _structure_snapshot(comparison, edited,
                                            body_dropped_bookmarks=body_dropped_bookmarks) \
-                or skeleton != _structure_snapshot(final_reopen, edited,
-                                                   body_dropped_bookmarks=body_dropped_bookmarks):
+                or (not anchor_raw and skeleton != _structure_snapshot(
+                        final_reopen, edited, body_dropped_bookmarks=body_dropped_bookmarks)):
             raise DocxError("NON_TARGET_STRUCTURE_CHANGED")
         source_snapshot = _non_target_snapshot(baseline, edited)
-        if source_snapshot != _non_target_snapshot(comparison, edited) or source_snapshot != _non_target_snapshot(final_reopen, edited):
+        if source_snapshot != _non_target_snapshot(comparison, edited) \
+                or (not anchor_raw and source_snapshot != _non_target_snapshot(final_reopen, edited)):
             raise DocxError("NON_TARGET_CHANGED")
-        source_texts, final_texts = _paragraph_texts(baseline, limits), _paragraph_texts(final_reopen, limits)
+        source_texts = _paragraph_texts(baseline, limits)
+        final_texts = _paragraph_texts(comparison if anchor_raw else final_reopen, limits)
         source_projection = {span.location: span.text for span in
                              _enumerate_paragraphs(original, limits,
                                                    overlay=allow_existing_revisions)[0]}
@@ -1677,8 +1718,34 @@ def generate_artifacts(source: str | Path, plan: ValidatedPlan, redline_path: st
                 inherited = expected_formats[start - 1 if start == end else start]
                 expected_formats[start:end] = [None if char == "\n" else inherited for char in str(edit["replacement"])]
             final_view = final_texts.get(location, "")
+            if anchor_raw:
+                # Raw tree still wraps our edit in ins/del, and the projection
+                # marks the whole paragraph as revision content, vacating its
+                # writable segments (and therefore every concrete format).
+                # Settle only our own ids inside the edited paragraph to
+                # recover run-level formats; foreign wrappers (validated by
+                # the inventory re-check) are deliberately left in place, and
+                # the untouched surroundings are already pinned by the raw
+                # c14n non-target snapshot.
+                format_tree = deepcopy(comparison)
+                format_paragraph = _paragraph_element(format_tree, location)
+                own_del = {str(item["del_id"]) for item in manifest}
+                own_ins = {str(item["ins_id"]) for item in manifest}
+                for node in list(format_paragraph):
+                    if node.tag == Q("del") and node.get(Q("id"), "") in own_del:
+                        format_paragraph.remove(node)
+                    elif node.tag == Q("ins") and node.get(Q("id"), "") in own_ins:
+                        index = format_paragraph.index(node)
+                        for child in list(node):
+                            node.remove(child)
+                            format_paragraph.insert(index, child)
+                            index += 1
+                        format_paragraph.remove(node)
+            else:
+                format_tree = final_reopen
+            format_view = _paragraph_texts(format_tree, limits).get(location, "")
             final_formats = [fmt for char, fmt in
-                             zip(final_view, _text_formats(final_reopen, location, limits))
+                             zip(format_view, _text_formats(format_tree, location, limits))
                              if char != BARRIER]
             if final_formats != expected_formats:
                 raise DocxError("RUN_FORMAT_CHANGED", location)
