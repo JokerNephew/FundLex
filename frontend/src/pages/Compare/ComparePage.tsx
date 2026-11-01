@@ -166,10 +166,9 @@ type CompareReaderProps = {
   rightRef: RefObject<HTMLDivElement | null>
   classicLeftRef: RefObject<HTMLDivElement | null>
   classicRightRef: RefObject<HTMLDivElement | null>
-  syncScroll: (source: HTMLElement) => void
 }
 
-function CompareReader({ view, selectedPair, viewQuery, activeDiff, visibleDiffs, diffIndex, diffType, mobilePane, viewMode, classicSide, isMobile, showSources, markup, setDiffType, setMobilePane, setViewMode, setClassicSide, setShowSources, setMarkup, focusDiff, selectPairDiff, mergedRef, leftRef, rightRef, classicLeftRef, classicRightRef, syncScroll }: CompareReaderProps) {
+function CompareReader({ view, selectedPair, viewQuery, activeDiff, visibleDiffs, diffIndex, diffType, mobilePane, viewMode, classicSide, isMobile, showSources, markup, setDiffType, setMobilePane, setViewMode, setClassicSide, setShowSources, setMarkup, focusDiff, selectPairDiff, mergedRef, leftRef, rightRef, classicLeftRef, classicRightRef }: CompareReaderProps) {
   const leftName = view?.left.name || selectedPair?.left.name || '原合同'
   const rightName = view?.right.name || selectedPair?.right.name || '改后的合同'
   const mergedName = view?.merged?.name || rightName
@@ -199,16 +198,16 @@ function CompareReader({ view, selectedPair, viewQuery, activeDiff, visibleDiffs
         <div className={`compare-word-layout ${showSources ? '' : 'is-sources-hidden'}`.trim()} data-markup={markup}>
           <section className="compare-word-document" aria-labelledby="compare-merged-title">
             <div className="compare-word-pane-head"><div><span className="compare-word-pane-kicker">比较的文档</span><strong id="compare-merged-title">{pairLabel}</strong><small>{mergedName}</small></div><span className="compare-word-legend" aria-label="修订标记说明"><i className="compare-legend-ins">插入</i><i className="compare-legend-del">删除</i></span></div>
-            <div ref={mergedRef} className="compare-word-pane compare-merged-pane" onScroll={(event) => syncScroll(event.currentTarget)}><SafeCompareDocument html={view?.merged?.html || view?.right.html || ''} label="比较的文档" activeDiffId={activeDiff?.id} onDiff={selectPairDiff} /></div>
+            <div ref={mergedRef} className="compare-word-pane compare-merged-pane"><SafeCompareDocument html={view?.merged?.html || view?.right.html || ''} label="比较的文档" activeDiffId={activeDiff?.id} onDiff={selectPairDiff} /></div>
           </section>
           {showSources && <aside className="compare-word-sources" aria-label="源文档">
             <section className="compare-word-source" aria-labelledby="compare-source-left-title">
               <div className="compare-word-pane-head"><div><span className="compare-word-pane-kicker">原文档</span><strong id="compare-source-left-title">{leftName}</strong><small>只读源文档</small></div><button className="compare-word-close" type="button" onClick={() => setShowSources(false)} aria-label="关闭源文档">×</button></div>
-              <div ref={leftRef} className="compare-word-pane" onScroll={(event) => syncScroll(event.currentTarget)}><SafeCompareDocument html={view?.left.html || ''} label="原文档" activeDiffId={activeDiff?.id} onDiff={selectPairDiff} /></div>
+              <div ref={leftRef} className="compare-word-pane"><SafeCompareDocument html={view?.left.html || ''} label="原文档" activeDiffId={activeDiff?.id} onDiff={selectPairDiff} /></div>
             </section>
             <section className="compare-word-source" aria-labelledby="compare-source-right-title">
               <div className="compare-word-pane-head"><div><span className="compare-word-pane-kicker">修订的文档</span><strong id="compare-source-right-title">{rightName}</strong><small>只读源文档</small></div><button className="compare-word-close" type="button" onClick={() => setShowSources(false)} aria-label="关闭源文档">×</button></div>
-              <div ref={rightRef} className="compare-word-pane" onScroll={(event) => syncScroll(event.currentTarget)}><SafeCompareDocument html={view?.right.html || ''} label="修订的文档" activeDiffId={activeDiff?.id} onDiff={selectPairDiff} /></div>
+              <div ref={rightRef} className="compare-word-pane"><SafeCompareDocument html={view?.right.html || ''} label="修订的文档" activeDiffId={activeDiff?.id} onDiff={selectPairDiff} /></div>
             </section>
           </aside>}
         </div>
@@ -222,9 +221,9 @@ function CompareReader({ view, selectedPair, viewQuery, activeDiff, visibleDiffs
             <Button type="button" aria-pressed={classicSide === 'right'} onClick={() => setClassicSide('right')}>查看合同B</Button>
           </div>
           <div className="compare-columns" data-mobile-side={classicSide}>
-            <div ref={classicLeftRef} className="compare-pane" onScroll={(event) => syncScroll(event.currentTarget)}><SafeCompareDocument html={view?.left.html || ''} label="合同A正文" activeDiffId={activeDiff?.id} onDiff={selectPairDiff} /></div>
+            <div ref={classicLeftRef} className="compare-pane"><SafeCompareDocument html={view?.left.html || ''} label="合同A正文" activeDiffId={activeDiff?.id} onDiff={selectPairDiff} /></div>
             <div className="compare-classic-divider" aria-hidden="true" />
-            <div ref={classicRightRef} className="compare-pane" onScroll={(event) => syncScroll(event.currentTarget)}><SafeCompareDocument html={view?.right.html || ''} label="合同B正文" activeDiffId={activeDiff?.id} onDiff={selectPairDiff} /></div>
+            <div ref={classicRightRef} className="compare-pane"><SafeCompareDocument html={view?.right.html || ''} label="合同B正文" activeDiffId={activeDiff?.id} onDiff={selectPairDiff} /></div>
           </div>
         </div>
       </div>
@@ -360,20 +359,54 @@ export function ComparePage() {
   }, [activeDiff?.id, allPanes, classicSide, isMobile, mobilePane, scrollToDiff, viewMode])
   useEffect(() => { setDiffIndex(0) }, [diffType, view?.pair.id])
 
-  const syncScroll = (source: HTMLElement) => {
+  // Linked scrolling: throttle to one rAF per frame, suppress the echo
+  // events the programmatic writes cause, and release the echo guard only
+  // after the gesture settles. The previous version wrote target scrollTop
+  // synchronously on every scroll event and released its lock after a
+  // single frame, so momentum scrolling echoed back and jittered (FL-D842).
+  const syncTargetsRef = useRef<Set<HTMLElement>>(new Set())
+  const syncFrameRef = useRef<number | null>(null)
+  const syncReleaseRef = useRef<number | undefined>(undefined)
+  const syncScroll = useCallback((source: HTMLElement) => {
     if (scrollLockRef.current || isMobile) return
-    const panes = allPanes().filter((pane): pane is HTMLDivElement => Boolean(pane && pane.clientHeight))
-    const targets = panes.filter((pane) => pane !== source)
-    if (!targets.length) return
-    const sourceMax = Math.max(0, source.scrollHeight - source.clientHeight)
-    const ratio = sourceMax ? source.scrollTop / sourceMax : 0
-    scrollLockRef.current = true
-    targets.forEach((target) => {
-      const targetMax = Math.max(0, target.scrollHeight - target.clientHeight)
-      target.scrollTop = ratio * targetMax
+    if (syncTargetsRef.current.has(source)) return
+    if (syncFrameRef.current !== null) return
+    syncFrameRef.current = requestAnimationFrame(() => {
+      syncFrameRef.current = null
+      const panes = allPanes().filter((pane): pane is HTMLDivElement => Boolean(pane && pane.clientHeight))
+      const targets = panes.filter((pane) => pane !== source)
+      if (!targets.length) return
+      const sourceMax = Math.max(0, source.scrollHeight - source.clientHeight)
+      const ratio = sourceMax ? source.scrollTop / sourceMax : 0
+      targets.forEach((target) => {
+        syncTargetsRef.current.add(target)
+        const targetMax = Math.max(0, target.scrollHeight - target.clientHeight)
+        target.scrollTop = ratio * targetMax
+      })
+      window.clearTimeout(syncReleaseRef.current)
+      syncReleaseRef.current = window.setTimeout(() => { syncTargetsRef.current.clear() }, 160)
     })
-    requestAnimationFrame(() => { scrollLockRef.current = false })
-  }
+  }, [allPanes, isMobile])
+  useEffect(() => {
+    // Bind natively so the listeners can be passive; React's onScroll prop
+    // is never passive and would keep the compositor waiting on the handler.
+    const refs = [mergedRef, leftRef, rightRef, classicLeftRef, classicRightRef]
+    const panes = refs.map((ref) => ref.current).filter((pane): pane is HTMLDivElement => Boolean(pane))
+    const onScroll = (event: Event) => syncScroll(event.currentTarget as HTMLElement)
+    const takeControl = (event: Event) => { syncTargetsRef.current.delete(event.currentTarget as HTMLElement) }
+    panes.forEach((pane) => {
+      pane.addEventListener('scroll', onScroll, { passive: true })
+      pane.addEventListener('wheel', takeControl, { passive: true })
+      pane.addEventListener('pointerdown', takeControl, { passive: true })
+      pane.addEventListener('touchstart', takeControl, { passive: true })
+    })
+    return () => panes.forEach((pane) => {
+      pane.removeEventListener('scroll', onScroll)
+      pane.removeEventListener('wheel', takeControl)
+      pane.removeEventListener('pointerdown', takeControl)
+      pane.removeEventListener('touchstart', takeControl)
+    })
+  }, [syncScroll, showSources, view?.pair.id])
 
   const selectFiles = (index: number, side: 'left' | 'right', file?: File) => setPairs((current) => current.map((pair, itemIndex) => itemIndex === index ? { ...pair, [side]: file } : pair))
   const applyFolder = (side: 'left' | 'right', event: ChangeEvent<HTMLInputElement>) => {
@@ -448,7 +481,7 @@ export function ComparePage() {
         </div>
         <div className="compare-summary-row"><div className="compare-summary-stat"><span>当前结果</span><strong>{view?.summary ? `共 ${view.summary.total || 0} 处差异 · 修改 ${view.summary.modify || 0} · 新增 ${view.summary.insert || 0} · 删除 ${view.summary.delete || 0}` : '结果尚未就绪'}</strong></div>{view?.coverage?.status !== 'complete' && view?.coverage && <details className="compare-coverage-chip"><summary>覆盖不完整 · {view.coverage.warnings?.length || 0} 项未覆盖</summary><div className="compare-coverage-popover" role="status"><p>以下内容未纳入比较，请人工复核，不要据此确认全文无差异。</p>{view.coverage.warnings?.length ? <ul>{view.coverage.warnings.map((warning, index) => <li key={`${warning}-${index}`}>{warning}</li>)}</ul> : null}</div></details>}</div>
       </div>
-      {viewQuery.error ? <div className="error-state">读取结果失败：{messageOf(viewQuery.error, '结果暂时不可用')}</div> : viewQuery.loading && !view ? <Spinner label="正在读取对比结果" /> : view && <CompareReader view={view} selectedPair={selectedPair} viewQuery={viewQuery} activeDiff={activeDiff} visibleDiffs={visibleDiffs} diffIndex={diffIndex} diffType={diffType} mobilePane={mobilePane} viewMode={viewMode} classicSide={classicSide} isMobile={isMobile} showSources={showSources} markup={markup} setDiffType={setDiffType} setMobilePane={setMobilePane} setViewMode={setViewMode} setClassicSide={setClassicSide} setShowSources={setShowSources} setMarkup={setMarkup} focusDiff={focusDiff} selectPairDiff={selectPairDiff} mergedRef={mergedRef} leftRef={leftRef} rightRef={rightRef} classicLeftRef={classicLeftRef} classicRightRef={classicRightRef} syncScroll={syncScroll} />}
+      {viewQuery.error ? <div className="error-state">读取结果失败：{messageOf(viewQuery.error, '结果暂时不可用')}</div> : viewQuery.loading && !view ? <Spinner label="正在读取对比结果" /> : view && <CompareReader view={view} selectedPair={selectedPair} viewQuery={viewQuery} activeDiff={activeDiff} visibleDiffs={visibleDiffs} diffIndex={diffIndex} diffType={diffType} mobilePane={mobilePane} viewMode={viewMode} classicSide={classicSide} isMobile={isMobile} showSources={showSources} markup={markup} setDiffType={setDiffType} setMobilePane={setMobilePane} setViewMode={setViewMode} setClassicSide={setClassicSide} setShowSources={setShowSources} setMarkup={setMarkup} focusDiff={focusDiff} selectPairDiff={selectPairDiff} mergedRef={mergedRef} leftRef={leftRef} rightRef={rightRef} classicLeftRef={classicLeftRef} classicRightRef={classicRightRef} />}
     </Card>}
 
   </div>

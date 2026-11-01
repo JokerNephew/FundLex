@@ -1431,6 +1431,9 @@
       window.removeEventListener('pointerup', onUp);
       window.removeEventListener('pointercancel', onUp);
       apply(current, true);
+      // Drag end is where heavy geometry work (re-measure, cross-pane
+      // realign) belongs; firing it per pointermove made drags stutter.
+      if (typeof opts.onEnd === 'function') opts.onEnd(current);
     };
     handle.addEventListener('pointerdown', event => {
       if (event.button !== 0 || opts.disabled()) return;
