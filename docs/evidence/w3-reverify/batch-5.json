@@ -1,0 +1,44 @@
+{
+ "script": "tools/evaluation/w3_reverify_second_batch_labels_20261101.py",
+ "batch": 5,
+ "cases": [
+  "W2H06",
+  "W2H07",
+  "W2H08",
+  "W2H09",
+  "W2H10",
+  "W2H11",
+  "W2H12",
+  "W2H13",
+  "W2H14",
+  "W2H15",
+  "W2H16",
+  "W2H17",
+  "W2H18",
+  "W2H19",
+  "W2H20",
+  "W2H21",
+  "W2H22",
+  "W2H23",
+  "W2H24",
+  "W2H25"
+ ],
+ "labels_sha256": "423c6944687a6006d493d3f8dff4b4cb32593cc6acc26c2e2b3fb423622a88f5",
+ "selection_sha256": "32b36f02a9c6cafebee7a73fcda0791c707ac62d07fe67bb57e91daafc6187d9",
+ "envelope_problems": [],
+ "problems": [
+  "W2H15: rule_coverage[4] evidence_quote CONTENT not in source (G05/target): '在符合法律法规、基金合同的约定且不损害已有基金份额持有人权益的情况下，经与基金托'",
+  "W2H25: rule_coverage[13] evidence_quote CONTENT not in source (G14/target): '基金管理人可以适当调低基金申购费率、基金赎回费和基金销售服务费率'"
+ ],
+ "warnings": [
+  "W2H11: rule_coverage[4] evidence_quote punct-only diff (G05)"
+ ],
+ "counts": {
+  "cases": 20,
+  "targets": 214,
+  "coverage_entries": 880,
+  "cases_with_targets": 16,
+  "uncertain_entries": 4,
+  "ineligible_cases": []
+ }
+}
