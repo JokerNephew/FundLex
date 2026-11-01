@@ -134,7 +134,34 @@ worker claim(lease+fencing) ──> GuidePipeline.run() 逐 stage(输入哈希�
 | guides/builtin_guide_v1.json | scope | 发布树必须包含 |
 | git/uv.lock | pipeline 证据 | 发布树 .git 可能缺失→回退 FUNDLEX_COMMIT_SHA |
 
-## 失败语义总判定
+## 指引版本 diff（「我的指引→版本对比」；运行时指引体系，非 guide_generation 候选）
+
+> 专项补充（2026-11-01，应总指挥追加要求，供 FL-D891 判定后端缺口）。**版本差提醒**：该功能模块不在 worktree 基线 158475f 中（`git ls-tree` 无 guide_diff/guide_text_diff），为生产树 `/opt/fundlex-recall-first` 随后新增的代码；本节结论基于生产树源码逐行核对，与基线其余模块同行管理。
+
+### diff 在哪算（接口/数据）
+- **规则级 diff**：`GET /api/guides/{version_id}/diff?against={base_id}`（api.py:1175）→ `guide_store.diff_versions`（guide_store.py:817）→ `fundlex/guide_diff.py:diff_guide_documents`（guide-diff-v1）。输入是两侧版本的**已解析规则文档**（`guide_document()`：guide_versions.rules_json，内置版读冻结 `guides/builtin_guide_v1.json`）。**同步请求内计算，确定性、零模型调用、无缓存、无异步任务**。
+- **原文 diff**：`GET /api/guides/{version_id}/text-diff?against={base_id}`（api.py:1186）→ `fundlex/guide_text_diff.py`（guide-text-diff-v1）。输入是两侧版本的**上传源 DOCX 字节**（`guide_source_path()` → 数据根下源文件），直接复用合同比对算法链 `compare.text_diff.compare_docx` + `render_compare_document/render_merged_document`，输出 left/right/merged 三段 HTML + 差异行 + coverage 摘要。同样**同步、确定性、零模型**。
+- 前端（生产 app.js:1236-1280）：「版本对比」卡两个 tab（rules/text）+ 合并稿/并排切换，请求失败时统一兜底。
+
+### 「差异暂未算出来，请稍后重试」属于哪种？——**报错兜底文案，不是未实现、也不是异步未就绪**
+文案出自生产 app.js:1280 的 catch 兜底（`detail==='BUILTIN_SOURCE_UNAVAILABLE'` 时另显"内置指引无法原文比对"）。两个 diff 端点均请求内同步算出，**不存在"暂未算出来、稍后就绪"的异步形态**；该文案的实际触发路径：
+1. **404 GUIDE_DIFF_UNAVAILABLE**（统一报错码，三种来源不区分）：① 任一版本不存在/不属当前 owner；② 规则 diff 时任一版本**尚未解析出规则**（rules_json 空→`guide_document` KeyError，即"解析中/解析失败"状态被折叠成"暂未算出来"）；③ 原文 diff 时 `TextDiffUnavailable(GUIDE_SOURCE_UNAVAILABLE)`（源文件丢失/非 docx，非内置情形）。
+2. **404 BUILTIN_SOURCE_UNAVAILABLE**：原文 diff 任一侧为内置指引（无上传原文），前端有专属文案，**不落到该兜底**。
+3. **422 INVALID_REQUEST**（against 缺失；前端恒带值，理论路径）。
+4. **网络/其他异常**：落到兜底 + errorNotice。
+结论：用户看到该文案时几乎总是 404 类「不可用/未就绪」语义，但后端**已能区分**各成因（错误码已在 API 层稳定），只是前端未按码细分，且"稍后重试"对「版本未解析出规则」有效、对「源缺失/built-in」无效。规则 tab 前端**不预检**版本 status（不像「规则开关」页过滤 GUIDE_RULES_READY），因此解析中版本必然触发兜底。
+
+### 规则级 diff 支持度与缺口
+- 已实现：rule_id 键控的增/删/改+字段级变更（白名单 6 字段：title/requirement/operations/old_text_variants/slot_tokens/class_substitution/references）；groups 结构增删与顺序变化；meta 四字段（parser/schema_version/source_sha256/prompt_versions）；validation 摘要计数两边对照；summary 含 identical 判定；owner 可见性逐侧 404（不泄露存在性）。
+- 缺口：① **字段白名单外变化不可见**——rule 中 `section_hint` 等字段 变化不产生 changed 记录（前端 guideDiffFieldLabel 已备 section_hint 映射，说明展示面预留、算法未覆盖）；② rule_id 重编即删+增（无移动/改名识别）；③ 不过滤版本状态，未解析版本→404 兜底而非「该版本还在解析中」；④ 无缓存（大规则集重复比较每次重算，成本低可接受）。
+
+### 原文 diff 支持度与缺口
+- 已实现：两个自定义版 DOCX 的全文确定性 diff（modify/insert/delete + 覆盖率），合并稿/并排 HTML 与合同比对页同款渲染；内置指引显式拒绝为 BUILTIN_SOURCE_UNAVAILABLE；源损坏归 422 GUIDE_TEXT_DIFF_UNREADABLE。
+- 缺口：① 自定义版本源文件缺失/非 docx→GUIDE_SOURCE_UNAVAILABLE 前端无专属文案（落兜底）；② 源文件可用性依赖数据根文件留存（未见生命周期/清理保护约定）；③ 不支持"内置 JSON 规则反渲染为文本"比对形态（设计上拒绝，属明示边界）。
+
+**后端缺口总判定（供 FL-D891）**：diff 计算能力**完整存在且确定性**；后端真正缺口只有「404 的三种成因共用一个 GUIDE_DIFF_UNAVAILABLE 兜底码/文案」与「规则 diff 字段白名单不含 section_hint」。前端只需要按已有错误码细分文案（含 status=parsing 的专属提示），**不需要后端新增异步 diff 计算**。
+
+
 - 完成判定 fail-closed：complete 需 11 项 checks 全绿；其余 complete_with_unresolved。
 - 基础设施故障：router 阻断→阶段失败→worker retry_wait/paused，不会错误 complete。
 - 主要 fail-open 面（政策内/已登记）：reviewer 未验证 evidence 的 critical 豁免（FL-D377）、coverage applicability/审计模型失败仅 major（FL-D828）、向量静默降级（payload 留痕）、scope 默认章回退（静默）。

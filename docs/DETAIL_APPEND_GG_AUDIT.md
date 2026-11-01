@@ -121,6 +121,16 @@
 - 下一步：前端线实现错误码映射；与 FL-D821 后端稳定码一并验收。
 - 变更记录：2026-11-01 新增。
 
+## FL-D832 【编号段溢出，并册时请主线确认】指引版本对比「差异暂未算出来」兜底文案与后端实际语义不符；三成因共码、字段白名单漏 section_hint（2026-11-01）
+
+- 发现日期：2026-11-01，应总指挥追加要求盘点「我的指引→版本对比」后端能力时逐行核对生产树（该功能代码不在本 worktree 基线 158475f，为生产树后续新增，见 MODULE_INVENTORY 专节版本差提醒）。
+- 问题与影响：①前端「差异暂未算出来，请稍后重试」（生产 app.js:1280）是**一切请求失败的统一兜底**，而两个 diff 端点（GET /api/guides/{id}/diff 与 /text-diff）均为请求内**同步、确定性、零模型**计算，不存在异步未就绪形态；"稍后重试"对「版本未解析出规则」（404 GUIDE_DIFF_UNAVAILABLE 来自 rules_json 空）恰好有效，但对「源文件缺失 GUIDE_SOURCE_UNAVAILABLE」「built-in 参与原文比对」无意义。②404 三种成因（版本不可见/未解析/源缺失）共用 GUIDE_DIFF_UNAVAILABLE，前端无法区分。③规则级 diff 的字段白名单（guide_diff.py RULE_FIELDS 6 字段）不含 `section_hint`，该字段变化的版本对比显示「无变化」；前端 guideDiffFieldLabel 已备 section_hint 映射，展示面预留但算法未覆盖。④原文 diff 的 GUIDE_SOURCE_UNAVAILABLE（非内置源缺失）前端无专属文案，落兜底。
+- 证据：/opt/fundlex-recall-first/fundlex/api.py:1175-1203；guide_diff.py:16-17（RULE_FIELDS）；guide_text_diff.py:26-45；guide_store.py:817-828（diff_versions）与 338-355（guide_document 空 rules_json→KeyError）；生产 app.js:1236-1280（兜底与 tab 对版本 status 无预检，对照 「规则开关」页有 GUIDE_RULES_READY 过滤）。
+- 处理方法：盘点结论已写入 docs/guide-generation/MODULE_INVENTORY.md「指引版本 diff」专节（含触发路径分解与缺口总判定）。后端代码本线**不改**（该功能属运行时指引体系、且生产树领先基线，修复归 FL-D891 前后端一并判定）；后端最小改动建议：404 载荷区分 UNPARSED/SOURCE_MISSING/VERSION_NOT_FOUND（或复用 detail 字段），guide_diff RULE_FIELDS 增补 section_hint；前端按码细分文案并对 status=parsing 版本预检。
+- 状态与验证：**已登记+盘点结论落盘，代码未改（归属 FL-D891 施工判定）**。验证为源码逐行核对，未发真实 HTTP 请求复现（避免触碰生产会话态）。
+- 下一步：主线将本节结论并入 FL-D891 判定；并册时确认编号。
+- 变更记录：2026-11-01 新增。
+
 ## FL-D831 【编号段溢出，并册时请主线确认】E2E 探针将数据库连接串回显进 systemd journal（已清除，建议评估轮换）（2026-11-01）
 
 - 发现日期：2026-11-01，本线搭建真实 E2E 时。
