@@ -8269,6 +8269,20 @@ H＝E×…
 - **变更记录 2026-11-01（批3a 施工，裁决修正）**：实证 app.js:270 触发条件——仅 `tasksLoaded && !tasksFailed && !dismissed && tasks.length===0 && 无筛选词` 才显，**非"常驻"**，空态用户唯一引导、有真实用户价值；裁决由"删卡"改为**保卡删重复尾注**（compare.html 引导卡内 `<div class="guide-note">处理结束后…证据与报告。</div>` 复述正文，已删）。原"删卡并入空态"裁决作废。
 - **状态**：批3a 部分已解决（尾注删）；卡片本体保留，不再施工。
 
+## FL-D833 浏览器套件 test_review_list_splitter_drag 间歇性环境抖动（终批回归复发，2026-11-01）
+
+- **问题与影响**：批4 回归与末批回归两次整批跑中，`tests/browser/test_workbench.py::test_review_list_splitter_drag` 以 playwright 连接层 Error（_connection.py:636）ERROR 收场（非断言 FAILED）；同例单跑两次均绿（6.3s/6.2s）。其他 84 例全绿。定性为整批运行资源/时序环境抖动（预计 85 例 Chromium 会话并发复用），非代码缺陷。
+- **处理方法**：不改动用例与源码；以「单跑复绿+整批再发即复核」的双证据口径记录；若后续复发频次升高（≥3 次）再评估给该用例加隔离 marker。
+- **验证**：批4（329.7s 整批）与末批（277.9s 整批）两次复现，两次单跑均绿。
+- **状态**：已知环境限制，留档观察；业务断言不受影响。
+
+## FL-D832 V1 指引页「规则组」残留九处（终批走查 screenshot 实证捕获，2026-11-01）
+
+- **问题与影响**：末批全站逐页截图（design-final/v1-05-guides.png）实证：V1 指引页顶提示、页内 tab「规则组启停」、行按钮「规则组」+同页 aria/tooltip/错码说明共九处残留旧词「规则组」，与批3a 定型词典「规则开关」不一致；grep 无测试锚（测试瞄准按钮 role=tab+锚 data-guide-page-tab 不改），确认安全。
+- **处理方法**：九处全换「规则开关」——compare.html:718 顶部引导、:722 tab 名、:803 区块标题+副词、:804-5 aria-label+提示；app.js 行按钮 label+title、加载提示「正在读取规则组…」、错条 GUIDE_GROUP_INVALID/EMPTY 说明、「规则组暂无法读取」、"该段未被任何规则组引用"、"解析完成后可配置规则组"。修复后全站 grep 「规则组」命中 0。
+- **验证**：node --check frontend/app.js 过；浏览器 V1 指引页重捕截图 v1-05-guides.png（design-final/round2）对照确认。
+- **状态**：已解决（终批末轮 commit）。
+
 ## FL-D831 V2 页脚「隐私政策·服务条款」伪链接（批4 截图实证捕获，2026-11-01）
 
 - **问题与影响**：批4 v2-result-l0123.png 截图实证：V2 AppShell 页脚挂「隐私政策·服务条款」两组 `footer-link is-disabled` 伪链接（无目标页面、不可点）——与批3a V1 compare.html 已删页脚同源问题，V2 侧漏删。三禁令「删不需要的信息/禁废话」；V1/V2 体验不一致。
