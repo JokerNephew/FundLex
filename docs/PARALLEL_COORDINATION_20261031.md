@@ -106,3 +106,8 @@
 ### 2026-11-01 13:0x 会话映射勘误（FL-D860）
 - ~~A4vO9d5 / nHOKfnt~~（僵尸，deepseek-flash 空转）→ 重建：**XMWmAw4**=gg-audit、**OhgIvj8**=compare-ux（均钉 hon-maas/kimi-k3#high，已见产出）
 - 调度 SOP：API 建会话必须显式钉模型（Model.Ref 对象）
+
+### 2026-11-01 13:5x 收口进度（巡线34，里程碑）
+- 🎯 **loop-8 = 100.0%（390/390）八波首达——dev20 冻结门槛全项达成**；留出 8 份首验令已发 feat-recall；第二波 100 份标签准备激活 kvvQwuiB
+- ✅ compare-ux A 阶段 → 滚动丝滑化并入（rAF 同步+splitter 重对齐+双视图；perf 新测绿）
+- FL-D861 B01 悬空残句带标交付形态登记（观察项）；recall 新池 FL-D862~869
