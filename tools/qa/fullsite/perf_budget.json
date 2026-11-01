@@ -1,0 +1,29 @@
+{
+  "_meta": {
+    "title": "FundLex 全站走查性能预算（冻结候选，随 docs/qa/FULLSITE_CHECKLIST.md §2 交主线审定）",
+    "version": "1.1-draft",
+    "unit": "ms",
+    "samples": 3,
+    "aggregation": "median",
+    "mobile_multiplier": 1.5,
+    "feedback_deadline_ms": 500,
+    "verdict_rule": "median > fail => '卡顿'成立(❌); warn < median <= fail => ⚠; median <= warn => ✅"
+  },
+  "classes": {
+    "A": {"P-TTFB": [800, 2000], "P-DCL": [1200, 2500], "P-LOAD": [2500, 5000], "P-READY": [3000, 6000], "P-CLICK": [300, 1000], "P-LTASK": [1000, 3000]},
+    "B": {"P-TTFB": [800, 2000], "P-DCL": [1500, 3000], "P-LOAD": [3000, 6000], "P-READY": [4000, 8000], "P-CLICK": [300, 1000], "P-CLICK-HEAVY": [800, 2000], "P-LTASK": [1000, 3000]},
+    "C": {"P-TTFB": [800, 2000], "P-DCL": [1500, 3000], "P-LOAD": [3000, 6000], "P-READY": [5000, 10000], "P-CLICK": [300, 1000], "P-CLICK-HEAVY": [800, 2000], "P-LTASK": [1500, 4000]}
+  },
+  "notes": [
+    "页面分级: A=轻页(列表/工作台/设置/模型/用户/指引列表), B=重详情页(任务/比对/生成详情、版本对比), C=最重页(报告/修订审阅/比对查看器)",
+    "P-CLICK-HEAVY 仅用于重视图切换(word↔classic、版本对比渲染)",
+    "长任务(上传/真实模型/生成/下载)豁免 P-CLICK 硬阈值, 但进度反馈必须 <= feedback_deadline_ms",
+    "轮询页只测首屏",
+    "移动端阈值 = 桌面 * mobile_multiplier, 四舍五入到百位",
+    "缓存口径: 默认 warm(同URL预载一次后测第二次); --cold 场景分开记录, 字段 cache_mode",
+    "环境口径: 阈值判定以生产公网采集为准; 本地 dev 采集仅作对照不进 A3 判定(results.json 记 base_url)",
+    "P-CLICK 超时按超时值记录(必然超 fail → ❌), 不以异常中断",
+    "P-LTASK 口径: P-READY 时刻起 5s 窗口内 longtask(>50ms) 总耗时",
+    "LCP/INP 列入阶段二增强项(Playwright 环境可采集后再入冻结表)"
+  ]
+}
