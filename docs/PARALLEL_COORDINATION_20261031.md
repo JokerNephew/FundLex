@@ -195,3 +195,4 @@
 - 会话映射新增：EN3=wLZQPE CA1=k6dCXj9k CA2=Rz0GCde7Q。工单经子agent二审（8补丁：阻断2/治理1/验收3/事实2）。
   - ✅ `f676b78` EN2 B类14件（ACK①；合并正式说明=INT-LOG #6：2719/0 全量+2冲突先例+凭据副本；备注=该 commit 由主线会话在 INT 验证期抢跑提交，内容核验无损）
   - ✅ `84e06b4` EN1·FL-D1001 注册回流（ACK②+拆分裁决：guide_store.py 回炉/form_matrix 随 harness 批；全量 2727/0）
+  - ⚠ `59721b8` FL-D987 部分落袋（D987b 审查 overlay 已复原；查看器 dialog 回退链+V2 三件因 B 期结构分叉中止，重组装/裁决请求见 INT-LOG #10）
