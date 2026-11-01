@@ -127,6 +127,19 @@ def _file_config(path: str) -> dict[str, Any]:
     return {"models": models, "task_roles": task_roles}
 
 
+def _resolve_key_env(env_name: str, *, owner: str) -> str:
+    """Resolve an env indirection to a secret.
+
+    A named-but-unset variable is a configuration error, never a silent empty
+    string: falling back to a sibling endpoint's credential could forward the
+    primary key to a different host (FL-D922).
+    """
+    value = os.environ.get(env_name, "").strip() if env_name else ""
+    if not value:
+        raise RoleConfigError(f"{owner} names {env_name!r} but it is not set")
+    return value
+
+
 def _merge_endpoint(entry: Mapping[str, Any], *, role: str,
                     inherited: ModelRoleConfig | None) -> ModelRoleConfig:
     """One role entry from a file, with optional inheritance from the primary."""
@@ -135,7 +148,7 @@ def _merge_endpoint(entry: Mapping[str, Any], *, role: str,
     api_key = str(entry.get("api_key") or "")
     api_key_env = str(entry.get("api_key_env") or "")
     if api_key_env:
-        api_key = os.environ.get(api_key_env, "").strip()
+        api_key = _resolve_key_env(api_key_env, owner=f"models.{role} api_key_env")
     base = inherited
     return ModelRoleConfig(
         role=role,
@@ -181,7 +194,8 @@ def _apply_env(cfg: ModelRoleConfig, prefix: str) -> ModelRoleConfig:
             updates[attr] = cast(raw)
     raw_key_env = _env(f"FUNDLEX_{prefix}_API_KEY_ENV")
     if raw_key_env:
-        updates["api_key"] = os.environ.get(raw_key_env, "").strip()
+        updates["api_key"] = _resolve_key_env(raw_key_env,
+                                              owner=f"FUNDLEX_{prefix}_API_KEY_ENV")
     for name, attr in (("FUNDLEX_MODEL_REQUEST_OPTIONS_JSON", "request_options"),
                        ("FUNDLEX_MODEL_EXTRA_HEADERS_JSON", "extra_headers")):
         # Transport-wide JSON knobs are intentionally shared by both roles unless
@@ -252,8 +266,13 @@ def load_role_config() -> tuple[dict[str, ModelRoleConfig], dict[str, str]]:
         review = replace(primary, role="review")
     elif review.base_url != primary.base_url and review.api_key == primary.api_key:
         # Never forward the primary endpoint's credential to a different host.
-        explicit_key = bool(_env("FUNDLEX_REVIEW_API_KEY") or _env("FUNDLEX_REVIEW_API_KEY_ENV")
-                            or review_entry.get("api_key") or review_entry.get("api_key_env"))
+        # Count only a *resolvable* key as explicit (FL-D922): a name without a
+        # value is rejected by _resolve_key_env above and proves nothing here.
+        explicit_key = bool(
+            _env("FUNDLEX_REVIEW_API_KEY")
+            or os.environ.get(_env("FUNDLEX_REVIEW_API_KEY_ENV") or "", "").strip()
+            or review_entry.get("api_key")
+            or os.environ.get(str(review_entry.get("api_key_env") or ""), "").strip())
         if not explicit_key:
             raise RoleConfigError("review model role uses another endpoint without its own API key")
 
