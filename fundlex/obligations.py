@@ -397,21 +397,6 @@ def apply_facts(ledger: ObligationLedger, facts: Any, *,
             item.completion_evidence = "OPEN_OBLIGATION:applicability_true"
 
 
-def _audit_verdicts(node: Any, depth: int = 0) -> Iterable[tuple[str, str]]:
-    if depth > 6:
-        return
-    if isinstance(node, Mapping):
-        target_id = node.get("target_id")
-        verdict = node.get("verdict")
-        if isinstance(target_id, str) and isinstance(verdict, str):
-            yield target_id, verdict
-        for value in node.values():
-            yield from _audit_verdicts(value, depth + 1)
-    elif isinstance(node, list):
-        for value in node:
-            yield from _audit_verdicts(value, depth + 1)
-
-
 def _iter_targets(report: Mapping[str, Any]) -> list[Mapping[str, Any]]:
     targets = report.get("targets")
     if isinstance(targets, list):
