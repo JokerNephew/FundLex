@@ -8199,3 +8199,24 @@ H＝E×…
 - **机制面归因**：FL-D791 句界探测对多站点追加（append 双正文位+摘要位）的绑定/归并可能收紧；是否并入 FL-D792 同形观察项待主线。
 - **状态**：open，归主线机制处置。
 - **变更记录**：2026-11-01 新增。
+
+## FL-D697 B05 loop-6 新回归：G02/G16 破坏性编辑被 audit 诚实拦截 → 无产物（五连 complete 首负）（2026-11-01，qa-feat-recall）
+
+- **发现**：loop-6 B05 从 v1~loop-5 五连 complete 翻 incomplete 无产物。unresolved 仅 G02+G16：G02@p118 audit wrong「AFTER p118 contains only the bare term 'A类基金份额'; the entire definition …」；G16@p788/p1237 audit wrong「AFTER仅含新增文本，原销售服务费条款被删除，违反追加而非替换」。
+- **机制面归因（不补规则）**：模型本轮**生成质量恶化**（定义句被掏空、append 落成 replace），audit 正确识别为 wrong → 验证层交付门诚实扣全案。触发为模型级回摆（FL-D650/683 族），非冻结机制回退；audit+交付门按设计拦截——统计损失为防谎报的诚实成本。
+- **影响**：-13 targets（87.9% 完成率的主要扣项之一）。
+- **状态**：open，归主线观测（模型生成面回摆）；本线不动。
+- **变更记录**：2026-11-01 新增。
+
+## FL-D698 B12 loop-6 阻塞迁移收官：G12+G13 与 T014 形状 replay FAIL 均已消退，残余 G05:2@p162 保守扣件（FL-D792 归属待主线）（2026-11-01，qa-feat-recall）
+
+- **消退实证（冻结令验收项）**：loop-6 B12 unresolved 仅剩 G05 三条（G05:2@p162 OPEN_OBLIGATION verified site missing + FINAL_COVERAGE_UNRESOLVED site_evidence_missing）——**G12/G13 零出现（FL-D791 愈）、G16/G22 replay FAIL 形状零出现（FL-D696 消散，令中 T014 形状项达成）**。
+- **残余**：G05:2（branch B3 调低赎回费率→调低销售服务费率替换支）目标/site 证据未闭合 → 交付门保守扣全案，延续「无产物」形态。**是否计入 FL-D792 同形观察项由主线判定**：若计入，B12 门槛项按令不计 FAIL；本线如实登记不主张。
+- **状态**：open（残余 G05 支），待主线判定归属。
+- **变更记录**：2026-11-01 新增。
+
+## FL-D695 更新：变体反证机制实证生效——loop-6 B15 G09 不再 absent（2026-11-01）
+
+- loop-6 B15 G09 判定形态迁移：loop-5 的 `absent`→MISS_TARGET_RESOLUTION 在本轮**消失**（变体证据反证生效实证），残余为 G09 CLAIM_REPLAY_FAILED + G05:0/G05:2 双支 OPEN_OBLIGATION（含模型自述「按G05应将调低赎回费率改为调低销售服务费率」理由文本）→ 仍保守扣全案，T001 executed 无从达成。
+- 另 FL-D793（G11 schema 单发抖动）按冻结令核查：loop-6 全波 unresolved 无 G11，**未复发，自然销案**。
+- FL-D696 追加实证：B19 六波首次 complete（+19）——plan_rejected replay 防双计对长期开放的「恢复重复目标 vs satisfied 子集」冲突收口。
