@@ -242,6 +242,22 @@ def check_case(case: dict, sel_case: dict, problems: list, warnings: list, stats
             q = t.get(qk)
             if not q:
                 continue
+            # 质检线捕获补漏（2026-11-01 inspection-record）：
+            # 旧实现 fragments() 丢弃 <10 字片段，致短 old_text（如「调低赎回费率」）
+            # 的在场断言被旁路；金标层一律先做整串在场断言，失败再细分原因。
+            if qk == "old_text":
+                nq = norm(q)
+                if nq and nq not in full_text:
+                    if strip_punct(nq) in full_nopunct:
+                        warnings.append(f"{cid}: targets[{i}] old_text punct-only diff")
+                        continue
+                    miss = [f for f in fragments(q) if fragment_class(f, full_text, full_nopunct) == "missing"]
+                    problems.append(
+                        f"{cid}: targets[{i}] old_text CONTENT not in source: "
+                        f"{miss[0][:40] if miss else nq[:40]!r}"
+                    )
+                    continue
+                continue
             for f in fragments(q):
                 cls = fragment_class(f, full_text, full_nopunct)
                 if cls == "missing":
