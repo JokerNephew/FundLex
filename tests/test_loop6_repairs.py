@@ -264,3 +264,76 @@ def test_refutation_gate_reapplied_after_wholesale_rebuild(tmp_path):
     rows = refute_absent_by_variant_evidence(guarded, {"G09": _g09()},
                                              inspection_other, facts=_facts())
     assert guarded[0].state == "absent" and rows == []
+
+
+# ---------------------------------------------------------------------------
+# FL-D699: identity class substitution inside a container is a satisfied no-op
+# ---------------------------------------------------------------------------
+
+def _g02_full():
+    guide = json.loads((Path(__file__).resolve().parents[1] /
+                        "guides/builtin_guide_v1.json").read_text())
+    return next(rule for rule in guide["groups"] if rule["rule_id"] == "G02")
+
+
+def _facts_mixed():
+    """subscription ['A','B'] -> G02:0 expands; service ['C'] -> G02:1 identity."""
+    from fundlex.recall import ClassFact, Facts
+    return Facts(fund_type="open_regular", fund_type_quote="某某混合型基金基金合同",
+                 fund_type_basis="标题",
+                 classes=(ClassFact(name="A类基金份额", subscription_fee=True,
+                                    service_fee=False, current=True, rate="1.2%", quote="A类"),
+                          ClassFact(name="B类基金份额", subscription_fee=True,
+                                    service_fee=False, current=True, rate="1.5%", quote="B类"),
+                          ClassFact(name="C类基金份额", subscription_fee=False,
+                                    service_fee=True, current=True, rate="0.4%", quote="C类")),
+                 floating_management_fee=False, floating_quote="本基金合同经中国证监会核准。",
+                 floating_basis="无浮动安排", notes="",
+                 quotes_verified={"floating": True}, problems=(),
+                 fact_status={"share_class_structure": "VERIFIED",
+                              "subscription_fee_group": "VERIFIED",
+                              "service_fee_group": "VERIFIED"})
+
+
+def test_identity_composite_class_substitution_closes_satisfied(tmp_path):
+    """B05 loop-7 shape: G02:0 instantiated == reference -> satisfied-noop."""
+    from fundlex.recall import plan_edits
+    inspection = _inspect(tmp_path, "src", [P118, P119])
+    target = _composite_target()
+    rule = _g02_full()
+    plan = plan_edits({"G02": rule}, [target], inspection, _facts(), None,
+                      max_compose_calls=0)
+    assert target.state == "satisfied"
+    assert "CLASS_SUBSTITUTION_IDENTITY_NOOP" in target.reason
+    assert plan["edits"] == []
+    assert plan["ledger"][0]["status"] == "satisfied"
+    assert plan["ledger"][0]["reason"] == "class_substitution_identity_noop"
+
+
+def test_mutation_non_identity_op_does_not_collapse(tmp_path):
+    """Expanded group keeps the target live and the scope guard fails closed."""
+    from fundlex.recall import plan_edits
+    inspection = _inspect(tmp_path, "src", [P118, P119])
+    target = _composite_target()
+    plan = plan_edits({"G02": _g02_full()}, [target], inspection, _facts_mixed(), None,
+                      max_compose_calls=0)
+    assert target.state == "needs_edit"
+    assert plan["edits"] == []
+    assert plan["ledger"][0]["status"] == "unresolved"
+    assert plan["ledger"][0]["reason"] == "RECALL_COMPOSITE_REPLACE_SCOPE_UNPROVEN"
+
+
+def test_identity_helper_guards():
+    from fundlex.recall import target_class_ops_identity
+    rule = _g02_full()
+    assert target_class_ops_identity(rule, ["G02:0"], _facts()) is True
+    assert target_class_ops_identity(rule, ["G02:1"], _facts()) is True
+    assert target_class_ops_identity(rule, ["G02:0"], _facts_mixed()) is False
+    plain = {"rule_id": "G99", "operations": []}
+    assert target_class_ops_identity(plain, ["G99:0"], _facts()) is False
+    unverified = _facts_mixed()
+    object.__setattr__(unverified, "fact_status",
+                       {"share_class_structure": "VERIFIED",
+                        "subscription_fee_group": "UNRESOLVED",
+                        "service_fee_group": "VERIFIED"})
+    assert target_class_ops_identity(rule, ["G02:0"], unverified) is False
