@@ -108,14 +108,14 @@
 | frontend/vitest.config.ts | FE 前端主线 | ☐ |
 | frontend/workspace.js | FE 前端主线 | ☐ |
 | fundlex/__init__.py | EN2 引擎审计2线 | ✅ 无发现 |
-| fundlex/api.py | PL1 飞书线 | ☐ |
-| fundlex/api_content.py | PL1 飞书线 | ☐ |
-| fundlex/api_errors.py | PL1 飞书线 | ☐ |
+| fundlex/api.py | PL1 飞书线 | ✅ FL-D900/901/904(在册)+附录F |
+| fundlex/api_content.py | PL1 飞书线 | ✅ 无发现(附录F) |
+| fundlex/api_errors.py | PL1 飞书线 | ✅ 无发现(附录F) |
 | fundlex/applicability.py | EN1 recall线 | ☐ |
 | fundlex/application/__init__.py | EN2 引擎审计2线 | ✅ 无发现 |
 | fundlex/application/task_service.py | EN2 引擎审计2线 | ✅ 无发现 |
 | fundlex/artifact_review.py | EN2 引擎审计2线 | ✅ FL-D921~937:FL-D937 |
-| fundlex/auth.py | PL1 飞书线 | ☐ |
+| fundlex/auth.py | PL1 飞书线 | ✅ 无发现(附录F) |
 | fundlex/checkpoints.py | EN2 引擎审计2线 | ✅ 无发现 |
 | fundlex/compare/__init__.py | CX 比对线 | ☐ |
 | fundlex/compare/align.py | CX 比对线 | ☐ |
@@ -133,8 +133,8 @@
 | fundlex/compare/store.py | CX 比对线 | ☐ |
 | fundlex/compare/text_diff.py | CX 比对线 | ☐ |
 | fundlex/compare/worker.py | CX 比对线 | ☐ |
-| fundlex/config.py | PL1 飞书线 | ☐ |
-| fundlex/db.py | PL1 飞书线 | ☐ |
+| fundlex/config.py | PL1 飞书线 | ✅ 无发现(附录F) |
+| fundlex/db.py | PL1 飞书线 | ✅ 无发现(附录F) |
 | fundlex/delivery.py | EN2 引擎审计2线 | ✅ 无发现 |
 | fundlex/docx.py | EN2 引擎审计2线 | ✅ FL-D921~937:FL-D936 |
 | fundlex/edit_summary.py | EN1 recall线 | ☐ |
@@ -190,21 +190,21 @@
 | fundlex/guide_store.py | EN2 引擎审计2线 | ✅ FL-D921~937:FL-D923 |
 | fundlex/guide_text_diff.py | EN2 引擎审计2线 | ✅ 无发现 |
 | fundlex/html_view.py | EN2 引擎审计2线 | ✅ FL-D921~937:FL-D924 |
-| fundlex/integrations/__init__.py | PL1 飞书线 | ☐ |
-| fundlex/integrations/feishu/__init__.py | PL1 飞书线 | ☐ |
-| fundlex/integrations/feishu/cards.py | PL1 飞书线 | ☐ |
-| fundlex/integrations/feishu/client.py | PL1 飞书线 | ☐ |
-| fundlex/integrations/feishu/events.py | PL1 飞书线 | ☐ |
-| fundlex/integrations/feishu/oauth.py | PL1 飞书线 | ☐ |
-| fundlex/integrations/feishu/onboarding.py | PL1 飞书线 | ☐ |
-| fundlex/integrations/feishu/runtime.py | PL1 飞书线 | ☐ |
-| fundlex/integrations/feishu/service.py | PL1 飞书线 | ☐ |
-| fundlex/integrations/feishu/service_main.py | PL1 飞书线 | ☐ |
-| fundlex/integrations/store.py | PL1 飞书线 | ☐ |
-| fundlex/jobs.py | PL1 飞书线 | ☐ |
-| fundlex/model.py | PL1 飞书线 | ☐ |
-| fundlex/model_budget.py | PL1 飞书线 | ☐ |
-| fundlex/model_settings.py | PL1 飞书线 | ☐ |
+| fundlex/integrations/__init__.py | PL1 飞书线 | ✅ 无发现(附录F) |
+| fundlex/integrations/feishu/__init__.py | PL1 飞书线 | ✅ 无发现(附录F) |
+| fundlex/integrations/feishu/cards.py | PL1 飞书线 | ✅ 无发现(附录F) |
+| fundlex/integrations/feishu/client.py | PL1 飞书线 | ✅ 无发现(附录F) |
+| fundlex/integrations/feishu/events.py | PL1 飞书线 | ✅ FL-D906(附录F) |
+| fundlex/integrations/feishu/oauth.py | PL1 飞书线 | ✅ 无发现(附录F) |
+| fundlex/integrations/feishu/onboarding.py | PL1 飞书线 | ✅ 无发现(附录F) |
+| fundlex/integrations/feishu/runtime.py | PL1 飞书线 | ✅ FL-D906(附录F) |
+| fundlex/integrations/feishu/service.py | PL1 飞书线 | ✅ FL-D903扩展(附录F) |
+| fundlex/integrations/feishu/service_main.py | PL1 飞书线 | ✅ 无发现(附录F) |
+| fundlex/integrations/store.py | PL1 飞书线 | ✅ FL-D903扩展(附录F) |
+| fundlex/jobs.py | PL1 飞书线 | ✅ 无发现(附录F) |
+| fundlex/model.py | PL1 飞书线 | ✅ 无发现(附录F) |
+| fundlex/model_budget.py | PL1 飞书线 | ✅ 无发现(附录F) |
+| fundlex/model_settings.py | PL1 飞书线 | ✅ 无发现(附录F) |
 | fundlex/models/__init__.py | EN2 引擎审计2线 | ✅ 无发现 |
 | fundlex/models/config.py | EN2 引擎审计2线 | ✅ FL-D921~937:FL-D922/937 |
 | fundlex/models/roles.py | EN2 引擎审计2线 | ✅ FL-D921~937:FL-D936 |
@@ -236,9 +236,9 @@
 | fundlex/semantic_contract.py | EN2 引擎审计2线 | ✅ FL-D921~937:FL-D927 |
 | fundlex/semantic_evidence.py | EN1 recall线 | ☐ |
 | fundlex/stage_replay.py | EN2 引擎审计2线 | ✅ 无发现 |
-| fundlex/store.py | PL1 飞书线 | ☐ |
+| fundlex/store.py | PL1 飞书线 | ✅ 无发现(附录F) |
 | fundlex/targeting.py | EN1 recall线 | ☐ |
-| fundlex/tasks.py | PL1 飞书线 | ☐ |
+| fundlex/tasks.py | PL1 飞书线 | ✅ 无发现(附录F) |
 | fundlex/trace_sink.py | EN2 引擎审计2线 | ✅ FL-D921~937:FL-D936 |
 | fundlex/upload_guard.py | EN2 引擎审计2线 | ✅ FL-D921~937:FL-D925 |
 | fundlex/upload_validation.py | EN2 引擎审计2线 | ✅ 无发现 |

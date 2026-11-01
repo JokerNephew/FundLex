@@ -8627,3 +8627,60 @@ H＝E×…
 - **状态**：复核完成，并入请求已报主线（证据=/tmp/opencode/qa/status/qa-recall-miss.md §FL-D982 + /tmp/opencode/qa/holdout-fix-matrix/bh07-v3）；FL-D869 未并入 r2 冻结版之定案维持，作 r3 引擎成分候选。
 - **变更记录 2026-11-01（第七轮·全覆盖令，只读复审计）**：按 `docs/COVERAGE_MATRIX_20261101.md`（主线 3cab25b）对 V2 全部 10 页面域 + 50 文件（矩阵 49 + 自产 lib/issueText.ts）在同一基线 3fce104 上逐项签认零遗漏，未改任何代码；新发现 18 项编号 V2M-01～V2M-18（裁决级 3：V2M-01 ApiError 裸错误码冒泡 / V2M-02 `--accent*` 死引用 6 处 / V2M-07 路由与初始化兜底；直接修建议级 7；登记观察级 8），登记于 `docs/frontend/V2_COVERAGE_SIGNOFF_20261101.md`（不占本册号段），修复待下轮令后并入本条目。
 - **变更记录 2026-11-01（第二棒：矩阵签认+双标清查）**：主线并入后复核（ComparePage 尊重删除→继任 CompareListPage/CompareNewPage/CompareTaskPage/shared 四文件逐行补签）；矩阵 A 节 V2 10 域+B 节 49 行全部 ☐→✅ 签认；FL-D880~896 V1 标准逐条对标 V2（结论：无 V1 已修 V2 落后硬伤，跨线提示 V1 侧 3 项欠债）；按「双标即登记修复」修复 V2M-02（--accent*→--brand* 6 处）/V2M-03（10px×2→--text-2xs）/V2M-10（CompareListPage 徽章 tone）/V2M-19（查看器 kicker 词典统一）；新登记 V2M-19~21；四闸全绿（tsc 0/vitest 24/24/build/浏览器对比用例 PASS）。详见签认表 4.1~4.5 与附录第三轮。
+## FL-D900 api.py 上传路由残留死代码 reasons 映射表（后端普查）
+
+- **发现日期**：2026-11-01（第七轮饱和式普查·后端非引擎域，qa-backend-audit）。
+- **问题与影响**：`fundlex/api.py:1413` 在 `upload_task` 内构造 `reasons = {"only DOCX files are supported": "UNSUPPORTED_FILE_FORMAT", ...}` 九项「旧错误消息→错误码」映射，全文件仅此一处出现，从未被读取——现行路径已直接用 `UploadValidationError.code`（行 1428 `error = exc.code`）。无功能影响，属演进残留死代码，误导读者以为还有消息串匹配逻辑。
+- **处理方法**：建议删除该字面量（纯删，行为不变）。
+- **状态**：已登记，待修复（低风险快改）。
+- **下一步**：随后端任一批次顺手删除；无需专门回归（引用为零可静态证明）。
+
+## FL-D901 模型设置三处中文 422 detail 被稳定错误信封吞掉（用户不可见）
+
+- **发现日期**：2026-11-01（后端普查，api×api_errors×前端封装交叉核对）。
+- **问题与影响**：`fundlex/api.py:1269/1277/1279` 三处 `raise HTTPException(422, "模型配置无法保存，请检查供应商、模型和访问密钥。"/"请先填写有效的供应商、模型和访问密钥；服务地址须为公网 HTTPS 地址。")`。但全局信封（`api_errors.code_from_detail` + `api.py:572 api_error_response`）只把匹配 `^[A-Z0-9_]+$` 的 detail 当稳定码，中文长句一律归为 `INVALID_REQUEST`，响应 `message/detail` 均为通用文案/码；前端 `reason()` 映射表亦无 `INVALID_REQUEST`/`MODEL_SETTINGS_INVALID` 条目 → 用户实际只见「请求或文件无法处理。」，路由作者写的具体修复指引（查供应商/密钥/HTTPS 地址）不可达。影响面：模型配置保存与验证连接失败时的排障指引缺失，恰是用户高频踩坑点。
+- **处理方法**：建议改为稳定码路径——`MODEL_SETTINGS_INVALID`/`MODEL_CONNECTION_INVALID`（`raise_api_error` 已支持），并把对应中文指引补进前端 `reasons` 表；或信封增加「安全 detail 白名单」通道。禁直接回传异常原文。
+- **状态**：已登记，待产品定口径后修复。
+- **下一步**：与前端线确认 reason 表增补条目，一处后端+一处前端同步改。
+
+## FL-D902 guide_store canary/parse_report 增强失败完全静默（可观测性缺口）
+
+- **发现日期**：2026-11-01（后端普查 AST 扫描 38 处吞错逐批复核收尾）。
+- **问题与影响**：`fundlex/guide_store.py:221`（executability canary 产 needs_review 复核维度）与 `:233`（block_report 产块级解析报告）两处 `except Exception: pass`（noqa: BLE001）。定位是 advisory 增强、失败不阻塞主错误路径——方向正确；但**无任何日志**：canary 自身坏掉（如依赖变更）时，needs_review 标记静默消失，审核面出现假干净，排查无线索。
+- **处理方法**：建议两处至少 `LOGGER.debug/warning("canary/block_report 附加信息生成失败", exc_info=True)`，不改变 best-effort 语义。
+- **状态**：已登记，待修复（低风险）。
+- **下一步**：同 guide_store 下次改动一并补日志。
+
+## FL-D903 飞书线 4 处持久化/清理失败静默无日志（原 discard_draft_files 扩展）
+
+- **发现日期**：2026-11-01（后端普查 service.py 吞错现场复核；2026-11-01 全覆盖矩阵签认轮扩展定案）。
+- **问题与影响**：飞书线共有 4 处「持久化/清理失败静默」同族问题，集中修复时一并处理：
+  1. `fundlex/integrations/feishu/service.py:834/899/942`（共 3 处）任务/对比/指引建卡成功后 `discard_draft_files(...)` 的 `except Exception: pass` 无日志。失败后果仅是草稿文件孤儿（retention 兜底，无功能损害）；但 DB/文件清理持续失败（如磁盘满、锁）时无任何痕迹，只有孤儿文件堆积这一滞后信号。
+  2. `fundlex/integrations/store.py:449` `add_draft_file` 与 `:606` `add_outbox` 的 `except Exception: return False` 无日志。调用方不检查返回值：draft 文件行丢失时用户在卡片上看不到已传文件可重发自愈；outbox 行丢失时通知少发，凭借指纹/dedupe 机制下轮 sync 自愈——功能可自愈，但持续故障（如磁盘满）无日志早晚变成用户工单。
+  另：`service.py:sync_tasks:1271` 的 `except Exception: continue`（5 秒轮询循环）对单条 channel 异常无日志，若某 channel 持续坏（如 task 行损坏）会每 5 秒静默重试一次，同属该族可观测性缺口。
+- **处理方法**：建议 4+1 处统一补 `_LOGGER.warning(..., exc_info=True)`（outbox/add_draft_file 处带 dedupe_key/draft_id，sync_tasks 处带 channel id），不改吞错语义本身。
+- **状态**：已登记，待修复（低风险，可观测性专项）。
+- **变更记录**：2026-11-01 全覆盖矩阵签认轮由「834 单点」扩展为「service.py 3 处 + store.py 2 处」并附记 sync_tasks 1 处，行号以当日 HEAD(3cab25b) 为准。
+- **下一步**：随飞书线下次改动补日志；修复后逐处 grep 确认无 `except Exception` 无日志残留，再关档。
+
+## FL-D904 feishu_health 路由用 __import__ 动态探测 worker 存活（脆弱异味）
+
+- **发现日期**：2026-11-01（后端普查，api.py 管理面走查）。
+- **问题与影响**：`fundlex/api.py:1065` `feishu_health` 用 `__import__("fundlex.integrations.feishu.service", fromlist=["active_service"]).active_service() is not None` 判断飞书 worker 进程存活。两处脆弱：①`active_service` 是模块级单例，经 `__import__` 在同一进程内求解——而 admin 健康检查跑在 **API 进程**，worker 是独立 systemd 单元，import 到的只是 API 进程内的副本（通常 None），语义上测不到真实 worker 状态，`service_process_active` 字段长期为 false 或误导；②`__import__` 内联写法绕开模块依赖声明，改名即炸且无静态检查。
+- **处理方法**：建议改为真实跨进程探活（worker 心跳行/lease 记录，integrations store 已有 health() 聚合可承载），或如实把该字段标记为"仅同进程诊断"并改名避免误读。
+- **状态**：已登记，待运维确认现有告警是否依赖该字段后再修。
+- **下一步**：核对生产监控是否消费 `service_process_active`；无消费者则按②改名+注释，有消费者则按①做实。
+
+## FL-D905 后端普查正向结论（饱和令覆盖声明，非问题）
+
+- **发现日期**：2026-11-01（第七轮饱和式普查后端非引擎域收口）。
+- **结论**：对 api 路由（71 个端点）、tasks 生命周期、五 worker plumbing（recall/compare/guide/feishu unit 模板+jobs 租约接管）、鉴权会话（scrypt/时序燃烧/throttle/事务化 last-admin）、静态托管（catch-all 仅重定向不拼路径）、部署脚本（tools/deploy 全部）逐文件走查+AST 扫描 38 处吞错全部现场复核：**无注入面**（SQL 全参数化，f-string 仅白名单标识符/占位符）、**无路径穿越面**（下载三件套白名单+读字节回响应、上传名 Path().name 归一、guide source 库 ID 解析）、**无越权面**（owner 全链路、admin 404 防枚举）、**无硬编码密钥**（部署脚本凭据全经 env/文件引用）。除 FL-D900~904 五项低风险登记外无中高严重度发现。CSP 缺失为既有在册项（api.py:619 注释自引），不重复登记。
+- **状态**：普查完成，结论归档（详见 docs/backend/BACKEND_AUDIT_20261101.md 及附录）。
+
+## FL-D906 飞书 runtime 移除应用依赖 lark 私有 `_disconnect`，无公开断连兜底
+
+- **发现日期**：2026-11-01（全覆盖矩阵 PL1 签认轮，runtime.py/events.py 逐行复核）。
+- **问题与影响**：`fundlex/integrations/feishu/runtime.py:146` `_close_socket` 用 `getattr(ws, "_disconnect", None)` 调 lark-oapi **私有成员**停止长连接。若 SDK 版本改名或移除该私有属性，`disconnect is None` 时静默跳过——`ws.start()` 曾在 `auto_reconnect=True` 下运行，线程不会自然退出。配合 `events.py:91` `build_event_handler` 的 `on_message` 主派发闭包**不查** `entry["active"]`（只有 `on_event`/`_seen` 钩查 active，且仅影响 record_event 计数），后果是：用户在设置页「移除应用」后，若私有断连落空，该应用的长连接仍可继续收发消息并以该应用身份回复，「移除即断连」的删除语义落空（无越权——凭据是用户自己的 app，但删除不生效是产品诚信问题）。当前部署所用 lark-oapi 版本实测含 `_disconnect`（生产在线运行中，第⑤节盘点验证过移除路径代码），属**低概率触发 + 依赖私有 API 的脆弱点**，非已知缺陷。
+- **处理方法**：建议双保险：①`_close_socket` 找不到 `_disconnect` 时 `log.warning` 并改为抛/记录（目前默默跳过）；②`runtime` 给 hash 的 `handler` 闭包加 `lambda data: entry["active"] and <dispatch>` 活跃位检查，使「标记 inactive 后立即停止派发」成为断连之外的第二道闸（active 已在 `_apps.pop` 后由关闭方置 False，检查成本为零）；③如 SDK 提供公开 `stop`/`close` 则优先使用并锁版本。
+- **状态**：已登记，待修复（低风险，产品删除语义 + 私有 API 依赖）。
+- **下一步**：确认锁定 lark-oapi 版本号（requirements）；随 FL-D903 一轮修复时加活跃位检查与日志。

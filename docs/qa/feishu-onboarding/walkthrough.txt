@@ -1,0 +1,116 @@
+screenshot 01-login.png
+registered + logged in as first-time user
+settings entry: 扫码时飞书提示“不是一个企业”？
+
+这说明你的飞书账号属于另一家企业。可以创建属于你自己企业的应用，连上后一样能私聊机器人处理合同。
+
+用我的飞书企业连接
+screenshot 02-settings-entry.png
+step1: 在飞书开放平台创建应用
+1
+打开飞书开放平台并登录
+
+用你平时使用的飞书账号登录；手机号或扫码都可以。
+
+2
+点「创建企业自建应用」
+
+应用名称填 FundLex，简介和图标可以随意填写。
+
+3
+复制两个凭证
+
+进入应用后点「凭证与基础信息」，复制 App ID 和 App Secret，下一步粘贴进来。
+
+需要你是所在企业的管理员。如果应用由同事创建，请让对方把 App ID 和 App Secret 发给你，或把本页步骤转给对方。
+
+打开飞书开放平台 ↗
+我已创建，填写凭证
+screenshot 03-wizard-step1.png
+screenshot 04-wizard-step2-form.png
+wrong-secret diagnosis: App ID 或 App Secret 不正确。
+
+请到飞书开放平台「凭证与基础信息」复制最新的 App Secret；Secret 只显示一次，重装应用会重置。
+
+打开对应页面 ↗
+screenshot 05-wizard-step2-error.png
+verified; summary: 正在连接你自己的飞书企业
+
+FundLex · 等待你在飞书里发消息
+
+查看连接
+step4: 在飞书里给机器人发一句话
+
+打开飞书，搜索机器人 FundLex，给它发送「你好」。我们会自动检测，不需要你再回来点按钮。
+
+正在建立连接…
+
+保存后一般 5 秒内完成。如果超过 1 分钟，请回到第 3 步检查「长连接」和「发布版本」。
+
+查看配置状态
+移除这个应用
+screenshot 06-wizard-step4-waiting.png
+step3: 补齐能力并发布
+
+当前应用：FundLex
+
+1
+添加权限
+已完成
+
+在「权限管理」搜索并添加下面 3 个权限。可以一次复制全部，逐个粘贴到搜索框。
+
+✓
+im:message:send_as_bot
+以应用身份发消息
+✓
+im:message.p2p_msg:readonly
+读取用户发给机器人的单聊消息
+✓
+im:resource
+获取消息中的资源文件
+复制权限清单
+打开权限管理 ↗
+2
+启用机器人
+已完成
+
+打开「机器人」，把「启用机器人」打开。没有这一步，飞书里搜不到 FundLex。
+
+打开机器人设置 ↗
+3
+设置事件订阅
+待验证
+
+「事件与回调」→ 订阅方式选 使用长连接接收事件 → 添加事件 接收消息 im.message.receive_v1。长连接不需要填任何服务器地址。
+
+打开事件与回调 ↗
+4
+发布版本
+必须完成
+
+「版本管理与发布」→ 创建版本 → 申请发布。企业管理员审核通过后，权限和机器人能力才会生效。
+
+打开版本管理 ↗
+我已配置好，重新检测
+重新填写凭证
+返回测试步骤
+screenshot 07-wizard-step3-checks.png
+reenter form: app id prefilled, secret empty
+screenshot 10-wizard-reenter.png
+binding code panel: 最后一步：把绑定码发给机器人
+
+复制下面的绑定码，在飞书私聊里发给机器人。发送后会立即绑定，本页自动完成。
+
+EZC3RY9N9VSR
+复制绑定码
+换一个
+
+绑定码 30 分 00 秒内有效；过期后点“换一个”。
+screenshot 09-wizard-binding-code.png
+status api keys: app_id,app_name,binding,bot_enabled,bot_name,checks,configured,created_at,error,first_event_at,guide,missing_scopes,runtime_connected,scopes_checked,stage,tenant_name,verified_at,warnings
+stage=active bot=FundLex scopes_checked=True missing=[]
+db cipher prefix=gAAAAABq5i length=140
+screenshot 08-wizard-narrow.png
+console errors: Failed to load resource: the server responded with a status of 422 (Unprocessable Entity)
+console errors: Failed to load resource: the server responded with a status of 422 (Unprocessable Entity)
