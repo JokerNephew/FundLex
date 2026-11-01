@@ -56,6 +56,15 @@ HARD_CODES = frozenset({
 
 FACT_BLOCKED_CODES = frozenset({"FACT_UNKNOWN", "FACT_CONFLICT", "FACT_NOT_VERIFIED"})
 
+
+def _fact_code_blocked(code: str) -> bool:
+    """A Finding (or a router ``fallback_reason`` like ``FACT_NOT_VERIFIED:a,b``)
+    blocks when its *code prefix* is blocked (FL-D937(8)): the router emits the
+    reason as a code-plus-list string, so exact-set membership alone can never
+    match it."""
+    raw = str(code or "")
+    return raw.split(":", 1)[0] in FACT_BLOCKED_CODES
+
 _FAILURE_CLASSES = {
     "MISSING_REQUIRED_TERM": "GENERATION",
     "OUTSIDE_SPAN_CHANGED": "GENERATION",
@@ -117,7 +126,7 @@ class ValidationReport:
 
     @property
     def verdict(self) -> str:
-        if any(finding.code in FACT_BLOCKED_CODES for finding in self.findings):
+        if any(_fact_code_blocked(finding.code) for finding in self.findings):
             return "UNKNOWN"
         if any(record.explanation == "UNEXPLAINED_HARD" for record in self.changes):
             return "FAIL"
