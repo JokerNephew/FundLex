@@ -184,3 +184,7 @@
   - ✅ `2b0cb28` GG(qa-gg-audit) 总攻文档 13 件摘收（纯 docs；DETAIL_APPEND_GG_AUDIT 冲突 1 处按并集先例解决）
   - ✅ `fabff06` EVAL(qa-feat-recall) A2/A3 文档 6 件摘收（纯 docs；剔除碰治理档 3 commit 已上报）
   - ⏳ 阻塞：qa-frontend-v2（D991 已过验收，但增量含 DETAIL_ISSUES/package.json/package-lock.json 治理+lock 三件套，待总指挥逐件明示）；qa-frontend-c（待 ACCEPT-FL-D990/994 + node_modules 软链回潮需该线先清）；qa-audit-platform（PL2 待放行条）
+  - ✅ `1ce3014` V2·FL-D991 并入（放行令①；vitest 35/35+build 绿；治理三件套随令知情并入；集中册冲突并集先例×1）
+  - ✅ `80c2234` FE-C·FL-D989 并入（放行令②，仅 D989 粒度；990/992/994 排除；node_modules 软链回潮按质检 P1 删除意图剔除）
+  - 📒 INT-LOG #5 含一则工作树事故诚实留痕（untracked 依赖目录误删→npm ci 重建复绿；零 git 跟踪内容损失）
+  - ⏳ 余阻塞：PL2 放行条仍缺；D990/992/994、D992 比对列表侧（CX）待验收
