@@ -54,8 +54,6 @@ class ModelCassette:
         task = str(request["task_type"])
         if not re.fullmatch(r"[a-zA-Z0-9_]+", task):
             raise FrozenError("MODEL_CASSETTE_TASK_INVALID")
-        identity = {key: request[key] for key in
-                    ("task_type", "prompt_version", "configured_model", "context_sha256")}
         return self.directory / task / (digest(request) + ".json")
 
     def request_lock(self, request: dict) -> Any:
