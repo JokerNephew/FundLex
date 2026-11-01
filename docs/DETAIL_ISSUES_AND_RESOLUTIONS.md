@@ -8184,6 +8184,91 @@ H＝E×…
 - **二跑复测（2026-11-01，`fl-d695-b15-recheck2/`，$0.0268/23c/185s）**：同合同同引擎 G11 三义务全 CLOSED（B1:O1 ARTIFACT_VERIFIED、B1:O2 ALREADY_SATISFIED via claim_replay），delivery=complete——单发解释成立（模型 schema 抖动），不升级解剖。
 - **状态**：观察项（二跑未复发）；后续同形态在不同合同/不同 loop 再发时按 compose 校验字段定位升级。
 
+---
+
+## FL-D803 全站工作字体族双轨（V1 Segoe UI 系 vs V2 Inter 系）（2026-11-01，qa-frontend 第三轮）
+
+- **日期**：2026-11-01
+- **问题与影响**：V1 `body{font:14px "Segoe UI","Microsoft YaHei UI","PingFang SC"}`（app.css:2）与 V2 `Inter,"Noto Sans SC",system-ui`（src/styles/tokens.css:2）字体族不同——同为 13px 表体，视觉字号、字形灰度、数字宽度全不同，是用户「列表字体不同/看起来没改」根因之一。上轮 token 口径无法发现。
+- **证据**：`/tmp/opencode/qa/screenshots/design-audit-20261101/list-v1-overview.png` vs `list-v2-tasks.png` 并排对照。
+- **处理方法**：统一为 `Inter,"PingFang SC","Microsoft YaHei UI","Noto Sans SC",system-ui,sans-serif`（以 V2 栈为准、增中文回落），记入改动档。
+- **状态**：已登记，随批3 施工。
+
+## FL-D804 指引生成列表 .gg-table 独立散写（列表追责直证）（2026-11-01，qa-frontend 第三轮）
+
+- **问题与影响**：guide_generation.css:36/50-54 自建列表体系：表体 12px（全站 13px）、td padding 12px（token 10/12）、hover `#fdfbf9`（异色温）、容器自画圆角边框、行尾「查看」用框式 .btn-sm（其余列表为文本链接）。上轮漏网。
+- **证据**：`design-audit-20261101/list-v1-generation.png`。
+- **处理方法**：废除 .gg-table 收编 .table；hover 色改 `--surface-soft` 记档。
+- **状态**：已登记，随批3 施工。
+
+## FL-D805 合同比对·合同组选择器游离列表语言（2026-11-01，qa-frontend 第三轮）
+
+- **问题与影响**：compare.js:74 合同组渲染为按钮式卡条 `.compare-pair-status`（圆点编号+双行文本），非列表行语言（compare.js:74）；且被折叠（联动 FL-D813）。
+- **处理方法**：重设计为列表行规格（编号+双侧文件名+状态徽标），平铺直呈。
+- **状态**：已登记，随批3/批4 施工。
+
+## FL-D806 V2 Pagination 组件句式未统一（批2 漏网）（2026-11-01，qa-frontend 第三轮）
+
+- **问题与影响**：批2 统一了 V1 workspace/gg 分页句式，V2 Tasks Pagination 组件仍输出「第 1 / 2 页」独立句式（test_frontend_v2.py:503 锚定）。全站分页仍两套。
+- **处理方法**：V2 Pagination 收敛「共 N 条 · 第 x / y 页」+每页 select 对齐规格；测试锚改语义断言。
+- **状态**：已登记，随批3 施工。
+
+## FL-D807 V1 输入框/下拉无 hover/focus 状态态（用户"很丑"实锤）（2026-11-01，qa-frontend 第三轮）
+
+- **问题与影响**：V1 `input[type=search],select`（app.css:4）仅 rest 态：无 hover 边色、无聚焦环/聚焦边色、select 原生无 chevron。
+- **证据**：`design-audit-20261101/input-v1-rest/hover/focus.png` 三态截图——focus 与 rest 无视觉差别。
+- **处理方法**：按组件令牌 3.1 全状态矩阵补齐（聚焦环 rgba(181,71,30,.14)）。
+- **状态**：已登记，随批2 施工。
+
+## FL-D808 V1/V2 控件规格相互不一致 + V2 内部分裂（2026-11-01，qa-frontend 第三轮）
+
+- **问题与影响**：①select 形态 V1 原生 vs V2 自定义 chevron；②V2 内部 `.form-stack input` radius 8px（src/styles/app.css:61）vs 全局 6px；③hover 边色 `#aeb8c1` vs `#aeb7c0` 近色双值；④占位/禁用/选项行高/滚动容器两形态皆未规格化。
+- **处理方法**：按令牌 3.1 双端统一；近色并值与 8px→6px 双项记档。
+- **状态**：已登记，随批2 施工。
+
+## FL-D809 动效散写无统一令牌（2026-11-01，qa-frontend 第三轮）
+
+- **问题与影响**：全端 15+ 种散写 transition（`.12s/.15s/.16s/.05s` 混杂、ease 与默认缓动混排）、一处 `none!important`、2 处 width/height 盒尺寸 transition（布局抖动源）、无时长/缓动令牌。
+- **处理方法**：动效令牌表收敛（三档时长+唯一缓动+允许属性集）。
+- **状态**：已登记，随批1 施工。
+
+## FL-D810 弹层/页面切换无动效 + 孤立动画语言（2026-11-01，qa-frontend 第三轮）
+
+- **问题与影响**：全部弹层显隐瞬切、页面切换瞬切，与 toast-in/feishu-pulse/spin 三套孤立动画并存——断裂感；prefers-reduced-motion 仅 toast 一处。
+- **处理方法**：弹层背板 fade 200ms+面板 250/150ms；页面进场 200ms；加载动画收编；reduced-motion 全站。
+- **状态**：已登记，随批1 施工。
+
+## FL-D811 徽标规格双形态 + V2 二次覆盖（2026-11-01，qa-frontend 第三轮）
+
+- **问题与影响**：V1 `.badge` fw700（app.css:4）vs V2 `.status-badge` fw650 且 src/styles/app.css:155 二次覆盖（padding 3px 8px+border）——同语义徽标两形态。
+- **处理方法**：统一 `--badge-*`（pill/11px/fw650/3px 9px/无 border），删覆盖（记档）。
+- **状态**：已登记，随批3 施工。
+
+## FL-D812 三禁令·V1 overview「第一次使用」常驻引导卡（2026-11-01，qa-frontend 第三轮）
+
+- **问题与影响**：compare.html:253 常驻引导卡对所有用户展示，老用户冗余——「不需要的信息直接删」对象；列表空态已有引导。
+- **处理方法**：删常驻卡、三步并入空态；先 grep 锚点再删。
+- **状态**：已登记，随批4 施工。
+
+## FL-D813 三禁令·compare 合同组折叠藏信息（2026-11-01，qa-frontend 第三轮）
+
+- **问题与影响**：compare.html:582 `.compare-groups-disclosure` 把核心操作对象藏折叠栏——用户明令禁止折叠栏藏信息充数。
+- **处理方法**：折叠废除、平铺直呈（联动 FL-D805 行化）。
+- **状态**：已登记，随批4 施工。
+
+## FL-D814 三禁令·全站解释性废话小字逐条裁决（2026-11-01，qa-frontend 第三轮）
+
+- **问题与影响**：V1 compare.html 现存 23 处 `.subnote`+footnote 若干，大量系统语义复述；V2 同类待审。
+- **处理方法**：批4 逐条裁决（删/留+理由），仅保留有用户行动语义者（法务声明、Secret 安全说明）；裁决表入册。
+- **状态**：已登记，随批4 施工。
+
+## FL-D815 三禁令·.tech 技术细节折叠（JSON dump 藏信息）（2026-11-01，qa-frontend 第三轮）
+
+- **问题与影响**：`.tech` `<details>` 输出技术 JSON——对用户无价值且折叠藏信息充数（双重违禁）。
+- **处理方法**：删；确有诊断价值字段转一行明文。
+- **状态**：已登记，随批4 施工。
+
+
 ## FL-D801 发布留存事务自动清理机制（FL-D724 建议项实施）（2026-11-01，主线）
 
 - **实施**：`fundlex-publish.sh` 发布收尾统一调 `prune_retained_transactions`：保留最新 `$FUNDLEX_PUBLISH_RETAINED_KEEP`（默认 3）份事务，其余清删；当前事务自豁免；匹配仅 `.fundlex-publish-*` 前缀不碰别物。
