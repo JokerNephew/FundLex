@@ -10,8 +10,12 @@ moves to the next action or terminates with ``MARK_UNRESOLVED``.
 """
 from __future__ import annotations
 
+import logging
+
 from .history import RecoveryHistory
 from .policies import RecoveryPolicy, load_policy
+
+_LOGGER = logging.getLogger("fundlex.recovery")
 from .types import FailureClass, RecoveryAction, RecoveryAttempt, RecoveryContext, RecoveryDecision
 
 _A = RecoveryAction
@@ -172,7 +176,11 @@ class RecoveryOrchestrator:
             try:
                 succeeded, detail = handler(decision.action, context)
             except Exception as exc:  # noqa: BLE001 - recorded, never swallowed silently
-                succeeded, detail = False, f"{type(exc).__name__}:{exc}"
+                # The history detail feeds user-facing reports: keep the
+                # exception type only, push the raw message to the log
+                # (FL-D925, raw exception text must not reach users).
+                succeeded, detail = False, type(exc).__name__
+                _LOGGER.warning("recovery handler failed: %s", exc, exc_info=True)
             self.record(history, context, decision,
                         outcome="succeeded" if succeeded else "failed", detail=detail)
             if succeeded:

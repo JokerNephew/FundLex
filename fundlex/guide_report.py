@@ -62,12 +62,16 @@ _STATUS_TEXT = {
 
 
 def _explain(code: str) -> dict[str, str]:
+    # User wording stays human; the raw technical code/inner message only ever
+    # travels in the ``code`` annotation field (FL-D925, backend zh+code 口径).
     if code.startswith(_MODEL_FAILED_PREFIX):
-        inner = code.split(":", 1)[1]
-        return {"zh": f"模型服务调用失败（{inner}）",
-                "remedy": "多为服务暂不可用或限流，稍后重试解析；持续出现请联系支持"}
-    return CODE_EXPLANATIONS.get(code, {"zh": f"未归类问题（{code}）",
-                                        "remedy": "重试解析；持续出现请联系支持"})
+        return {"zh": "模型服务调用失败",
+                "remedy": "多为服务暂不可用或限流，稍后重试解析；持续出现请联系支持",
+                "code": code}
+    if code in CODE_EXPLANATIONS:
+        return CODE_EXPLANATIONS[code]
+    return {"zh": "未归类问题",
+            "remedy": "重试解析；持续出现请联系支持", "code": code}
 
 
 def explain_code(code: str) -> dict[str, str]:
