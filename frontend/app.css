@@ -368,12 +368,11 @@ button.footer-link:hover{color:var(--accent-dark);text-decoration:underline}
   .page-actions{align-items:flex-start;flex-wrap:wrap}.object-title,.section-title .object-title,.detail-head .object-title,.gg-workspace .object-title{font-size:20px}
 }
 
-/* Contract review opens as a centered panel covering only the main content
-   area (R2-F01): the shell topbar (with the breadcrumb) and sidebar stay
-   clickable, so review never blocks workspace navigation. */
-.detail-overlay.inline-contract-detail:has(.review-layout){position:fixed!important;top:64px!important;right:0!important;bottom:0!important;left:252px!important;z-index:140!important;display:grid!important;place-items:center;padding:20px!important;background:rgb(16 24 32 / .54)!important}
+/* Contract review opens as a full-screen modal (FL-D987b, 用户方向「全屏弹窗很好」):
+   刀前形态 8b1dc2f~1 复原——遮罩铺满视口、大面板居中，topbar/sidebar 被遮罩。 */
+.detail-overlay.inline-contract-detail:has(.review-layout){position:fixed!important;inset:0!important;z-index:140!important;display:grid!important;place-items:center;padding:20px!important;background:rgb(16 24 32 / .54)!important}
 .detail-overlay.inline-contract-detail:has(.review-layout) #close-detail{display:inline-flex!important}
-#detail-panel:has(.review-layout){width:min(1600px,100%);height:min(1000px,100%);max-width:none;max-height:none;border:1px solid #c9d1d8;border-radius:14px;box-shadow:0 28px 90px rgb(10 17 24 / .38);overflow:hidden;display:flex;flex-direction:column}
+#detail-panel:has(.review-layout){width:calc(100vw - 40px);height:calc(100vh - 40px);max-width:1600px;max-height:1000px;border:1px solid #c9d1d8;border-radius:14px;box-shadow:0 28px 90px rgb(10 17 24 / .38);overflow:hidden;display:flex;flex-direction:column}
 #detail-panel:has(.review-layout) .detail-head{flex:0 0 auto}
 #detail-panel:has(.review-layout) .detail-body{display:flex;flex-direction:column;flex:1;min-height:0;padding:0;overflow:hidden}
 #detail-panel:has(.review-layout) .review-layout{display:grid;flex:1;min-height:0;grid-template-columns:minmax(0,1fr) 360px;align-items:stretch;gap:14px;padding:16px 16px 0}
@@ -391,11 +390,9 @@ button.footer-link:hover{color:var(--accent-dark);text-decoration:underline}
   #detail-panel:has(.review-layout) .rev-list{max-height:38vh}
 }
 @media(max-width:760px){
-  /* Mobile shell: 96px topbar (with breadcrumb row) + 57px sidebar bar.
-     Selector must match the `.inline-contract-detail` base rule's specificity
-     (both declarations are !important, so a weaker selector would lose). */
-  .detail-overlay.inline-contract-detail:has(.review-layout){top:153px!important;left:0!important;padding:6px}
-  #detail-panel:has(.review-layout){width:calc(100vw - 12px);height:calc(100% - 12px);border-radius:10px}
+  /* FL-D987b：移动端同样全屏（不留 top:153px 主区内嵌口）。 */
+  .detail-overlay.inline-contract-detail:has(.review-layout){padding:6px!important}
+  #detail-panel:has(.review-layout){width:calc(100vw - 12px);height:calc(100vh - 12px);max-width:none;max-height:none;border-radius:10px}
   #detail-panel:has(.review-layout) .review-layout{padding:10px 12px 0}
   #detail-panel:has(.review-layout) .review-actions{margin:8px 12px 0}
   #detail-panel:has(.review-layout)>.detail-body>p.subnote{padding:0 12px 10px;max-height:80px}
@@ -738,11 +735,6 @@ body:has(.detail-overlay.inline-contract-detail:not([hidden]) .review-layout){ov
     justify-content:center!important;
     align-items:center!important;
   }
-}
-@media(min-width:761px) and (max-width:1180px){
-  /* Sidebar narrows to 218px at this breakpoint; keep the review overlay
-     flush with it so no unclickable sliver of main content shows through. */
-  .detail-overlay.inline-contract-detail:has(.review-layout){left:218px!important}
 }
 #detail-panel:has(.review-layout) .review-doc>*{max-width:920px;margin-left:auto;margin-right:auto}
 /* Compact reader chrome: preserve controls, return height to the document. */

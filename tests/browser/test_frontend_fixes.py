@@ -138,11 +138,9 @@ def test_contract_detail_closes_back_to_task_via_escape_and_background(browser, 
         context.close()
 
 
-def test_review_overlay_flushes_with_sidebar_across_breakpoints(browser, live_dev):
-    """R2-F01 复核收尾：review overlay 左边距必须始终贴合侧栏宽度。
-
-    >1180px 侧栏 252px、761-1180px 侧栏 218px、<761px 顶栏 153px。
-    """
+def test_review_overlay_全屏大画布_across_breakpoints(browser, live_dev):
+    """FL-D987b 全屏回归：用户「全屏弹窗很好」——overlay 必须铺满整个视口（inset 全 0），
+    且面板覆盖视口的 ≥96%（桌面）/全视口（移动），不再留 topbar/sidebar 主区内嵌口。"""
     _app, base = live_dev
     context, page, errors = _dev_page(browser)
     install_api(page, base_api(_paused_task_scenario()))
@@ -153,15 +151,19 @@ def test_review_overlay_flushes_with_sidebar_across_breakpoints(browser, live_de
         page.locator("[data-action='open-review']").click()
         overlay = page.locator("#detail-overlay")
         overlay.locator(".review-layout").wait_for(state="visible")
-        box = lambda: overlay.evaluate("el => ({left: el.getBoundingClientRect().left, "
-                                       "top: el.getBoundingClientRect().top})")
-        assert box()["left"] == 252
-        page.set_viewport_size({"width": 1000, "height": 900})
-        assert box()["left"] == 218
-        page.set_viewport_size({"width": 390, "height": 844})
-        mobile = box()
-        assert mobile["left"] == 0
-        assert mobile["top"] == 153
+        for vw, vh in [(1440, 900), (1000, 900), (390, 844)]:
+            page.set_viewport_size({"width": vw, "height": vh})
+            box = overlay.evaluate("el => ({left: el.getBoundingClientRect().left, "
+                                   "top: el.getBoundingClientRect().top, "
+                                   "width: el.getBoundingClientRect().width, "
+                                   "height: el.getBoundingClientRect().height, "
+                                   "position: getComputedStyle(el).position})")
+            assert box["position"] == "fixed"
+            assert box["left"] == 0 and box["top"] == 0, f"视口 {vw}x{vh} 下 overlay 未铺满：{box}"
+            assert box["width"] == vw and box["height"] == vh, f"视口 {vw}x{vh} 下 overlay 未铺满：{box}"
+            panel = page.locator("#detail-panel").bounding_box()
+            assert panel["width"] * panel["height"] >= (vw * vh) * (0.9 if vw < 761 else 0.8), \
+                f"视口 {vw}x{vh} 下面板覆盖率不足：{panel}"
         assert not errors, errors
     finally:
         context.close()

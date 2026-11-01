@@ -608,7 +608,8 @@ def test_revision_pair_checkbox_keyboard_and_insert_navigation(ui):
     page.locator('[data-action="open-review"]').click()
     page.wait_for_selector("#review-doc")
     assert not page.locator('[data-rev-toggle="4"]').is_checked()
-    page.locator('#breadcrumb [data-crumb="task"]').click()
+    # FL-D987b：审查已恢复全屏弹窗，面包屑被遮罩；先 Esc 关闭审查再验证。
+    page.keyboard.press("Escape")
     page.keyboard.press("a")
     assert page.locator("#detail-overlay").is_hidden()
 
@@ -643,7 +644,8 @@ def test_old_review_failure_cannot_overwrite_new_report(ui):
             break
         page.wait_for_timeout(50)
     assert pending
-    page.locator('#breadcrumb [data-crumb="task"]').click()
+    # FL-D987b：审查已恢复全屏弹窗，面包屑被遮罩；Esc 关审查后重开第二个文档详情。
+    page.keyboard.press("Escape")
     page.locator("#doc-rows [data-detail]").nth(1).click()
     page.wait_for_selector('[data-action="open-review"]')
     pending[0].fulfill(status=503, json={"detail": "fixture failure"})
@@ -816,7 +818,8 @@ def test_generation_blocks_duplicate_requests_and_late_reply(ui):
     assert page.locator('[data-action="generate-selected"]').is_disabled()
     page.keyboard.press("r")
     assert page.locator('[data-rev-toggle="1"]').is_checked()
-    page.locator('#breadcrumb [data-crumb="task"]').click()
+    # FL-D987b：审查已恢复全屏弹窗，面包屑被遮罩；Esc 关审查再开另一文档详情。
+    page.keyboard.press("Escape")
     page.locator("#doc-rows [data-detail]").nth(1).click()
     page.wait_for_selector('[data-action="open-review"]')
     pending[0].fulfill(json={"accepted": [1, 4], "rejected": [], "download_url": "/api/ui-fixture/selected"})
