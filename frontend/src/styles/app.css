@@ -25,7 +25,7 @@
 .ui-button--danger { border-color: #d89a95; color: var(--danger); }
 .ui-spinner { display: inline-block; width: 18px; height: 18px; border: 2px solid var(--brand-soft-strong); border-top-color: var(--brand); border-radius: 50%; animation: spin .7s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
-.status-badge { display: inline-flex; align-items: center; padding: var(--badge-pad); border-radius: var(--badge-radius); font-size: var(--badge-size); font-weight: var(--badge-weight); white-space: nowrap; }
+.status-badge { display: inline-flex; align-items: center; padding: var(--badge-pad); border-radius: var(--badge-radius); font-size: var(--badge-size); font-weight: var(--badge-weight); white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 .status-badge--success { background: var(--success-soft); color: var(--success); }
 .status-badge--warning { background: var(--warning-soft); color: var(--warning); }
 .status-badge--info { background: var(--brand-soft); color: var(--brand-dark); }
@@ -645,23 +645,6 @@ input[type="file"]::file-selector-button { margin-right: 10px; border: 1px solid
 
 .compare-diff-spacer{height:0;overflow:hidden;pointer-events:none}
 
-/* Guide rule groups: WYSIWYG enable/disable table (FL-D730). */
-.rule-group-row td { background: var(--list-header-bg); color: var(--list-header-color); font-size: var(--text-xs); font-weight: 700; }
-.rule-group-count { margin-left: var(--space-2); font-weight: 400; }
-.rule-toggle { display: flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; margin: calc(-1 * var(--list-cell-y)) calc(-1 * var(--list-cell-x) / 2); cursor: pointer; }
-.rule-row--disabled td { background: var(--warning-soft); border-bottom-color: var(--warning-soft); }
-.rule-row--disabled td:first-child { box-shadow: inset 3px 0 0 var(--warning); }
-.rule-row--disabled .rule-title { text-decoration: line-through; }
-.rule-detail-row td { padding-top: 0; border-bottom-color: var(--list-row-border); }
-.rule-detail-row:hover { background: transparent; }
-.rule-detail-row.rule-row--disabled td { border-bottom-color: var(--warning-soft); }
-.rule-detail { border-top: 1px dashed var(--border-strong); }
-.rule-detail > .rule-requirement { border-top: 0; padding-top: 0; }
-.rule-requirement { margin: 0; color: var(--ink); font-size: var(--text-sm); line-height: var(--leading-normal); }
-.rule-operations { display: grid; gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
-.rule-operations li { display: flex; align-items: baseline; gap: var(--space-2); }
-.rule-operation-detail { color: var(--muted); overflow-wrap: anywhere; }
-
 /* Model settings: read-mode role cards with on-demand edit forms (FL-D732). */
 .model-role-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); align-items: start; }
 .model-role-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-3); margin-bottom: var(--space-4); }
@@ -690,33 +673,33 @@ input[type="file"]::file-selector-button { margin-right: 10px; border: 1px solid
 .inline-kpi { display: inline-flex; align-items: baseline; gap: var(--space-1); color: var(--muted); font-size: var(--text-xs); }
 .inline-kpi b { color: var(--ink); font-size: var(--text-sm); }
 
-/* ── 指引版本对比（规则差异 + 原文比对）────────────────────────── */
-.guide-diff-tabs{display:flex;gap:4px;border-bottom:1px solid var(--line,#e3e7ea);margin-bottom:12px}
-.guide-diff-tabs button{border:0;background:none;padding:8px 14px;font:inherit;font-size:13px;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px}
-.guide-diff-tabs button.is-active{color:var(--brand,#b5471e);border-bottom-color:var(--brand,#b5471e);font-weight:650}
-.guide-diff-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
-.guide-diff-group{border:1px solid var(--line,#e3e7ea);border-radius:8px;padding:12px;background:#fff}
-.guide-diff-group h3{margin:0 0 8px;font-size:13px}
-.guide-diff-rules{list-style:none;margin:0;padding:0;display:grid;gap:6px;font-size:13px}
-.guide-diff-change{border-top:1px solid var(--line,#e3e7ea);padding:8px 0;font-size:13px}
+/* ── 指引版本对比（规则差异 + 原文比对；令牌唯一规格 FL-D731）────────────────────────── */
+.guide-diff-tabs{display:flex;gap:var(--space-1);border-bottom:1px solid var(--border);margin-bottom:var(--space-3)}
+.guide-diff-tabs button{border:0;background:none;padding:var(--space-2) 14px;font:inherit;font-size:var(--text-sm);color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px}
+.guide-diff-tabs button.is-active{color:var(--brand-dark);border-bottom-color:var(--brand);font-weight:650}
+.guide-diff-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:var(--space-3)}
+.guide-diff-group{border:1px solid var(--border);border-radius:var(--radius-sm);padding:var(--space-3);background:var(--surface)}
+.guide-diff-group h3{margin:0 0 var(--space-2);font-size:var(--text-sm)}
+.guide-diff-rules{list-style:none;margin:0;padding:0;display:grid;gap:6px;font-size:var(--text-sm)}
+.guide-diff-change{border-top:1px solid var(--border);padding:var(--space-2) 0;font-size:var(--text-sm)}
 .guide-diff-change:first-of-type{border-top:0}
 .guide-diff-change summary{cursor:pointer}
-.guide-diff-fields{margin:8px 0 0;display:grid;gap:8px}
-.guide-diff-field dt{font-size:12px;color:var(--muted);margin-bottom:2px}
+.guide-diff-fields{margin:var(--space-2) 0 0;display:grid;gap:var(--space-2)}
+.guide-diff-field dt{font-size:var(--text-xs);color:var(--muted);margin-bottom:2px}
 .guide-diff-field dd{margin:0;display:flex;flex-direction:column;gap:2px}
-.guide-diff-old{color:#a33324;background:#fdf1ef;border-radius:4px;padding:3px 6px}
-.guide-diff-new{color:#1f6b3a;background:#eef8f0;border-radius:4px;padding:3px 6px}
-.guide-diff-arrow{color:var(--muted);font-size:11px}
+.guide-diff-old{color:var(--danger);background:var(--danger-soft);border-radius:4px;padding:3px 6px}
+.guide-diff-new{color:var(--success);background:var(--success-soft);border-radius:4px;padding:3px 6px}
+.guide-diff-arrow{color:var(--muted);font-size:var(--text-2xs)}
 .guide-diff-ops{margin:0;padding-left:18px}
-.guide-diff-viewbtns{display:inline-flex;gap:6px;margin-left:12px;vertical-align:middle}
-.guide-diff-panes{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.guide-diff-pane{border:1px solid var(--line,#e3e7ea);border-radius:8px;background:#fff;max-height:60vh;overflow:auto;padding:14px 18px}
-.guide-diff-merged{border:1px solid var(--line,#e3e7ea);border-radius:8px;background:#fff;max-height:60vh;overflow:auto;padding:14px 18px}
+.guide-diff-viewbtns{display:inline-flex;gap:6px;margin-left:var(--space-3);vertical-align:middle}
+.guide-diff-panes{display:grid;grid-template-columns:1fr 1fr;gap:var(--space-2)}
+.guide-diff-pane{border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);max-height:60vh;overflow:auto;padding:14px 18px}
+.guide-diff-merged{border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);max-height:60vh;overflow:auto;padding:14px 18px}
 @media(max-width:760px){.guide-diff-panes{grid-template-columns:1fr}}
-.guide-diff-pane .compare-diff.diff-insert,.guide-diff-pane .compare-diff.insert{background:#d9f1df}
-.guide-diff-pane .compare-diff.diff-delete,.guide-diff-pane .compare-diff.delete{background:#f7d8d8}
-.guide-diff-merged .compare-ins{color:#1f6b3a}
-.guide-diff-merged .compare-del{color:#a33324}
+.guide-diff-pane .compare-diff.diff-insert,.guide-diff-pane .compare-diff.insert{background:#b9e6c5}
+.guide-diff-pane .compare-diff.diff-delete,.guide-diff-pane .compare-diff.delete{background:#f5b9b2}
+.guide-diff-merged .compare-ins{color:#b3261e;text-decoration:underline;text-decoration-color:#b3261e;text-decoration-thickness:1.5px}
+.guide-diff-merged .compare-del{color:#b3261e;text-decoration:line-through;text-decoration-thickness:1.5px}
 
 /* ── 页面/弹层进场动效（第三轮批2，令牌 §2；V2 路由切换重挂载，页内刷新不重放）── */
 @keyframes view-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }

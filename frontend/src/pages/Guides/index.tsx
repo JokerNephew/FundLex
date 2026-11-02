@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState } from 'react'
+import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api } from '../../api/endpoints'
 import { saveBlob } from '../../api/client'
@@ -6,14 +6,11 @@ import {
   useGuide,
   useGuideMutation,
   useGuideParseMutation,
-  useGuideRuleSettings,
-  useGuideRuleSettingsMutation,
   useGuideSettings,
   useGuideUploadMutation,
   useGuides,
 } from '../../api/hooks'
 import { Button, Card, Spinner, StatusBadge } from '../../components/ui'
-import type { GuideRuleSetting } from '../../types'
 import { ErrorState, LoadingCard } from '../Tasks'
 import { CompareCard } from './CompareCard'
 
@@ -80,7 +77,7 @@ export function GuidesPage() {
     <div className="page-heading">
       <div>
         <h1>指引配置</h1>
-        <p>管理指引版本与规则开关，决定新建任务用哪一版。</p>
+        <p>管理指引版本，决定新建任务用哪一版。</p>
       </div>
     </div>
     {error && <ErrorState error={error} />}
@@ -96,7 +93,7 @@ export function GuidesPage() {
         <p>{current.filename} <StatusBadge value={current.status} /></p>
         <p className="muted">{guideType(current)} · {current.groups ?? '—'} 条规则</p>
         <div className="action-row">
-          <Link to={`/guides/${current.id}`}><Button variant="primary">查看规则与开关</Button></Link>
+          <Link to={`/guides/${current.id}`}><Button variant="primary">查看详情</Button></Link>
           <Button disabled={busy || current.built_in} onClick={() => void selectGuide(null)}>恢复默认内置指引</Button>
         </div>
       </>}
@@ -123,14 +120,19 @@ export function GuidesPage() {
                 <div className="muted">{guideType(guide)}{guide.current ? ' · 当前使用' : guide.parent_version_id ? ' · 历史版本' : ''}</div>
               </td>
               <td>
-                <StatusBadge value={guide.status} />{guide.issues ? <div className="form-error">{guide.issues} 条解析问题</div> : null}
-                {guide.review?.status === 'needs_review' ? <div className="form-error">这版指引解析质量可疑，建议先查看再启用</div> : null}
-                {!canEnable && blockReason ? <div className="muted">{enableBlockReasonText(blockReason)}</div> : null}
+                <StatusBadge value={guide.status} />
+                {(() => {
+                  const notes: string[] = []
+                  if (guide.issues) notes.push(`${guide.issues} 条解析问题`)
+                  if (guide.review?.status === 'needs_review') notes.push('质量可疑，建议人工确认')
+                  if (!canEnable && blockReason) notes.push(enableBlockReasonText(blockReason))
+                  return notes.length ? <div className="muted" title={notes.join('；')}>{notes.join('；')}</div> : null
+                })()}
               </td>
               <td>{guide.groups ?? '—'}</td>
               <td>
                 <div className="action-row">
-                  <Link to={`/guides/${guide.id}`}><Button variant="primary">查看</Button></Link>
+                  <Link to={`/guides/${guide.id}`}>查看</Link>
                   <Button variant="quiet" disabled={busy || !canEnable || guide.current}
                     title={canEnable ? '' : enableBlockReasonText(blockReason)}
                     onClick={() => void selectGuide(guide.id)}>
@@ -162,73 +164,14 @@ export function GuideDetailPage() {
   const { guideId } = useParams()
   const navigate = useNavigate()
   const guide = useGuide(guideId)
-  const ruleSettings = useGuideRuleSettings(guideId)
   const [error, setError] = useState('')
-  const [message, setMessage] = useState('')
   const [busy, setBusy] = useState(false)
-  const [disabled, setDisabled] = useState<string[]>([])
-  const [loadedVersion, setLoadedVersion] = useState('')
-  const [dirty, setDirty] = useState(false)
   const guideParseMutation = useGuideParseMutation()
-  const ruleMutation = useGuideRuleSettingsMutation()
-
-  useEffect(() => {
-    if (!ruleSettings.data) return
-    if (loadedVersion === ruleSettings.data.version_id) return
-    setDisabled(ruleSettings.data.disabled_rule_ids)
-    setLoadedVersion(ruleSettings.data.version_id)
-    setDirty(false)
-  }, [loadedVersion, ruleSettings.data])
-
-  const ruleGroups = useMemo(() => {
-    const buckets = new Map<string, GuideRuleSetting[]>()
-    const sorted = [...(ruleSettings.data?.rules || [])].sort((a, b) => a.rule_id.localeCompare(b.rule_id, 'zh-Hans-CN', { numeric: true }))
-    for (const rule of sorted) {
-      const key = (rule.section_hint || '').trim() || '未分章节'
-      const bucket = buckets.get(key) || []
-      bucket.push(rule)
-      buckets.set(key, bucket)
-    }
-    return [...buckets.entries()]
-  }, [ruleSettings.data])
 
   if (guide.error) return <ErrorState error={guide.error} onRetry={() => void guide.refetch()} />
   if (guide.loading && !guide.data) return <LoadingCard />
   if (!guide.data) return <div className="empty-state">指引版本不存在。</div>
   const data = guide.data
-  const canEditRules = ['parsed', 'released'].includes(data.status)
-  const ruleTotal = ruleSettings.data?.rules.length ?? 0
-  const enabledCount = (ruleSettings.data?.rules || []).filter((rule) => !disabled.includes(rule.rule_id)).length
-  const toggleRule = (ruleId: string) => {
-    setMessage('')
-    setDirty(true)
-    setDisabled((current) => current.includes(ruleId) ? current.filter((item) => item !== ruleId) : [...current, ruleId])
-  }
-  const selectAllRules = () => {
-    setMessage('')
-    setDirty(true)
-    setDisabled([])
-  }
-  const selectNoRules = () => {
-    setMessage('')
-    setDirty(true)
-    setDisabled((ruleSettings.data?.rules || []).map((rule) => rule.rule_id))
-  }
-  const saveRules = async () => {
-    if (!guideId) return
-    setBusy(true)
-    setError('')
-    setMessage('')
-    try {
-      await ruleMutation.mutateAsync({ id: guideId, disabled })
-      setDirty(false)
-      setMessage('规则开关已保存；只影响之后新建的任务。')
-    } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : '规则开关保存失败')
-    } finally {
-      setBusy(false)
-    }
-  }
   const downloadSource = async () => {
     try {
       if (!guideId) return
@@ -272,7 +215,6 @@ export function GuideDetailPage() {
       <StatusBadge value={data.status} />
     </div>
     {error && <ErrorState error={error} />}
-    {message && <p role="status">{message}</p>}
 
     <Card>
       <h2>解析结果</h2>
@@ -294,59 +236,10 @@ export function GuideDetailPage() {
     </Card>
 
     <Card>
-      <div className="page-heading">
-        <div>
-          <h2>规则开关</h2>
-          <p className="muted">关闭的规则不会在之后新建的任务中执行，至少保留一条启用。</p>
-          {ruleSettings.data ? <p className="muted">共 {ruleTotal} 条 · 已启用 {enabledCount} / {ruleTotal}</p> : null}
-        </div>
-        {canEditRules && ruleTotal ? <div className="action-row">
-          <Button variant="quiet" disabled={busy} onClick={selectAllRules}>全选</Button>
-          <Button variant="quiet" disabled={busy} onClick={selectNoRules}>全不选</Button>
-          <Button variant="primary" onClick={() => void saveRules()} disabled={busy || !ruleSettings.data || !dirty || !enabledCount}
-            title={dirty && !enabledCount ? '至少保留一条启用规则' : ''}>{busy ? '保存中…' : '保存'}</Button>
-        </div> : null}
-      </div>
-      {!canEditRules ? <div className="empty-state">指引解析完成后才能配置规则开关。</div> : ruleSettings.error ? <ErrorState error={ruleSettings.error} onRetry={() => void ruleSettings.refetch()} /> : ruleSettings.loading && !ruleSettings.data ? <Spinner /> : !ruleSettings.data?.rules.length ? <div className="empty-state">这一版还没有解析出规则。</div> : <div className="table-scroll">
-        <table className="data-table">
-          <thead><tr><th>启用</th><th>规则</th><th>章节</th><th>状态</th></tr></thead>
-          {ruleGroups.map(([section, rules]) => (
-            <tbody key={section}>
-              <tr className="rule-group-row"><td colSpan={4}>{section}<span className="rule-group-count">共 {rules.length} 条</span></td></tr>
-              {rules.map((rule) => {
-                const checked = !disabled.includes(rule.rule_id)
-                const requirement = (rule.requirement || '').trim()
-                const titleText = (rule.title || '').trim() || '—'
-                return <Fragment key={rule.rule_id}>
-                  <tr className={`rule-row${checked ? '' : ' rule-row--disabled'}`}>
-                    <td><label className="rule-toggle"><input aria-label={`启用规则 ${rule.rule_id}`} type="checkbox" checked={checked} disabled={busy} onChange={() => toggleRule(rule.rule_id)} /></label></td>
-                    <td><strong className="rule-title">{titleText}</strong></td>
-                    <td><span className="ui-tag">{rule.section_hint || '—'}</span></td>
-                    <td><span className={`status-badge status-badge--${checked ? 'success' : 'warning'}`}>{checked ? '已启用' : '已关闭'}</span></td>
-                  </tr>
-                  <tr className={`rule-detail-row${checked ? '' : ' rule-row--disabled'}`}>
-                    <td colSpan={4}>
-                      <div className="rule-detail">
-                        <p className="rule-requirement">{requirement || titleText}</p>
-                        {!requirement ? <p className="meta-line">详细修改以指引原文为准。</p> : null}
-                        {rule.operations?.length ? <ul className="rule-operations">{rule.operations.map((operation, index) => <li key={index}><span className="ui-tag">{operation.label}</span>{operation.detail ? <span className="rule-operation-detail">{operation.detail}</span> : null}</li>)}</ul> : null}
-                      </div>
-                    </td>
-                  </tr>
-                </Fragment>
-              })}
-            </tbody>
-          ))}
-        </table>
-      </div>}
-    </Card>
-
-    <Card>
       <h2>解析问题</h2>
       {data.issues_detail?.error_code === 'GUIDE_VALIDATION_UNCLEAN'
         ? <p className="form-error">解析质量没过关，这一版不能启用。</p>
-        : null}
-      {!Object.keys(data.issues_detail || {}).length ? <p className="muted">没有记录解析问题。</p> : null}
+        : <p className="muted">{data.issues ? `共 ${data.issues} 条解析问题记录。` : '没有记录解析问题。'}</p>}
     </Card>
   </>
 }

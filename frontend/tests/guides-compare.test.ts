@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { defaultCompareTargets, enabledChanges } from '../src/pages/Guides/CompareCard'
+import { defaultCompareTargets } from '../src/pages/Guides/CompareCard'
 import type { GuideSummary } from '../src/types'
 
 function guide(id: string, status = 'parsed', extra: Partial<GuideSummary> = {}): GuideSummary {
@@ -41,21 +41,3 @@ describe('defaultCompareTargets', () => {
   })
 })
 
-describe('enabledChanges', () => {
-  it('reports rules whose enable switch differs', () => {
-    const change = enabledChanges({ G01: true, G02: true, G03: true },
-      { G01: true, G02: false, G03: true })
-    expect(change).toEqual({ disabledNow: ['G02'], enabledNow: [] })
-  })
-
-  it('reports re-enabled rules and ignores unchanged or one-sided entries', () => {
-    const change = enabledChanges({ G01: false, G03: false }, { G01: true, G03: false })
-    expect(change).toEqual({ disabledNow: [], enabledNow: ['G01'] })
-    expect(enabledChanges({ G01: true }, { G01: true })).toEqual({ disabledNow: [], enabledNow: [] })
-  })
-
-  it('sorts output deterministically', () => {
-    const change = enabledChanges({ G09: true, G02: true }, { G09: false, G02: false })
-    expect(change.disabledNow).toEqual(['G02', 'G09'])
-  })
-})

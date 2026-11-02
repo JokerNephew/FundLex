@@ -132,26 +132,6 @@ export interface GuideSettings {
   engine_id?: string
 }
 
-export interface GuideRuleOperation {
-  label: string
-  detail?: string
-}
-
-export interface GuideRuleSetting {
-  rule_id: string
-  title?: string
-  section_hint?: string
-  enabled: boolean
-  requirement?: string
-  operations?: GuideRuleOperation[]
-}
-
-export interface GuideRuleSettings {
-  version_id: string
-  disabled_rule_ids: string[]
-  rules: GuideRuleSetting[]
-}
-
 export interface ModelRoleSettings {
   role: 'primary' | 'review'
   provider?: string

@@ -1,5 +1,4 @@
 import { useMemo, useState } from 'react'
-import { api } from '../../api/endpoints'
 import { useGuideDiff, useGuideTextDiff } from '../../api/hooks'
 import { Button, Card, Listbox, Spinner } from '../../components/ui'
 import { ErrorState } from '../Tasks'
@@ -57,39 +56,8 @@ function fieldValue(name: string, value: unknown): React.ReactNode {
   return JSON.stringify(value)
 }
 
-/** Rule ids whose owner-level enable switch differs between two versions. */
-export function enabledChanges(before: Record<string, boolean>, after: Record<string, boolean>) {
-  const disabledNow: string[] = []
-  const enabledNow: string[] = []
-  for (const ruleId of Object.keys({ ...before, ...after }).sort()) {
-    const oldEnabled = before[ruleId]
-    const newEnabled = after[ruleId]
-    if (oldEnabled === undefined || newEnabled === undefined || oldEnabled === newEnabled) continue
-    if (newEnabled) enabledNow.push(ruleId)
-    else disabledNow.push(ruleId)
-  }
-  return { disabledNow, enabledNow }
-}
-
 function RulesDiffView({ result }: { result: GuideDiffResult }) {
   const { diff } = result
-  const [enabledNote, setEnabledNote] = useState<string>('')
-  const loadEnabledDiff = async () => {
-    setEnabledNote('读取中…')
-    try {
-      const [before, after] = await Promise.all([
-        api.guideRuleSettings(result.against), api.guideRuleSettings(result.version_id)])
-      const map = (rules: { rule_id: string; enabled: boolean }[]) =>
-        Object.fromEntries(rules.map((rule) => [rule.rule_id, rule.enabled]))
-      const change = enabledChanges(map(before.rules), map(after.rules))
-      const parts: string[] = []
-      if (change.disabledNow.length) parts.push(`停用 ${change.disabledNow.length} 条（${change.disabledNow.join('、')}）`)
-      if (change.enabledNow.length) parts.push(`启用 ${change.enabledNow.length} 条（${change.enabledNow.join('、')}）`)
-      setEnabledNote(parts.length ? parts.join('；') : '两个版本的规则启停一致。')
-    } catch {
-      setEnabledNote('启停对比不可用（两版本均需处于可启用状态）。')
-    }
-  }
   const summary = diff.summary
   return <>
     <p className="muted" data-testid="guide-diff-summary">
@@ -138,19 +106,19 @@ function RulesDiffView({ result }: { result: GuideDiffResult }) {
         }) : <p className="muted">无</p>}
       </section>
     </div>
-    <div className="action-row">
-      <Button variant="quiet" onClick={() => void loadEnabledDiff()}>对比规则启停</Button>
-      {enabledNote && <span className="muted">{enabledNote}</span>}
-    </div>
   </>
 }
 
 function TextDiffView({ target, against }: { target: string; against: string }) {
   const [view, setView] = useState<'merged' | 'side'>('merged')
   const diff = useGuideTextDiff(target, against)
-  const builtinBlocked = ((diff.error as Error | null)?.message || '').includes('BUILTIN_SOURCE_UNAVAILABLE')
-  if (builtinBlocked) {
+  const rawError = ((diff.error as Error | null)?.message || '')
+  const sourceUnavailable = rawError.includes('BUILTIN_SOURCE_UNAVAILABLE') || rawError.includes('GUIDE_SOURCE_UNAVAILABLE')
+  if (rawError.includes('BUILTIN_SOURCE_UNAVAILABLE')) {
     return <p className="muted">内置指引没有上传的原文文件，无法做原文比对；可查看「规则差异」，或改用两个自己上传的版本。</p>
+  }
+  if (sourceUnavailable) {
+    return <p className="muted">所选版本没有可读取的原文文件，无法做原文比对；可查看「规则差异」。</p>
   }
   if (diff.error) return <ErrorState error={diff.error} onRetry={() => void diff.refetch()} />
   if (diff.loading && !diff.data) return <Spinner />

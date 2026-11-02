@@ -9054,3 +9054,9 @@ H＝E×…
 - 实证：生产 env 默认 FUNDLEX_FRONTEND_VERSION=v1；用户五条指摘（下拉无感/规则开关未删/三表不统一/全屏半面/文案未删）全部发生在 V1 静态层；FL-D991/F2 等修复全落在 React 层（V2 域名册 16 处替换对生产零可见）。
 - 根因：派工与 S1 验收未区分 V1/V2 两个前端面；主线把「React 层修好」当「用户可见」。
 - 处置：V1=验收唯一第一现场（监督章程已修）；CX/FE-E 两线开打 V1 表面战（下拉 vanilla 组件/规则开关 V1 删除/三表 V1 统一/990/994 V1 落点）；V2 去留已呈用户拍板（建议冻结 V2、全力 V1）。
+## FL-D988/992/993 Guides 域三案第三任接棒落地（总指挥令，2026-11-02，qa-frontend-v2-20261102）
+
+- **接棒形态**：FE-D 8 commit（基点 449cc5e）整合至主线 HEAD d734855 的新分支，全部 cherry-pick 零冲突，**设计零新改**；顺手修 FE-D 上报既有 lint error（CompareListPage unused import）。
+- **验证**：tsc 0 / vitest 7 文件 32 绿 / build ✓ / lint 0；自拍截图 4 张（列表+详情+移动+对照）实测断言齐通过（详情页 D993 文本断言硬过）；D993 grep 清零 0 命中。
+- **新发现报主线申请号段**：N1 `qualificationStatusText` 漏映射 `needs_review`（fundlex/guide_store.py:44/779 实写该值），详情页「可用状态」会英文裸显，已在完工报告登记。
+- **报告**：docs/frontend/GUIDES_THREENESS_COMPLETION_20261102.md（用户原话断言表/施工清单/造数错误自纠/质量双保险；子agent质检环境无工具如实申报）。

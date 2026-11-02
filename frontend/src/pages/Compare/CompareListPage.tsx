@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import { Button, Card, Spinner, StatusBadge } from '../../components/ui'
 import { useCompareTasks } from '../../api/hooks'
-import { statusLabel, taskDescription } from './shared'
+import { taskDescription } from './shared'
 
 // P1 比对任务列表（FL-D846：/compare）：只放任务检索入口与状态、差异概览，
 // 新建与比对工作台分别迁至 /compare/new 与 /compare/:taskId。
