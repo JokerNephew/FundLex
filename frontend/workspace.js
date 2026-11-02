@@ -31,7 +31,10 @@
       $('workspace-state').textContent='';
       $('workspace-task-rows').innerHTML=(data.items||[]).map(item=>{
         const notes=Array.isArray(item.attention)?item.attention:[];
-        const attention=notes.map(n=>typeof n==='string'?n:n.label||n.code).filter(Boolean).join('；');
+        // FL-D1052（用户 2026-11-03 原话：前端不要再报覆盖不完整，对比完了就显示完成）
+        // 覆盖类及用户点名的六类内容备注一律压制，数据在库照留；其余类别照常显示。
+        const COVERAGE_ATTENTION=/覆盖|未纳入比对|未覆盖|页眉内容|页脚内容|复合内容|文本框|图形|STRUCTURAL_DIFFERENCE_NOT_COMPARED|UNSUPPORTED_VISIBLE_CONTENT|COVERAGE/;
+        const attention=notes.map(n=>typeof n==='string'?n:n.label||n.code).filter(s=>s&&!COVERAGE_ATTENTION.test(String(s))).join('；');
         const status=item.status_label||phases[item.status]||'查看任务状态';
         const phase=item.phase_label||phases[item.phase]||status;
         return `<tr><td><strong class="workspace-task-name">${esc(item.name)}</strong></td><td><span class="business-type is-${esc(item.kind)}">${esc(kinds[item.kind]||item.kind)}</span></td><td>${esc(item.scale?.value??'—')} ${esc(item.scale?.unit||'')}</td><td><span>${esc(status)}</span>${phase!==status?`<small class="row-sub">${esc(phase)}</small>`:''}</td><td class="workspace-attention-cell">${attention?`<span class="workspace-attention-text">${esc(attention)}</span>`:'<span class="subnote">暂无额外待办，交付情况请查看详情</span>'}</td><td class="workspace-time">${esc(time(item.created_at))}</td><td><button type="button" class="btn-link" data-workspace-open="${esc(item.kind)}" data-id="${esc(item.id)}">进入任务</button></td></tr>`;
