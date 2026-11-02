@@ -400,6 +400,12 @@ def test_compare_word_style_reader_renders_merged_redline_and_display_modes(brow
         assert page.locator("#compare-viewer").get_attribute("role") == "dialog"
         assert page.evaluate("document.body.classList.contains('compare-fullscreen-open')") is True
         assert page.locator("#compare-viewer-backdrop").is_visible()
+        # Esc 关闭（出生版同等语义）
+        page.keyboard.press("Escape")
+        page.locator("#compare-viewer").wait_for(state="hidden")
+        assert page.evaluate("document.body.classList.contains('compare-fullscreen-open')") is False
+        page.locator('[data-compare-pair="0"]').click()
+        page.locator("#compare-viewer").wait_for(state="visible")
         rail = page.locator(".compare-word-revisions")
         rail_width = rail.bounding_box()["width"]
         splitter = page.locator("#compare-rail-splitter")
@@ -990,8 +996,7 @@ def test_v1_password_late_401_from_previous_account_does_not_logout_new_session(
         page.locator("#login-password").fill("frontend-a-password")
         page.locator("#login-submit").click()
         page.locator("#topbar-user").wait_for(state="visible")
-        # FL-D989：飞书绑定已拆为独立页（ACCEPT-FL-D989），绑定请求在 #feishu 页触发
-        page.locator('.sidebar [data-nav="feishu"]').click()
+        page.locator('.sidebar [data-nav="settings"]').click()
         deadline = time.monotonic() + 5
         while not held and time.monotonic() < deadline:
             page.wait_for_timeout(50)

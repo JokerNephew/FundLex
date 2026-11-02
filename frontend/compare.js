@@ -1087,7 +1087,7 @@
     document.body.classList.toggle('compare-fullscreen-open', Boolean(open));
     viewer.hidden=!open;
     const backdrop=$('compare-viewer-backdrop'); if(backdrop)backdrop.hidden=!open;
-    if(open){syncViewerNav();requestAnimationFrame(()=>viewer.focus?.());}
+    if(open){syncViewerNav();requestAnimationFrame(()=>viewer.focus?.({preventScroll:true}));}
   }
   function syncViewerNav(){
     const total=state.pairs?.length||0,idx=Number.isInteger(state.pairIndex)?state.pairIndex:-1;

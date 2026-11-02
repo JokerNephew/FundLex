@@ -268,8 +268,8 @@
 #compare-viewer[data-view-mode="classic"] .compare-word-only{display:none}
 @media(max-width:760px){.compare-view-body[data-view-mode="classic"] .compare-diff-rail{order:-1}}
 
-/* P3 工作台：比对结果区为页面内嵌 region（取代 FL-D843 前的全屏 dialog），
-   布局沿用卡片网格基础规则；这里保留结果头部紧凑化与失效组空态。 */
+/* 查看器结果头部紧凑化与失效组空态（P3 版式语言）。
+   NOTE: region 化外壳本身已由 FL-D987 全屏回退取代（用户「全屏弹窗很好」）。 */
 #compare-viewer .compare-viewer-toolbar{padding:8px 16px;background:#fff}
 /* FL-D987 全屏回退：恢复 9f5b61d 出生的全屏 dialog 壳（region 化弹窗量价越
    用户「原来的全屏弹窗很好啊」方向 ）。chip/selection-bar/单行修订项等 B 版
