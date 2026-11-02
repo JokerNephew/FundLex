@@ -9129,3 +9129,7 @@ H＝E×…
 - 报告：docs/frontend/V1_A8_D992_COMPLETION_20261102.md；证据：evidence/{guides-a8-v1-20261102,d992-v1-20261102}。
 - 教训入册：workspace.js 插入曾导致 TDZ（按 'const route=' 查找名不符实际 'let'，定义落文末——插入后必须 node --check+真实加载验证）。
 - 验证：浏览器回归 6/6（v1_listbox 3 + word-style + workbench 模型 + 工作台聚合）。
+
+## FL-D1020 fc 残火最后一案 W2H13（2026-11-02，holdoutfix2 b-run，open）
+- 三版对照（如实留史）：baseline 50.4%(fc2,wrong0) → a-run 47.1%(fc1,wrong2) → b-run 44.9%(fc1=W2H13,wrong0)。D1002/1008/1009 修复有效（fc2→1）；a-run 引入的 wrong2 已被精化清零；完成率下降=诚实拦截替代谎报（menu不追数字表面）。
+- 总判定维持冻结；W2H13 根因派 EN1。
