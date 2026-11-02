@@ -9322,3 +9322,7 @@ H＝E×…
 - 起因：主线在 qa-compare-ux 树为空态 `git stash` 后 `git stash pop`，pop 的是 stash@{0} 古悬条目（11-01 冻结期 V2 时代内容），工作区一度冲突乱态。
 - 处置：reset --hard 还原+古 stash 原样封存（悬置待裁决不动）+CX 在途 untracked 件幸存核验（sectionnav.js 02:37 仍在）。核损：零（无 commit 丢失、CX 施工未中断）。
 - 教训（永久）：①禁在他线工作树用 stash/pop；测试隔离一律用只读 checkout 或临时 worktree；②`git stash` 空态≠安全——pop 的永远是最旧栈顶；③测试归因对照一律 stash 前先 `git stash list` 确认栈顶身份。
+
+### 总指挥派号映射（2026-11-03 03:0x，直通域占位第七批）
+- FL-DT-15 → FL-D1050（写回证据层索引偏移缺陷：外来段落标记修订放行后 final 接受视图段落合并，按 location(pN) 对号必败（A50 redline 1404p→final 1393p）；写入有效、校验实现错；已修 3aa668f=重开 redline 逐对校验+忽略索引+篡改 fail closed，测试含移植形态。注：第3线曾误用 FL-D1036，已令其更正）。
+- 台账：FL-D1049 已被主线事故占用，下一可用 = FL-D1051。
