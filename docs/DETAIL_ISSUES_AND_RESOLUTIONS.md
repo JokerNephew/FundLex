@@ -9224,3 +9224,8 @@ H＝E×…
 - 未动红线：冻结十线 worktree（用户令产物原位）、/tmp/opencode/qa 证据、release-20261102-d1024 在途件、qa-base。
 - 风险未消：30+ worktree 共 11G 与 ~/.local 13G 是长期压力源；待用户解冻旧线后做 worktree 级瘦身（需逐线产物盘点，今晚不做）。
 - 教训：磁盘已成本项目最频发环境事故，发布/评测前置必须带 df 检查（REL/EVAL 工单模板补「disk>2G 才可开工」条款）。
+
+### 总指挥派号映射（2026-11-02 22:5x，直通域占位于正号第二批）
+- FL-DT-06 → FL-D1034（修订编号奇数起始破坏 selective del/ins 配对契约；第3线 6a1eb00 已修未发布——发布走 REL 单通道，届时随直通波判词绑定）。
+- FL-DT-07 → FL-D1035（核心样例 32 份真实带痕 DOCX 仅 1 份过 overlay 门槛：修订结构不支持 29（段落标记23/嵌套6）+ DOCUMENT_PROTECTED 2；直通路径真实阻塞，**待用户产品裁决：扩展 overlay vs 规范化路径**，证据 direct-writer 07b92fd+docs/evidence/core-samples-line3/）。
+- 校正通告：FL-DT 呈报方声称「下一可用仍为 FL-D1033」有误——FL-D1033 已被磁盘第三案占用（77edf53）；下一可用 = FL-D1036。台账以此行与 git 历史为准。
