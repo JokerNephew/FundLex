@@ -9212,3 +9212,10 @@ H＝E×…
 ### 总指挥派号映射（2026-11-02 21:5x，直通域占位于正号对照）
 - FL-DT-01 → FL-D1028；FL-DT-02 → FL-D1029；FL-DT-03 → FL-D1030；FL-DT-04 → FL-D1031；FL-DT-05 → FL-D1032（协调风险，跨域共管，我侧防护令已行见 mainline 21:5x）。
 - 号段台账更新：下一可用 = FL-D1033。直通域自行改名条目，本映射行为唯一权威对照。
+
+## FL-D1033 磁盘再度打满：急诊发布参照跑崩+停机风险（2026-11-02 22:2x，治理一轮已清2.4G）
+- 实锤：df 100%（177M），REL 全量参照 pytest 1816 passed 后 OSError「disk below free-space reserve」止闸；发布与评测均被环境卡死（今年内第三起：09:2x/11:0x/22:2x）。
+- 治理（已执行）：/var/backups/fundlex 旧三份删留最新一份(-978M)；/opt 已完成发布事务 nsAuoy/sBDndS 删(-405M，在途 WnwrfB 留)；/tmp 10-24~28 旧 staging（candidate/compare-revisions-stage/production-v1/d275/mysql-test/node tar/engine-deploy）删；journal vacuum 60M。结果 177M→2.5G。
+- 未动红线：冻结十线 worktree（用户令产物原位）、/tmp/opencode/qa 证据、release-20261102-d1024 在途件、qa-base。
+- 风险未消：30+ worktree 共 11G 与 ~/.local 13G 是长期压力源；待用户解冻旧线后做 worktree 级瘦身（需逐线产物盘点，今晚不做）。
+- 教训：磁盘已成本项目最频发环境事故，发布/评测前置必须带 df 检查（REL/EVAL 工单模板补「disk>2G 才可开工」条款）。
