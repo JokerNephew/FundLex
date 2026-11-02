@@ -9198,11 +9198,12 @@ H＝E×…
 ### FL-D1037（原 FL-DT-10）直通工单引用的评估文档一时间未提交入各线基线（2026-11-02，流程留档·已补救）
 - 事实：`docs/DIRECT_THROUGH_REFACTOR_ASSESSMENT_20261102.md` 在 qa-base 曾长期未跟踪，第 5 线指出工单引用缺失；已由 `a7ae212` 提交补救。仅流程教训：工单引用文档必须先入库再派工。无需代码动作。
 
-### FL-D1044（原 FL-DT-12）集成冒烟脚本误加载生产 env，测试数据写入生产 MySQL（2026-11-02，open·处置中）
+### FL-D1044（原 FL-DT-12）集成冒烟脚本误加载生产 env，测试数据写入生产 MySQL（2026-11-02，已关闭）
 - 事实（第 6 线自报，属实）：真冒烟脚本随进程完整加载 `/etc/fundlex-recall.env`，`FUNDLEX_DATABASE_URL` 进入进程后任务行被写入**生产 MySQL**：owner=`smoke-owner`，涉及 guide_versions（abd43559→ba67715a 两版本）、guide_jobs、guide_config、tasks、task_batches、batches、documents、artifacts 链路行级数据；对象文件在 /tmp 独立目录，**未触碰生产对象文件、未影响服务、无用户数据**。
 - 处置（已定）：①生产库清理由 REL 单通道审核执行（第 6 线交精确 SQL 包、本人不得在产库执行写/删），执行前后 select 计数留证；②冒烟/e2e 脚本加“发现生产 DATABASE_URL 即 fail-fast”自检并强制 sqlite 临时库，修好前停止真冒烟；③脚本键路修正（matched_report 误读 direct_edit 块）在隔离环境重跑取证。
 - 编号与验收要件（2026-11-02，接班 `beb723f` 权威映射 FL-DT-12→FL-D1044，下一可用 FL-D1045）：自报属实记档不追责；①生产清理只走 REL 单通道，清完 REL 须报**事务号**留证；②fail-fast 隔离验收**以代码 diff 为准，不看承诺**——冒烟脚本加载 env 命中生产 URL 必须即时自爆，否则同类零再犯不成立。状态保持 open 至两项证据到齐。
 - 要件②已验收（2026-11-02，代码实核）：`/tmp/opencode/line6-real-smoke.py` L35-44 将 env 携带的 `FUNDLEX_DATABASE_URL` 一律作废、强制重指临时 sqlite 并打印拒绝沿用；L61 再断言 `store.database.dialect` 非 sqlite 即 `SystemExit` 自爆。语义=“泄漏中和 + fail-fast 兜底”双保险，生产写不可达，以代码为准通过，已同步接班（接班亲核收账；其另指出 L35 字面检查为死码、真兜底为 dialect 断言，已转第 6 线下次触碰时清理，非阻塞）。要件①（REL 事务号 + 第 6 线 select=0 复核）到齐后整体关闭本条。
+- 要件①已封闭、全案关闭（2026-11-03，接班通报）：初执行八撞 1142 根因=执行账号 fundlex_ops 缺 guide_config 的 DELETE 权（非语句问题）；主线经权限以 fundlex app 账号原包执行完成，`select` 复核 owner=smoke-owner 全链 remaining=0，证据落档。FL-D1044 两项要件全部成立，**已关闭**；REL 侧授权面盘点列入月度账。
 - 附带观察（2026-11-03，非阻塞，既有行为）：`db.py` 对 `sqlite:///绝对路径` 既有剥离为相对路径的约定会在冒烟脚本层踩坑（生产代码不依赖该约定，非本次重构引入）；第 6 线已在冒烟脚本用纯路径形规避。仅留档，不定责不立项。
 - 附带观察 2（2026-11-03，回归环境伪影，已修工具链）：**systemd EnvironmentFile 与 shell source 语义不同**——`/etc/fundlex-recall.env` 的 `FUNDLEX_MODEL_REQUEST_OPTIONS_JSON` 为合法 JSON 但整值未加引号；`sh set -a; .` 会吞掉值内 10 个双引号（57→47 字符）致 `ModelGateway.from_env` json.loads 秒崩，生产 systemd 按字面读取故正常。首轮 A/B/D 回归全秒败均是伪影、不计入引擎分母。处置：统一通道 `/tmp/opencode/batch-run/env_exec.py`（systemd 字面语义解析，已实测恢复合法 JSON），后续一切回归/冒烟进程一律走该通道；不修改生产 env 文件（它是 systemd 语义下的合法配置）。本条与 FL-D1044 的隔离教训同族：测试环境的入场方式永远不要假设与生产等价。
 - 用户新口径（2026-11-03，已下发各线）：**后续全面使用新指引解析/合同修改逻辑，当前无正式用户，不考虑旧格式兼容**。默认指引=卡包文档；旧 guide-rules-v1 的渲染表格、重解析路径、新任务入口、兼容分支不再投入维护，下一窗口随删旧清单一并评估删除；历史数据仅存库不主动暴露。首发版不动。
