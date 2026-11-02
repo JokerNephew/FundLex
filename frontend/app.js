@@ -248,7 +248,7 @@
     const show=state.tasksLoaded&&!state.tasksFailed&&!state.guideDismissed&&!(state.tasks||[]).length&&!$('task-search').value.trim()&&!$('task-filter').value&&!$('task-guide-filter').value;
     show?el.removeAttribute('hidden'):el.setAttribute('hidden','');
   }
-  function guideNameForTask(task){if(!task)return '—';if(task.legacy)return '遗留任务 · 未绑定指引';const id=task.guide_snapshot?.version_id;if(!id)return '未绑定指引';const item=(state.taskGuides||[]).find(guide=>guide.id===id);return `${item?.filename||'创建时的指引'} · 已锁定`;}
+  function guideNameForTask(task){if(!task)return '—';if(task.legacy)return '遗留任务 · 未绑定指引';const id=task.guide_snapshot?.version_id;if(!id)return '未绑定指引';const item=(state.taskGuides||[]).find(guide=>guide.id===id);return item?.filename||'创建时的指引';}
   function renderTaskGuideFilter(){const select=$('task-guide-filter');if(!select)return;const current=select.value,items=state.taskGuides||[];patchHTML(select,'<option value="">全部指引</option>'+items.map(guide=>`<option value="${esc(guide.id)}">${esc(guide.filename)}${guide.built_in?'（内置）':''}</option>`).join(''));if(current&&items.some(guide=>guide.id===current))select.value=current;}
   function renderTaskRows(){const items=state.tasks||[];patchHTML($('task-rows'),items.map(taskRow).join('')||emptyRow(7,'当前条件下没有任务'));}
   async function loadTaskGuides(quiet=false){if(state.auth.mode==='password'&&!state.auth.token)return;const t=ticket('task-guides');try{const payload=await json('/api/guides');if(!current(t))return;state.taskGuides=Array.isArray(payload.items)?payload.items:[];renderTaskGuideFilter();renderTaskRows();syncFirstRunGuide();if(state.task)renderTask();}catch(e){if(!current(t))return;if(!quiet&&e.code!=='404'&&e.code!=='CONNECTION')errorNotice(e);}}

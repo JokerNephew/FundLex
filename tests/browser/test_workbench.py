@@ -228,8 +228,8 @@ def test_revision_task_columns_detail_metadata_and_responsive_layout(ui):
     page.goto(base + f"/#task?id={task}")
     page.wait_for_selector("#doc-rows [data-detail]")
     page.wait_for_function("!document.querySelector('#task-guide-meta').hidden")
-    # FL-D717 定稿文案：任务绑定指引快照后显示「文件名 · 已锁定」（不直显 version_id）
-    assert page.locator("#task-guide-value").inner_text() == f"{guide['filename']} · 已锁定"
+    # FL-D990：用户点改——删红标与「已锁定」，只留文件名（指引快照绑定关系保留）
+    assert page.locator("#task-guide-value").inner_text() == guide['filename']
 
     page.goto(base + "/#overview")
     row = page.locator(f'#task-rows tr:has([data-task="{task}"])')
