@@ -33,16 +33,36 @@ class FakeGuideRouter:
         self.callback = callback
 
     def identity(self):
-        return {
-            "regulation_analyst": {"role": "regulation_analyst", "model": "fake-analyst", "provider": "fake", "configured": True},
-            "requirement_reviewer": {"role": "requirement_reviewer", "model": "fake-reviewer", "provider": "fake", "configured": True},
-            "discovery": {"role": "discovery", "model": "fake-discovery", "provider": "fake", "configured": True},
-            "guide_author": {"role": "guide_author", "model": "fake-author", "provider": "fake", "configured": True},
-            "guide_reviewer": {"role": "guide_reviewer", "model": "fake-guide-reviewer", "provider": "fake", "configured": True},
-            "coverage_auditor": {"role": "coverage_auditor", "model": "fake-coverage", "provider": "fake", "configured": True},
-            "independent_model_review": True,
-            "independent_model_review_status": "qualified",
-        }
+        # FL-D953：字段形状必须逐项对齐 fundlex/guide_generation/model_router.py
+        # identity()（9 字段/role + 两个派生键），避免 fake 与真实路由形状漂移。
+        result = {}
+        for role, model in (
+            ("regulation_analyst", "fake-analyst"),
+            ("requirement_reviewer", "fake-reviewer"),
+            ("discovery", "fake-discovery"),
+            ("guide_author", "fake-author"),
+            ("guide_reviewer", "fake-guide-reviewer"),
+            ("coverage_auditor", "fake-coverage"),
+        ):
+            result[role] = {
+                "role": role,
+                "provider": "fake",
+                "model": model,
+                "max_context_chars": 32000,
+                "max_output_tokens": 1500,
+                "temperature": 0,
+                "request_options_sha256": "fake-options-sha256",
+                "configured": True,
+                "shares_primary_endpoint": True,
+                "same_model_as_author": role == "guide_author",
+            }
+        author = result["guide_author"]["model"]
+        reviewer = result["guide_reviewer"]["model"]
+        result["independent_model_review"] = bool(author and reviewer and author != reviewer)
+        result["independent_model_review_status"] = (
+            "qualified" if result["independent_model_review"]
+            else "independent_model_review_not_qualified")
+        return result
 
     @property
     def max_context_chars(self):
@@ -188,4 +208,14 @@ class FakeGuideRouter:
             return {"groups": []}
         if task_type == "guide_verify":
             return {"findings": [], "invalid_findings": 0, "coverage_explanation": ""}
-        return {}
+        if task_type == "guide_batch_resolve":
+            return {"resolutions": []}
+        if task_type == "guide_repair":
+            return {"groups": [], "notes": ""}
+        if task_type == "guide_topic_coverage":
+            return {"topics": [], "missing": [], "notes": ""}
+        # FL-D953: a falling-back-to-{} default hid router/fake drift for every
+        # unexpected task type.  Tests must stub a shape explicitly from now on.
+        raise AssertionError(
+            f"guide_generation fakes: task_type {task_type!r} 未覆盖——请按真实 ModelRouter "
+            f"路由为该任务类显式补 stub，不得静默回裸 {{}}")
