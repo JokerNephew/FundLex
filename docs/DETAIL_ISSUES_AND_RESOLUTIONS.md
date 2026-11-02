@@ -9289,3 +9289,4 @@ H＝E×…
 - 台账：下一可用 = FL-D1045。
 - 治理二轮（11-03 00:2x 用户令）：release-d1024/r48 两棵已飞候选树 -618M；pip cache purge；dnf clean；npm cache；全 worktree __pycache__/.pytest_cache 扫净。955M→2.6G。保留：ms-playwright 681M（浏览器测试要它）、冻结十线 worktree（产物原位令）、qa 证据与 qa-base 活树。结论：worktree 群 11G 是唯一深水区，用户解冻旧线后方可盘点瘦身。
 - 更新（2026-11-03 00:4x）：FL-D1035 用户已拍板 **C 混合路**（扩展 overlay + 规范化并存，实施中）；直通域新优先级=当前可用版尽快部署上线，随后 32 样本回归；REL 发布预告已发。
+- 更新（2026-11-03 00:5x，直通报）：FL-D1035 C 混合全栈落地实测，首发口径=30/32 可交付（1 strict_dual_layer + 29 normalized_base）+ 2 DOCUMENT_PROTECTED 诚实失败标记 + .doc 类型边界；旧「31 份真实失败」口径作废。GO 三证按此口径备料，REL 于第6线材料到达前不启动。
