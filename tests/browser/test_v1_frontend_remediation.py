@@ -289,7 +289,8 @@ def test_compare_generate_late_response_cannot_save_the_previous_pair(browser, l
 
         page.locator("#compare-selection-generate").click()
         assert held, "generate request should be held"
-        page.locator('[data-compare-pair="1"]').click()
+        # FL-D987：chip 在 dialog 遮罩下，组切换走 dialog 内「下一组」（出生版等价语义）
+        page.locator("#compare-next-pair").click()
         page.locator("#compare-pair-title").filter(has_text="P2").wait_for()
         page.locator("#compare-selection-progress").filter(has_text="待选择").wait_for()
         page.wait_for_timeout(300)
@@ -395,9 +396,10 @@ def test_compare_word_style_reader_renders_merged_redline_and_display_modes(brow
         # FL-D980：覆盖警告对用户是可读中文（机读 token 不再直露）。
         assert "页眉" in page.locator("#compare-coverage-list").inner_text()
         assert page.locator("#compare-coverage-list").is_visible()
-        # FL-D843：比对结果区为页面内嵌 region（无 dialog/backdrop/全屏锁）
-        assert page.locator("#compare-viewer").get_attribute("role") == "region"
-        assert page.evaluate("document.body.classList.contains('compare-fullscreen-open')") is False
+        # FL-D987 全屏回退：查看器打开必须为全屏对话框（用户「原来的全屏弹窗很好啊」）
+        assert page.locator("#compare-viewer").get_attribute("role") == "dialog"
+        assert page.evaluate("document.body.classList.contains('compare-fullscreen-open')") is True
+        assert page.locator("#compare-viewer-backdrop").is_visible()
         rail = page.locator(".compare-word-revisions")
         rail_width = rail.bounding_box()["width"]
         splitter = page.locator("#compare-rail-splitter")
@@ -410,11 +412,16 @@ def test_compare_word_style_reader_renders_merged_redline_and_display_modes(brow
         page.wait_for_timeout(150)
         assert rail.bounding_box()["width"] >= rail_width + 20
 
-        # FL-D843：无关闭按钮，退出经「← 返回比对任务列表」回列表再进入
-        page.locator("[data-compare-back-list]").click()
+        # FL-D987 全屏回退：dialog 恢复「× 关闭」与 Esc；退出后任务详情页仍在，回列表重进
+        page.locator("#compare-close-viewer").click()
         assert page.locator("#compare-viewer").is_hidden()
+        page.locator("[data-compare-back-list]").click()
         page.locator('[data-compare-task="T"]').click()
+        # FL-D987：重进后 dialog 直接打开；chip 组切在 dialog 遮罩下不可点，
+        # 出生版同等语义=先关 dialog 再点 chip。
         page.locator("#compare-viewer").wait_for(state="visible")
+        page.locator("#compare-close-viewer").click()
+        page.locator("#compare-viewer").wait_for(state="hidden")
         page.wait_for_selector('#compare-pair-list > *', state='attached')
         page.locator('[data-compare-pair="0"]').click()
         page.locator("#compare-viewer").wait_for(state="visible")
