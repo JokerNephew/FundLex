@@ -50,6 +50,8 @@
 .gg-table{min-width:760px}
 /* .gg-table th/td 规格收编 .table 体系（FL-D804：原 12px/td12px/hover#fdfbf9 散写删除） */
 .gg-table td{max-width:300px;overflow-wrap:anywhere}
+/* FL-D988：生成任务名与全站列表名同基准（13px/600/ink） */
+.gg-table tbody td>strong{font-weight:600;color:var(--ink)}
 .gg-table td small{display:block;color:var(--muted);font-size:var(--list-meta-size);margin-top:2px}
 /* hover 收编 --list-row-hover-bg */
 .gg-create-layout{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(280px,1fr);gap:18px;align-items:start}

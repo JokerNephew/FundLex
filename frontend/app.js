@@ -1300,16 +1300,26 @@
       renderGuidePanel(item,data);}
     catch(e){if(!current(t)||$('guide-overlay').hidden)return;$('guide-overlay-body').innerHTML='<div class="empty">指引详情暂无法读取，请关闭后重试。</div>';if(e.code!==404)errorNotice(e);}}
   const GUIDE_ISSUE_HINTS={
-    GUIDE_SLOT_NOT_IN_TEXT:'核对新文中是否包含槽位 token；修正指引原文后重新解析（自动修复）。',
+    GUIDE_SLOT_NOT_IN_TEXT:'核对新文中是否包含指引引用的占位标记；修正指引原文后重新解析（自动修复）。',
     GUIDE_GROUP_INVALID:'检查该规则的规则编号、操作与文本字段是否完整，修正后重新解析。',
     GUIDE_PARAGRAPH_RANGE_INVALID:'检查来源段落编号是否超出指引正文范围，修正后重新解析。',
     GUIDE_PARAGRAPH_ORDER:'来源段落编号需按升序且不重复，修正后重新解析。',
     GUIDE_GROUP_EMPTY:'该来源段落未生成有效规则，补充或调整来源编号后重新解析。'
   };
   function guideIssueHint(code){return GUIDE_ISSUE_HINTS[code]||'核对问题位置和指引原文；如为指引原件问题，修正后点击“重新解析”。';}
+  // FL-D894：解析问题照常展示人读名称与位置，英文错误码收进折叠详情，不再裸显
+  const GUIDE_ISSUE_LABELS={
+    GUIDE_SLOT_NOT_IN_TEXT:'指引引用与原条款对不上',
+    GUIDE_GROUP_INVALID:'规则数据不完整',
+    GUIDE_PARAGRAPH_RANGE_INVALID:'段落编号超出指引正文范围',
+    GUIDE_PARAGRAPH_ORDER:'段落编号顺序有误',
+    GUIDE_GROUP_EMPTY:'该段落未生成有效规则',
+    GUIDE_COVERAGE_GAP:'指引原文未覆盖的段落',
+  };
+  function guideIssueLabel(code){return GUIDE_ISSUE_LABELS[code]||'解析问题';}
   function guideIssueDetails(code,rule,detail,paragraphs=[],evidence='',open=false){
     const position=[rule?`规则 ${rule}`:'未提供规则编号',Array.isArray(paragraphs)&&paragraphs.length?`段落 ${paragraphs.join('、')}`:''].filter(Boolean).join(' · ');
-    return `<li><details class="guide-issue" ${open?'open':''}><summary><code>${esc(code||'ISSUE')}</code>${detail?` · ${esc(String(detail).slice(0,80))}`:''}</summary><dl class="guide-issue-grid"><dt>问题位置</dt><dd>${esc(position||'未提供')}</dd><dt>失败原因</dt><dd>${esc(detail||'未提供详细原因')}</dd><dt>修复建议</dt><dd>${esc(guideIssueHint(code))}</dd></dl>${evidence?`<details class="guide-quote"><summary>证据原文</summary><p>${esc(evidence)}</p></details>`:''}</details></li>`;
+    return `<li><details class="guide-issue" ${open?'open':''}><summary>${esc(guideIssueLabel(code))}${detail?` · ${esc(String(detail).slice(0,80))}`:''}</summary><dl class="guide-issue-grid"><dt>问题位置</dt><dd>${esc(position||'未提供')}</dd><dt>失败原因</dt><dd>${esc(detail||'未提供详细原因')}</dd><dt>修复建议</dt><dd>${esc(guideIssueHint(code))}</dd><dt>问题代码</dt><dd><code>${esc(code||'—')}</code></dd></dl>${evidence?`<details class="guide-quote"><summary>证据原文</summary><p>${esc(evidence)}</p></details>`:''}</details></li>`;
   }
   function guideIssuesHTML(issues,item) {const value=issues&&typeof issues==='object'?issues:{},errors=Array.isArray(value.errors)?value.errors:[],warnings=Array.isArray(value.warnings)?value.warnings:[],gaps=Array.isArray(value.coverage_gaps)?value.coverage_gaps:[],findings=value.verification&&Array.isArray(value.verification.findings)?value.verification.findings:[];let html='';
     if(value.error_code&&!errors.length)html+=`<p class="subnote">最近一次解析未通过：${esc(reasons[value.error_code]?reason(value.error_code):'解析未通过，请检查文件后重试')}${value.attempts?` · 已尝试 ${esc(String(value.attempts))} 次`:''}</p>`;
