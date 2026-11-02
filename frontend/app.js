@@ -1258,7 +1258,7 @@
     if(Array.isArray(value))return value.length?esc(value.map(v=>typeof v==='string'?v:JSON.stringify(v)).join('；')):'—';
     return esc(JSON.stringify(value));}
   function guideDiffRulesHTML(diff){const s=diff.summary,rows=[];
-    rows.push(`<p class="subnote">规则 ${s.rules_before} 条 → ${s.rules_after} 条；新增 ${s.added} · 删除 ${s.removed} · 修改 ${s.changed}${s.identical?'：两个版本的规则内容完全一致。':''}</p>`);
+    rows.push(`<p class="guide-diff-kpis" data-testid="guide-diff-summary"><span class="badge b-gray" title="修改前 ${s.rules_before} 条 → 修改后 ${s.rules_after} 条">规则 ${s.rules_before} → ${s.rules_after}</span><span class="badge b-blue">新增 ${s.added}</span><span class="badge b-red">删除 ${s.removed}</span><span class="badge b-amber">修改 ${s.changed}</span>${s.identical?'<span class="badge b-green">两个版本的规则内容完全一致</span>':''}</p>`);
     const card=(title,items,html)=>`<section class="guide-diff-group"><h3>${title} · ${items.length} 条</h3>${items.length?html:'<p class="subnote">无</p>'}</section>`;
     const simple=item=>`<li><strong>${esc(item.rule_id)}</strong>${item.rule&&item.rule.title?` ${esc(item.rule.title)}`:''}</li>`;
     const groups=[
@@ -1278,8 +1278,40 @@
       if(d.tab==='rules'){body.innerHTML=guideDiffRulesHTML(payload.diff);}
       else{const td=payload.text_diff,s=td.summary;
         const head=`<p class="subnote">${td.identical?'两个版本的原文完全一致。':`共 ${s.diffs} 处差异：修改 ${s.modify} · 新增 ${s.insert} · 删除 ${s.delete}`}<span class="guide-diff-viewbtns"><button type="button" class="btn btn-sm ${d.view==='merged'?'btn-primary':''}" data-guide-diff-view="merged" ${d.view==='merged'?'disabled':''}>合并稿</button><button type="button" class="btn btn-sm ${d.view==='side'?'btn-primary':''}" data-guide-diff-view="side" ${d.view==='side'?'disabled':''}>并排对照</button></span></p>`;
-        body.innerHTML=d.view==='side'?head+`<div class="guide-diff-panes"><div class="compare-pane guide-diff-pane" aria-label="基准版本原文">${td.left_html}</div><div class="compare-pane guide-diff-pane" aria-label="对比版本原文">${td.right_html}</div></div>`:head+`<div class="guide-diff-merged compare-pane">${td.merged_html}</div>`;}}
+        body.innerHTML=d.view==='side'?head+`<div class="guide-diff-panes"><div class="compare-pane guide-diff-pane" aria-label="基准版本原文">${td.left_html}</div><div class="compare-column-splitter" id="guide-diff-splitter" role="separator" tabindex="0" aria-orientation="vertical" aria-label="拖动调整左右栏宽度"></div><div class="compare-pane guide-diff-pane" aria-label="对比版本原文">${td.right_html}</div></div>`:head+`<div class="guide-diff-merged compare-pane">${td.merged_html}</div>`;
+      if(d.view==='side'){const wrap=body.querySelector('.guide-diff-panes'),handle=body.querySelector('#guide-diff-splitter');
+        if(wrap&&handle&&window.FundLexColumnSplitter){window.FundLexColumnSplitter(handle,wrap,()=>wrap.querySelector('.guide-diff-pane'),{key:'fundlex-guide-diff-left-w',variable:'--guide-diff-left-w',min:240,minOther:320,side:'left',disabled:()=>matchMedia('(max-width: 760px)').matches});}
+        bindGuideDiffScrollSync(wrap);}}}
     catch(e){if(!current(t))return;body.innerHTML=`<p class="subnote">${e&&e.detail==='BUILTIN_SOURCE_UNAVAILABLE'?'内置指引没有上传的原文文件，无法做原文比对。':'差异暂未算出来，请稍后重试。'}</p>`;if(e&&e.code!==404)errorNotice(e);}}
+  // A8 指引版本比对：并排对照两栏滚动比例同步（CX 契约最短路径）。
+  // rAF 闸刀 + syncTargets 回声抑制（160ms 无事件释放，防惯性滚动回环）+ 手势夺权。
+  const guideDiffSyncState={targets:new Set(),frame:null,releaseTimer:undefined};
+  function bindGuideDiffScrollSync(wrap){
+    if(!wrap)return;
+    const panes=[...wrap.querySelectorAll('.compare-pane')].filter(p=>p.clientHeight);
+    if(panes.length<2)return;
+    const sync=(source)=>{
+      if(matchMedia('(max-width: 760px)').matches)return;
+      if(guideDiffSyncState.targets.has(source)||guideDiffSyncState.frame!==null)return;
+      guideDiffSyncState.frame=requestAnimationFrame(()=>{
+        guideDiffSyncState.frame=null;
+        const targets=panes.filter(p=>p!==source&&p.clientHeight);
+        if(!targets.length)return;
+        const sourceMax=Math.max(0,source.scrollHeight-source.clientHeight);
+        const ratio=sourceMax?source.scrollTop/sourceMax:0;
+        targets.forEach(target=>{guideDiffSyncState.targets.add(target);const targetMax=Math.max(0,target.scrollHeight-target.clientHeight);target.scrollTop=ratio*targetMax;});
+        clearTimeout(guideDiffSyncState.releaseTimer);
+        guideDiffSyncState.releaseTimer=setTimeout(()=>guideDiffSyncState.targets.clear(),160);
+      });
+    };
+    const takeControl=(e)=>guideDiffSyncState.targets.delete(e.currentTarget);
+    panes.forEach(pane=>{
+      pane.addEventListener('scroll',()=>sync(pane),{passive:true});
+      pane.addEventListener('wheel',takeControl,{passive:true});
+      pane.addEventListener('pointerdown',takeControl,{passive:true});
+      pane.addEventListener('touchstart',takeControl,{passive:true});
+    });
+  }
   async function enableGuide(id) {if(state.guideBusy)return;state.guideBusy=id;renderGuides();const t=ticket('guide-action'),item=guideByName(id);try{const payload=await json('/api/settings/guide',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({version_id:id})});if(!current(t))return;if(Array.isArray(payload.available))state.guides=payload.available;state.guideBusy=null;renderGuides();toast(`已启用指引：${item?item.filename:id}`);closeGuidePanel();await loadCapabilities();}
     catch(e){if(!current(t))return;state.guideBusy=null;renderGuides();errorNotice(e,'指引切换未完成：');}}
   async function resetToBuiltinGuide() {if(state.guideBusy)return;state.guideBusy='reset';renderGuides();const t=ticket('guide-action');try{const payload=await json('/api/settings/guide',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({version_id:null})});if(!current(t))return;if(Array.isArray(payload.available))state.guides=payload.available;state.guideBusy=null;renderGuides();toast('已恢复内置指引，之后创建的任务使用内置指引。');await loadCapabilities();}

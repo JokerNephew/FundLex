@@ -863,11 +863,12 @@ body:has(.detail-overlay.inline-contract-detail:not([hidden]) .review-layout){ov
 .guide-diff-new{color:#1f6b3a;background:#eef8f0;border-radius:4px;padding:3px 6px}
 .guide-diff-arrow{color:var(--muted);font-size:11px}
 .guide-diff-ops{margin:0;padding-left:18px}
-.guide-diff-panes{display:grid;grid-template-columns:1fr 1fr;gap:10px;max-height:60vh}
+.guide-diff-panes{display:grid;grid-template-columns:minmax(0,var(--guide-diff-left-w,1fr)) 12px minmax(0,1fr);gap:0;max-height:60vh}
 .guide-diff-pane{border:1px solid var(--line-soft);border-radius:8px;background:#fff;max-height:60vh;overflow:auto}
 .guide-diff-merged{border:1px solid var(--line-soft);border-radius:8px;background:#fff;max-height:60vh;overflow:auto}
-@media(max-width:760px){.guide-diff-panes{grid-template-columns:1fr}.guide-diff-selects select{min-width:100%}}
+@media(max-width:760px){.guide-diff-panes{grid-template-columns:1fr}.guide-diff-panes .compare-column-splitter{display:none}.guide-diff-selects select{min-width:100%}}
 .guide-diff-viewbtns{display:inline-flex;gap:6px;margin-left:12px;vertical-align:middle}
+.guide-diff-kpis{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 10px}
 
 
 /* FL-D780..784: 跨企业飞书自助接入向导 */

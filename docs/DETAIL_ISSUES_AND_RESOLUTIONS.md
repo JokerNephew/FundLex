@@ -9121,3 +9121,11 @@ H＝E×…
 
 ## FL-D1019 V1 指引版本比对本体缺陷 X-1（2026-11-02，AX2 验收发现，open）
 - AX2 判定 V1-A8 整体通过的自拍中捕获 1 项失败格（详情见 AX2-ACCEPT 件附 §X-1）；A8 先行并入，X-1 转施工优先修复后随补。
+## V1 转战首批：A8 指引版本比对 + FL-D992 V1 列表对齐（总指挥令，2026-11-02，qa-frontend-v2-20261102-v1）
+
+- 背景：V2 主线物理删除（be9bb68），V1 为唯一前端面；FL-D991 V1 listbox 集成件三件套（33f3f14/7ac5793/47704d4）随新分支并入。
+- A8：并排对照接入 FundLexColumnSplitter+比例同步滚动（CX §0 最短路径），实测拖拽/键盘/移动端/同步全部通过；施工 app.js+app.css。
+- FL-D992：六项基准 computed 断言全过——.badge/business-type max-width+ellipsis、badge() 补 title、.filename→var(--ink)、.workspace-task-name→600、工作台状态列徽标化（statusTone 同色族）。
+- 报告：docs/frontend/V1_A8_D992_COMPLETION_20261102.md；证据：evidence/{guides-a8-v1-20261102,d992-v1-20261102}。
+- 教训入册：workspace.js 插入曾导致 TDZ（按 'const route=' 查找名不符实际 'let'，定义落文末——插入后必须 node --check+真实加载验证）。
+- 验证：浏览器回归 6/6（v1_listbox 3 + word-style + workbench 模型 + 工作台聚合）。
