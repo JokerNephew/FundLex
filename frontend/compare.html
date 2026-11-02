@@ -162,7 +162,7 @@
     <section class="section" id="view-overview" aria-label="合同修改">
 <div class="split task-overview">
 <div class="card card-pad">
-<div class="section-title"><div><h2>修改任务</h2><small>仅合同修改任务；全部三类业务任务见 <a href="#workspace" data-nav="workspace">工作台 · 全部任务</a></small></div></div>
+<div class="section-title"><div><h2>修改任务</h2></div></div>
 <div class="toolbar">
 <div class="searchbox">
 <input id="task-search" type="search" placeholder="搜索任务名称" aria-label="搜索任务名称">
@@ -708,11 +708,10 @@
 <section class="section" id="view-generation" aria-label="指引生成"><div id="gg-root"></div></section>
 <section class="section" id="view-document" aria-label="合同结果"><div id="document-host"></div></section>
     <section class="section" id="view-guide" aria-label="我的指引">
-<div class="page-actions"><p class="subnote">管理自己的指引版本、启停规则开关，并决定新建任务使用哪一版。生成的候选指引需经过导入与核验，不能自动替换当前版本。</p><button class="btn" type="button" data-nav="generation">前往指引生成</button></div>
+<div class="page-actions"><p class="subnote">管理自己的指引版本，并决定新建任务使用哪一版。生成的候选指引需经过导入与核验，不能自动替换当前版本。</p><button class="btn" type="button" data-nav="generation">前往指引生成</button></div>
 <div class="guide-diff-tabs guide-page-tabs" role="tablist" aria-label="指引管理分区">
 <button type="button" role="tab" data-guide-page-tab="versions" class="is-active" aria-selected="true">指引版本</button>
 <button type="button" role="tab" data-guide-page-tab="diff" aria-selected="false">版本对比与上传</button>
-<button type="button" role="tab" data-guide-page-tab="rules" aria-selected="false">规则开关</button>
 </div>
 <div data-guide-pane="versions">
       <div class="card card-pad">
@@ -789,13 +788,6 @@
 <button class="btn btn-primary" type="button" data-action="guide-upload" id="guide-upload-btn" disabled>上传指引</button>
 </div>
 <p class="subnote" id="guide-upload-message" aria-live="polite">解析失败可在列表中查看问题并重新解析。</p>
-</div>
-</div>
-<div data-guide-pane="rules" hidden>
-      <div class="card card-pad u-mt-4">
-<div class="section-title"><h2>规则开关</h2><small>选择一个已解析版本，查看并启停它的规则开关；只影响之后新建的任务</small></div>
-<div class="guide-diff-selects"><label>指引版本<select id="guide-rules-version" class="control-select" aria-label="选择要配置规则开关的指引版本"></select></label></div>
-<div id="guide-rules-inline" aria-live="polite"><p class="subnote">选择一个版本后在此管理规则开关。</p></div>
 </div>
 </div>
     </section>

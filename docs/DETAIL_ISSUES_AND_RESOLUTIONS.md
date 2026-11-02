@@ -8696,24 +8696,43 @@ H＝E×…
 
 ## FL-D988 指引生成相关子页面风格与其他页面不一致（2026-11-01，open）
 - 重设计工单未覆盖指引生成域（派工遗漏），风格统一只做过比对域与 V2。
+- **跟进（FE-E V1 落地，2026-11-02）**：指引生成列表已实测同构（卡片=`.card` 阴影/token、表=`.table` 体系、行末「查看」裸 `btn-link` 13px/600/ink 与新建按钮等）；补 `.gg-table tbody td>strong` 600/ink 使任务名与 D992 列表基准一致。本工作树（qa-frontend-e）实施并 playwright 实测，证据 /tmp/opencode/qa/fee-proof/{04,05}-generation-*.png 与 fee_gg.py 输出；待合并发布后回验。
 
 ## FL-D989 飞书绑定须独立页面（2026-11-01，新诉求，open）
 - 原话：「飞书绑定单独一个页面，不要把账户的修改跟他放一起」。
 
+## FL-D894 技术内容外泄全站清扫（V1 域，2026-11-02 补漏令，FE-E）
+- **问题与影响**：用户原话「页面中还有很多用户根本不需要看到的技术内容，比如"规则哈希5335e401e840…"」；哈希/长串 id/token 名/英文错误码裸显属技术外泄。
+- **处理方法（本线已实施）**：V1 域（app.js 工作台/指引域、guide_generation.js 指引生成域、workspace.js）逐项排查：
+  1. 指引解析问题列表裸显错误码（`GUIDE_SLOT_NOT_IN_TEXT` 等 `<code>` 标题）→ 人读问题名（GUIDE_ISSUE_LABELS 映射），错误码收进折叠详情「问题代码」行；
+  2. 指引生成编辑器裸显 `guide_item_id` `<code>` → 删（标题已含条目名）；
+  3. 适用性问题行裸显 `guide_item_id · clause_id` → 改按条目标题引用，内部编号收 title 悬浮；
+  4. 当前候选卡裸显 `candidate_version_id` 长 id → 收进「高级详情」折叠（与历史版本卡既有做法一致）；
+  5. 指引错误修复建议中「槽位 token」→「占位标记」人话化；
+  6. 合同影响记录：`impact_id` 标题/`requirement_id` 常量行/关联候选条目 id 列表 → 全部改按法规条文/条目标题引用（无标题回退 id）；影响筛选下拉选项去掉裸 `requirement_id` 前缀；补漏记录的要求编号同理人话化。
+  - 保留判定：阶段失败 error_code、本轮 error_code 原本已在 `<details>技术信息` 折叠内（藏起，保留）；`规则 R{id}` 属业务编号保留；model connection_id 仅 hidden input 不外显。
+  - 小字清扫结论：V1 全域无 ≤10px 字号（最小 11px，即 D992 允许的次要小字档），不需要字号调整；小字内容层面随本次技术小字删除同步减噪。
+- **状态**：本工作树（qa-frontend-e）已实施并验证：node --check 通过；playwright before/after 对照（裸码→人话标题，/tmp/opencode/qa/fee-proof/{before,after}/guide-issues-overlay.png）。待合并发布后生产回验。
+- **下一步**：compare.js 侧同类项排查归 CX 线；V2 构建归 V2 线。
+
 ## FL-D990 任务详情页指引标注：去红色特殊标注+删「已锁定」字（2026-11-01，open）
 - 生产 TaskDetail 指引快照前红色标注+「已锁定」字样；用户：内容可保留，红标与「已锁定」删除。
+- **跟进（FE-E workbench/工作台侧，2026-11-02）**：`guideNameForTask` 去掉「 · 已锁定」后缀；`.task-guide-meta` 去 accent 左边线+底色（纯文本行）。工作树自拍断言 shown=true、borderLeft=0px、无「已锁定」（/tmp/opencode/qa/fee-proof/03-task-detail.png）。compare 侧归 CX 线。
 
 ## FL-D991 下拉框依旧丑：须调研并替换组件（2026-11-01，open）
 - 核实：生产仍是原生 `<select>`（Compare/shared.tsx、Guides/CompareCard.tsx、Settings/ModelSettings.tsx），历史仅做样式微调未换组件。用户：找网上可用组件替换。
 
 ## FL-D992 三类列表风格仍不统一+合同修改状态文本溢出（2026-11-01，复发，open）
 - 「列表不一致」第三次复发家族（V1 三列表未统一）；状态列文本超长溢出未截断。
+- **跟进（FE-E V1 指引列表+任务列表，2026-11-02）**：按 `docs/frontend/SPEC_LIST_BASELINE_D992_20261101.md` 修三处偏差——`.table .filename` 颜色 #29323b→var(--ink)；`.badge` 补 max-width:100%/hidden/ellipsis（原本无截断上限）；`.table .btn-link` color→var(--ink)（原 accent-dark）。playwright computed 实测六条全过（指引列表/任务列表 name=Inter 13px/600/ink、td=13px/400、th=12px/600/muted、badge=11px/650+ellipsis、btn=btn-link 13px/600/ink/裸文本），证据 /tmp/opencode/qa/fee-proof/after/* 与 fee_d894.py 输出（before/after 对照）。
 
 ## FL-D993 规则开关子页面仍未删（2026-11-01，open）
 - 核实：Guides/index.tsx 仍有「规则开关已保存…」逻辑，FE 施工批未完工并入。
+- **跟进（FE-E V1 侧，2026-11-02）**：V1 层（用户实际可见）已删除：compare.html 规则开关 tab/pane/页头文案、指引列表行「规则开关」按钮；app.js 删启停全部逻辑（loadGuideRulesInline/refreshGuideRulesVersion/saveGuideRuleSettings/syncGuideRuleUI/guideRuleRow 等）与 guide-rule-* CSS；指引详情弹层保留信息/规则概览/解析问题三块只读。自拍断言 tab 仅 2 个、无「规则开关」字样、行操作仅「查看问题」（/tmp/opencode/qa/fee-proof/01-guides-page.png）。V2 React 层残留归对应 V2 线。
 
 ## FL-D994 删除「仅合同修改任务；全部三类业务任务见 工作台 · 全部任务」（2026-11-01，open）
 - 该文案仍在生产构建（index-N7wocR2n.js）。
+- **跟进（FE-E，2026-11-02）**：V1 落点 compare.html 修改任务卡头小字已删；frontend/ V1 五文件 grep「仅合同修改任务」零命中。生产 V2 构建（index-N7wocR2n.js）残留归 V2 线。
 
 ## FL-D995 总指挥根因自登记：完成度不足的三层原因（2026-11-01，用户质询，open）
 - 用户：「我不知道是你交接任务没写清楚，还是你给这些单个对话的任务太多了」。
@@ -9071,3 +9090,12 @@ H＝E×…
 - 定损：committed 工作基本幸存（分支全在）；损失=EN2 四个未并入 commit（03:16/06:14/06:17(D4)/08:48(C1) 对象库不可寻回，EN2 重做）、EVAL devfix 47/75 在跑运行时状态（var 不入库，重跑认损）。
 - 根因（高度疑似未终证）：opencode 位置闲置卸载（唯一幸存=当时活跃树）——处置：实验项 location_idle_timeout=false 已写入全局配置；全部树已从分支重建；EN2 树以救援分支重建。
 - 后续：看 INT-LOG 与 dispatch-log 追溯是否有第二原因；重建后各线复工令已发。
+## FL-D1010 qa-frontend-e 工作树被外部清空事件（2026-11-02，open）
+- **问题与影响**：2026-11-02 约 11:27，FE-E 工作树 `.local/share/opencode/worktree/29a9a9/qa-frontend-e` 整树内容被清空（仅剩新写入的 docs/ 目录），主仓 `.git/worktrees/qa-frontend-e` 管理目录同时消失，特征符合 `git worktree remove --force`（或等价手工删除）。事发时磁盘余量 11G/72%，排除 cc5f85b 所载磁盘爆满清理；肇事方未确认（疑似并行 agent 清理流程误伤）。
+- **影响面**：FE-E 两个施工 commit（c614096、9df4632）已提交分支 `qa-frontend-e-20261102`，对象库存主仓，零损失；正在撰写的完工报告为未提交文件，事前已拷至 /tmp/opencode/qa/ 备份。
+- **处理方法**：核实分支 HEAD 完好后，以 `git worktree add` 原味重建工作树（不改历史/指针），报告文件回填 `docs/frontend/FE_E_COMPLETION_REPORT_20261102.md` 并随报告 uncommitted 交付验收。
+- **状态**：已重建并复核（node --check 通过、删除类断言 grep 复测一致）。**防范建议（待总指挥裁决）**：各线 worktree remove 前必须先 `git -C <worktree> status`+分支差异检查并报监督；worktree 清理集中登记。
+- **下一步**：监督确认验收后，报告文档随批提交；若查明肇事流程在此追加变更记录。
+
+## FL-D1012 补充：EN2 灭失评估撤销（2026-11-02 12:1x）
+- INT 于 10:33 已将 EN2 的 C1/D4/D2 并入主线（18eba4b，事故前完成取件）。EN2 重做工单撤销，实际损失仅剩 EVAL devfix 运行时状态。
