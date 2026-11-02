@@ -46,7 +46,8 @@ users = UserStore(store.database)
 sessions = SessionStore(store.database)
 
 suffix = "".join(random.choices(string.ascii_lowercase + string.digits, k=8))
-username = f"deploy-verify-{suffix}"
+# FL-D946①：账号前缀并入 cleanup 白名单（cloud-run-%），遗迹可被守门清理兜底。
+username = f"cloud-run-verify-{suffix}"
 password = secrets.token_urlsafe(18)
 user = users.create_user(username=username, password=password, display_name="部署验证账号", role="member")
 base = "http://127.0.0.1:8010"
@@ -107,11 +108,20 @@ try:
             item = documents["items"][0]
             results["document_engine_bound"] = bool(item.get("guide_snapshot"))
             results["document_status"] = item.get("job_status")
+        # FL-D946⑥：seal 之后等任务走到终态，才允许删除落账行；worker 中途还在跑时
+        # 摇铃 3 分钟，超期如实记录不过度清理。
+        terminal = {"completed", "completed_with_exceptions", "failed"}
+        terminal_status = None
+        for _ in range(180):
+            snap = client.get(f"/api/tasks/{task_id}", headers=headers).json()
+            terminal_status = snap.get("status")
+            if terminal_status in terminal or not terminal_status:
+                break
+            time.sleep(1)
+        results["task_terminal"] = terminal_status
         results["ok"] = True
 finally:
-    with store.database.connect() as db:
-        if 'task_id' in dir():
-            pass
+    # FL-D946④：旧的 dir() 死代码已删（占位无作用且误导读法）。
     try:
         with store.database.connect() as db:
             rows = db.execute("SELECT id FROM tasks WHERE owner=?", (username,)).fetchall()
@@ -132,6 +142,9 @@ finally:
     except Exception as exc:
         results["cleanup"] = f"failed: {type(exc).__name__}"
 print("VERIFY_JSON:" + json.dumps(results, ensure_ascii=False))
+# FL-D946②：清理失败即 2 号退出（清理不完整=守门不许喊成 OK）。
+if results.get("cleanup") != "done":
+    sys.exit(2)
 '''
 
 
@@ -165,7 +178,6 @@ def tunnel_check(host: str, user: str, password: str) -> dict:
         with httpx.Client(timeout=30, trust_env=False) as http:
             page = http.get(f"http://127.0.0.1:{local_port}/")
             results["index_status"] = page.status_code
-            results["index_has_guide_page"] = "指引配置" in page.text
             results["index_bytes"] = len(page.content)
             api = http.get(f"http://127.0.0.1:{local_port}/api/capabilities")
             results["api_status"] = api.status_code
@@ -173,11 +185,20 @@ def tunnel_check(host: str, user: str, password: str) -> dict:
                 results["api_body"] = api.json()
             except ValueError:
                 results["api_body"] = api.text[:300]
-            app_js = http.get(f"http://127.0.0.1:{local_port}/static/app.js")
-            results["app_js_status"] = app_js.status_code
-            results["app_js_has_recall"] = "recall_first" in app_js.text
+            # FL-D946③：隧道断言走 JSON 结构化字段（engine.id == "recall_first"），
+            # 不再依赖页面/JS 字面量（V1 静态面改版也会守约）。
+            try:
+                results["api_engine_id"] = (api.json().get("engine") or {}).get("id")
+                if results["api_engine_id"] != "recall_first":
+                    raise AssertionError(f"engine.id unexpected: {results['api_engine_id']!r}")
+                results["api_engine_check"] = True
+            except (AssertionError, ValueError) as exc:
+                results["api_engine_check"] = False
+                results["api_engine_error"] = str(exc)
             guide_api = http.get(f"http://127.0.0.1:{local_port}/api/guides")
             results["guides_unauth_status"] = guide_api.status_code
+        if results.get("api_engine_check") is False:
+            return results | {"tunnel": "engine_mismatch"}
         results["tunnel"] = "ok"
     finally:
         stopping.set()
@@ -248,12 +269,14 @@ def main(argv: list[str] | None = None) -> int:
         print("== server-side functional check ==")
         client = connect(host, user, password, port=22, timeout=30)
         try:
+            import os
+            remote_tmp = f"/tmp/fundlex_cloud_verify_{os.getpid()}.py"
             sftp = client.open_sftp()
-            with sftp.open("/tmp/fundlex_cloud_verify.py", "w") as handle:
+            with sftp.open(remote_tmp, "w") as handle:
                 handle.write(SERVER_SCRIPT)
             sftp.close()
             stdin, stdout, stderr = client.exec_command(
-                "/opt/fundlex-recall-first/.venv/bin/python -X utf8 /tmp/fundlex_cloud_verify.py", timeout=600)
+                f"/opt/fundlex-recall-first/.venv/bin/python -X utf8 {remote_tmp}", timeout=600)
             out = stdout.read().decode("utf-8", "replace")
             err = stderr.read().decode("utf-8", "replace")
             code = stdout.channel.recv_exit_status()
@@ -267,8 +290,10 @@ def main(argv: list[str] | None = None) -> int:
                     print(" ", line)
             if code != 0:
                 print("  stderr:", err.strip()[-1500:])
+                if code == 2:
+                    print("  cleanup 落账失败（rc=2 语义=清理不完整，勿视为 OK）")
                 return 1
-            client.exec_command("rm -f /tmp/fundlex_cloud_verify.py")
+            client.exec_command(f"rm -f {remote_tmp}")
         finally:
             client.close()
     print("== verification finished ==")
