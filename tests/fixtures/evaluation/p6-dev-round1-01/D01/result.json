@@ -1,0 +1,331 @@
+{
+ "case_id": "D01",
+ "file": "广发上海清算所0-4年央企80债券指数证券投资基金基金合同_20250319.docx",
+ "sha256": "2f2f7a36000af8135feb625c0c7d6f9f3e8b291d1628f0879993d6987e2d278d",
+ "bytes": 141078,
+ "task_create": 201,
+ "task_id": "b2dd87e2192d4965aac0a68fa239ca5b",
+ "upload": 200,
+ "upload_receipt": "accepted",
+ "seal": 200,
+ "task_status": "completed",
+ "waited_s": 234,
+ "job_status": "succeeded",
+ "delivery_status": "incomplete",
+ "error_code": null,
+ "target_counts": {
+  "total": 30,
+  "completed": 29,
+  "unresolved": 1
+ },
+ "engine_id": "recall_first",
+ "report_delivery_status": "incomplete",
+ "model": {
+  "http_attempts": 46,
+  "calls": null,
+  "estimated_cost_usd": 0.037213649999999994,
+  "total_tokens": 201450,
+  "input_tokens": null,
+  "output_tokens": null
+ },
+ "facts": {
+  "fund_type": "open_regular",
+  "class_count": 3,
+  "service_group": [
+   "C类"
+  ],
+  "is_floating_fee": false
+ },
+ "targets": [
+  {
+   "rule_id": "G22",
+   "state": "needs_edit",
+   "status": "planned",
+   "location": "p934",
+   "origin": "inventory",
+   "reason": "非浮动管理费且收取销售服务费，需替换为按基金份额比例分配并加上返还销售服务费（如有）的表述。"
+  },
+  {
+   "rule_id": "G12",
+   "state": "needs_edit",
+   "status": "planned",
+   "location": "p229",
+   "origin": "inventory",
+   "reason": "需替换为赎回费用全额计入基金财产的表述。"
+  },
+  {
+   "rule_id": "G09",
+   "state": "needs_edit",
+   "status": "planned",
+   "location": "p227",
+   "origin": "inventory",
+   "reason": "多份额类别时需改为“乘以当日该类基金份额的基金份额净值并扣除或加上相应的费用”。"
+  },
+  {
+   "rule_id": "G08",
+   "state": "needs_edit",
+   "status": "planned",
+   "location": "p226",
+   "origin": "inventory",
+   "reason": "多份额类别时需替换为A类收取申购费、C类不收取申购费及直销机构不收取申购费的表述。"
+  },
+  {
+   "rule_id": "G01",
+   "state": "needs_edit",
+   "status": "planned",
+   "location": "p92",
+   "origin": "inventory",
+   "reason": "释义份额类别定义后需增加直销机构申购A类不收取认购/申购费用、直销机构C类不收取销售服务费及其他销售机构C类持有超一年不再收取销售服务费的新条款。"
+  },
+  {
+   "rule_id": "G06",
+   "state": "absent",
+   "status": "not_applicable",
+   "location": "p135",
+   "origin": "inventory",
+   "reason": "本窗口内未出现该原条款，无法删除。"
+  },
+  {
+   "rule_id": "G14",
+   "state": "needs_edit",
+   "status": "planned",
+   "location": "p231",
+   "origin": "inventory",
+   "reason": "多份额类别时需将“基金管理人可以适当调低基金申购费率和赎回费率。”变更为“基金管理人可以适当调低基金申购费率和销售服务费率。”。"
+  },
+  {
+   "rule_id": "G21",
+   "state": "satisfied",
+   "status": "satisfied",
+   "location": "p934",
+   "origin": "inventory",
+   "reason": "非浮动管理费且仅有一个份额类别的分支不要求替换，本产品为多份额类别，该分支不适用。"
+  },
+  {
+   "rule_id": "G19",
+   "state": "absent",
+   "status": "not_applicable",
+   "location": "p934",
+   "origin": "inventory",
+   "reason": "本产品非浮动管理费产品，浮动管理费且仅有一个份额类别的替换分支不适用。"
+  },
+  {
+   "rule_id": "G02",
+   "state": "satisfied",
+   "status": "satisfied",
+   "location": "p92",
+   "origin": "inventory",
+   "reason": "释义中已按实际类别分组表述为A类及D类收取申购费不计提销售服务费、C类不收取申购费计提销售服务费。"
+  },
+  {
+   "rule_id": "G04",
+   "state": "satisfied",
+   "status": "satisfied",
+   "location": "p130",
+   "origin": "inventory",
+   "reason": "基金基本情况份额类别设置已按实际类别分组表述为A类及D类收取申购费不计提销售服务费、C类不收取申购费计提销售服务费。"
+  },
+  {
+   "rule_id": "G11",
+   "state": "needs_edit",
+   "status": "planned",
+   "location": "p228",
+   "origin": "inventory",
+   "reason": "多份额类别时需替换为通过直销机构申购A类不收取申购费、其他销售机构申购A类费用由投资人承担、C类不收取申购费用的表述。"
+  },
+  {
+   "rule_id": "G05",
+   "state": "needs_edit",
+   "status": "planned",
+   "location": "p135",
+   "origin": "inventory",
+   "reason": "有收取销售服务费的份额类别，需将“调低赎回费率”改为“调低销售服务费率”。"
+  },
+  {
+   "rule_id": "G13",
+   "state": "needs_edit",
+   "status": "planned",
+   "location": "p230",
+   "origin": "inventory",
+   "reason": "需删除该持续持有期少于7日赎回费条款。"
+  },
+  {
+   "rule_id": "G15",
+   "state": "needs_edit",
+   "status": "planned",
+   "location": "p758",
+   "origin": "inventory",
+   "reason": "需删除原销售服务费每日计提、按月支付及支付给登记机构等条款。"
+  },
+  {
+   "rule_id": "G07",
+   "state": "absent",
+   "status": "not_applicable",
+   "location": "p226",
+   "origin": "inventory",
+   "reason": "本产品有多个份额类别，仅有一个份额类别的替换分支不适用。"
+  },
+  {
+   "rule_id": "G10",
+   "state": "absent",
+   "status": "not_applicable",
+   "location": "p228",
+   "origin": "inventory",
+   "reason": "本产品有多个份额类别，仅有一个份额类别的替换分支不适用。"
+  },
+  {
+   "rule_id": "G03",
+   "state": "needs_edit",
+   "status": "planned",
+   "location": "p135",
+   "origin": "inventory",
+   "reason": "基金基本情况份额类别设置原条款后需增加直销机构申购A类不收取认购/申购费用、直销机构C类不收取销售服务费及其他销售机构C类持有超一年不再收取销售服务费的新条款。"
+  },
+  {
+   "rule_id": "G17",
+   "state": "needs_edit",
+   "status": "planned",
+   "location": "p759",
+   "origin": "inventory",
+   "reason": "需删除C类基金份额销售服务费主要用于支付销售机构佣金等及使用范围不包括募集期间费用的条款。"
+  },
+  {
+   "rule_id": "G18",
+   "state": "needs_edit",
+   "status": "planned",
+   "location": "p785",
+   "origin": "inventory",
+   "reason": "需将“由于本基金A类基金份额不收取销售服务费，而C类基金份额收取销售服务费”变更为“由于本基金A类基金份额和C类基金份额费用收取不同”。"
+  },
+  {
+   "rule_id": "G20",
+   "state": "absent",
+   "status": "not_applicable",
+   "location": "p934",
+   "origin": "inventory",
+   "reason": "本产品非浮动管理费产品，浮动管理费且多份额类别的替换分支不适用。"
+  },
+  {
+   "rule_id": "G16",
+   "state": "needs_edit",
+   "status": "planned",
+   "location": "p760",
+   "origin": "inventory",
+   "reason": "需在原条款最后增加销售服务费每日计提、直销机构返还、其他销售机构按月支付及持有超过一年后返还等内容。"
+  },
+  {
+   "rule_id": "G22",
+   "state": "needs_edit",
+   "status": "planned",
+   "location": "p1299",
+   "origin": "inventory",
+   "reason": "非浮动管理费产品且收取销售服务费（C类0.10%），应替换为按基金份额持有人持有的基金份额比例分配并加上返还销售服务费（如有）的表述；现条款仍为按各类基金份额比"
+  },
+  {
+   "rule_id": "G18",
+   "state": "needs_edit",
+   "status": "planned",
+   "location": "p1191",
+   "origin": "inventory",
+   "reason": "收益分配原则中关于A类不收取销售服务费而C类收取的表述应改为费用收取不同的表述，现仍保留原销售服务费差异描述。"
+  },
+  {
+   "rule_id": "G05",
+   "state": "satisfied",
+   "status": "satisfied",
+   "location": "p434",
+   "origin": "survey_satisfied",
+   "reason": "survey_new_text_present"
+  },
+  {
+   "rule_id": "G05",
+   "state": "satisfied",
+   "status": "satisfied",
+   "location": "p1100",
+   "origin": "survey_satisfied",
+   "reason": "survey_new_text_present"
+  },
+  {
+   "rule_id": "G08",
+   "state": "satisfied",
+   "status": "satisfied",
+   "location": "p227",
+   "origin": "survey_satisfied",
+   "reason": "survey_new_text_present"
+  },
+  {
+   "rule_id": "G08",
+   "state": "satisfied",
+   "status": "satisfied",
+   "location": "p230",
+   "origin": "survey_satisfied",
+   "reason": "survey_new_text_present"
+  },
+  {
+   "rule_id": "G15",
+   "state": "needs_edit",
+   "status": "planned",
+   "location": "p1221",
+   "origin": "survey",
+   "reason": "survey_reference:1.00"
+  },
+  {
+   "rule_id": "G17",
+   "state": "needs_edit",
+   "status": "unresolved",
+   "location": "p1222",
+   "origin": "survey",
+   "reason": "survey_reference:1.00"
+  }
+ ],
+ "unresolved": [
+  {
+   "kind": "target",
+   "code": null,
+   "rule_id": "G17",
+   "location": "p1222"
+  },
+  {
+   "kind": "audit",
+   "code": "AUDIT_NOT_COMPLETED",
+   "rule_id": "G22",
+   "location": "p934"
+  },
+  {
+   "kind": "audit",
+   "code": "AUDIT_NOT_COMPLETED",
+   "rule_id": "G22",
+   "location": "p1299"
+  },
+  {
+   "kind": "audit",
+   "code": "AUDIT_NOT_COMPLETED",
+   "rule_id": "G17",
+   "location": "p1222"
+  }
+ ],
+ "sweep_findings": 0,
+ "output_validation": {
+  "kind": "recall_working_edits",
+  "final_sha256": "2998f9264ee90b2d56e7007adcc94a9e5be57c3edfea643493b985e44e392cb8",
+  "redline_sha256": "9cb87d63cf4813d539e88a4b731a191947b250cc22a8ddc2a3607a199604bd48"
+ },
+ "downloads": {
+  "report_json": {
+   "path": "var/recall-first-evaluation/p6-dev-round1-01/D01/report_json",
+   "bytes": 460740
+  },
+  "report_md": {
+   "path": "var/recall-first-evaluation/p6-dev-round1-01/D01/report_md",
+   "bytes": 5717
+  },
+  "working_final": {
+   "path": "var/recall-first-evaluation/p6-dev-round1-01/D01/working_final",
+   "bytes": 136223
+  },
+  "working_redline": {
+   "path": "var/recall-first-evaluation/p6-dev-round1-01/D01/working_redline",
+   "bytes": 137567
+  }
+ }
+}

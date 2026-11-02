@@ -34,6 +34,22 @@ def referenced_keys(store: RunStore) -> set[str]:
             guide_rows = []
         for row in guide_rows:
             keys.add(f"guides/{row['id']}.docx")
+        # FL-D948: compare/selection/guide-generation artifacts are live
+        # deliverables just like ``artifacts.object_key`` — GC must never be
+        # able to delete a published compare or guide-generation artifact, so
+        # each of these four tables is consulted with the same historical-store
+        # tolerant pattern as guide_versions above.
+        for table, column in (("compare_pair_files", "object_key"),
+                              ("compare_artifacts", "object_key"),
+                              ("compare_selection_artifacts", "object_key"),
+                              ("gg_artifacts", "object_key")):
+            try:
+                rows = db.execute(f"SELECT {column} FROM {table}").fetchall()
+            except Exception:
+                continue
+            for row in rows:
+                if row[column]:
+                    keys.add(str(row[column]))
     return keys
 
 

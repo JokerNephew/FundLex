@@ -1,0 +1,69 @@
+# FundLex 召回优先处理报告
+
+- 引擎：recall_first 0.1.0（schema 3）
+- 执行模式：delivery
+- 源文件 SHA-256：2f2f7a36000af8135feb625c0c7d6f9f3e8b291d1628f0879993d6987e2d278d
+- 指引文档 SHA-256：3932d4cac5f2b9a2a34de005440b2616ded681d114fa59112a44ad82e8475e57
+- 交付状态：incomplete
+- 资格：eligible（fund_type=open_regular；引文核验=True）
+- 事实：份额类别 3（A类、C类、D类）；销售服务费类别：C类；浮动管理费：否
+- 目标计数：应改 18，已符合 7，不适用 5；计划修改 17
+- 审计轮次：4；未决问题 3
+- 查漏：块 4，发现 0，未解决 0，缺口 0
+- 模型调用：115；估算费用：0.037213649999999994
+
+## 每规则处置
+
+- G01：覆盖 targets_found；目标 1（应改 1 / 已符合 0 / 不适用 0）；审计完成 1/1；章节 ['S03']
+- G02：覆盖 targets_found；目标 1（应改 0 / 已符合 1 / 不适用 0）；审计完成 0/0；章节 ['S03']
+- G03：覆盖 targets_found；目标 1（应改 1 / 已符合 0 / 不适用 0）；审计完成 1/1；章节 ['S04']
+- G04：覆盖 targets_found；目标 1（应改 0 / 已符合 1 / 不适用 0）；审计完成 0/0；章节 ['S04']
+- G05：覆盖 targets_found；目标 1（应改 1 / 已符合 0 / 不适用 0）；审计完成 1/1；章节 ['S04']
+- G06：覆盖 targets_found；目标 1（应改 0 / 已符合 0 / 不适用 1）；审计完成 0/0；章节 ['S04']
+- G07：覆盖 targets_found；目标 1（应改 0 / 已符合 0 / 不适用 1）；审计完成 0/0；章节 ['S07']
+- G08：覆盖 targets_found；目标 1（应改 1 / 已符合 0 / 不适用 0）；审计完成 1/1；章节 ['S07']
+- G09：覆盖 targets_found；目标 1（应改 1 / 已符合 0 / 不适用 0）；审计完成 1/1；章节 ['S07']
+- G10：覆盖 targets_found；目标 1（应改 0 / 已符合 0 / 不适用 1）；审计完成 0/0；章节 ['S07']
+- G11：覆盖 targets_found；目标 1（应改 1 / 已符合 0 / 不适用 0）；审计完成 1/1；章节 ['S07']
+- G12：覆盖 targets_found；目标 1（应改 1 / 已符合 0 / 不适用 0）；审计完成 1/1；章节 ['S07']
+- G13：覆盖 targets_found；目标 1（应改 1 / 已符合 0 / 不适用 0）；审计完成 1/1；章节 ['S07']
+- G14：覆盖 targets_found；目标 1（应改 1 / 已符合 0 / 不适用 0）；审计完成 1/1；章节 ['S07']
+- G15：覆盖 targets_found；目标 1（应改 1 / 已符合 0 / 不适用 0）；审计完成 2/2；章节 ['S16']
+- G16：覆盖 targets_found；目标 1（应改 1 / 已符合 0 / 不适用 0）；审计完成 1/1；章节 ['S16']
+- G17：覆盖 targets_found；目标 1（应改 1 / 已符合 0 / 不适用 0）；审计完成 1/2；章节 ['S16']
+- G18：覆盖 targets_found；目标 2（应改 2 / 已符合 0 / 不适用 0）；审计完成 2/2；章节 ['S17', 'S25']
+- G19：覆盖 targets_found；目标 1（应改 0 / 已符合 0 / 不适用 1）；审计完成 0/0；章节 ['S20', 'S26']
+- G20：覆盖 targets_found；目标 1（应改 0 / 已符合 0 / 不适用 1）；审计完成 0/0；章节 ['S20', 'S26']
+- G21：覆盖 targets_found；目标 1（应改 0 / 已符合 1 / 不适用 0）；审计完成 0/0；章节 ['S20', 'S26']
+- G22：覆盖 targets_found；目标 2（应改 2 / 已符合 0 / 不适用 0）；审计完成 0/2；章节 ['S20', 'S26']
+
+## 审计轮次
+
+- 第 0 轮（full）：规则 14，结论 18，另报 0，丢弃 1，问题 1
+- 第 1 轮（full）：规则 14，结论 18，另报 0，丢弃 1，问题 1
+- 第 2 轮（full）：规则 14，结论 18，另报 0，丢弃 1，问题 1
+- 第 3 轮（full）：规则 14，结论 18，另报 0，丢弃 1，问题 3
+
+## 查漏轮次
+
+- 第 0 轮：块 4，发现 0，丢弃 20
+
+## 未完成清单
+
+- [target] {"kind": "target", "rule_id": "G17", "target_id": "Y006", "location": "p1222", "reason": "RECALL_TARGET_COMPOSITE_UNRESOLVED", "quote": "销售服务费主要用于支付销售机构佣金、以及基金管理人的基金行销广告费、促销活动费、基金份额持有人服务费等。 "}
+- [audit] {"kind": "audit", "code": "AUDIT_NOT_COMPLETED", "rule_id": "G22", "target_id": "S03_S04_S07_S16_S17_S20#1:T001", "location": "p934", "verdict": "wrong", "reason": "AFTER contains the required replacement text but appends a stray trailing character '配。' after the required sentence, which is not part of the guide's fixed policy text and constitutes an unauthorized addition/error.", "evidence_verified": true}
+- [audit] {"kind": "audit", "code": "AUDIT_NOT_COMPLETED", "rule_id": "G22", "target_id": "S25_S26#1:T001", "location": "p1299", "verdict": "wrong", "reason": "AFTER contains the required replacement text but appends a stray trailing character '配。' after the required sentence, which is not part of the guide's fixed policy text and constitutes an unauthorized addition/error.", "evidence_verified": true}
+- [audit] {"kind": "audit", "code": "AUDIT_NOT_COMPLETED", "rule_id": "G17", "target_id": "Y006", "location": "p1222", "verdict": "wrong", "reason": "G17 requires deleting the C类基金份额 sales service fee clause, but the AFTER text at p1222 still retains the full clause unchanged, so the required deletion was not performed.", "evidence_verified": true}
+
+**交付状态：incomplete**
+
+# FundLex 合同处理报告
+
+- 合同 ID：5d72f9e7742944b68dfdf507daf70411
+- 源文件 SHA-256：2f2f7a36000af8135feb625c0c7d6f9f3e8b291d1628f0879993d6987e2d278d
+- 规则版本：v1
+- 规则 SHA-256：c3edf6476e9e22b999e9b5a574ab2db8e7a632cf26da253580e398ed77fd9050
+- 引擎：a8bf319f8b188af26f7ac9e7c7934d0403ee5bb04c30cd7b0cb96f0b77eed411
+- Schema：3
+- 资格：eligible
+- 交付完整性：incomplete

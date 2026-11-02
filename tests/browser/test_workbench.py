@@ -424,8 +424,14 @@ def test_repeated_slow_refresh_keeps_rows_focus_and_recovers_after_error(ui, vie
       window.stableProgress=document.querySelector('#overall-progress .p-done');
       stableAction.focus();
     }''',row_id)
+    # FL-D951：10.5s 硬等待换事件等待——以状态轮询请求事件为锚，12s 为上限不是步进
+    # 单位。（卡原文写 expect_response，但该测试的路线模式是被拦截后手工 fulfill，
+    # response 事件要等 fulfill 才会触发，expect_request 才是自洽锚点。）
+    wait_target = (f'**/api/tasks/{task}/documents?*' if view == 'task'
+                   else '**/api/tasks?*sort=newest*')
     for attempt in range(3):
-        page.wait_for_timeout(10500)
+        with page.expect_request(wait_target, timeout=12000):
+            pass
         for _ in range(200):
             if pending:break
             page.wait_for_timeout(25)

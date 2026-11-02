@@ -15,7 +15,8 @@ from fastapi.testclient import TestClient
 from fundlex.api import create_app
 from fundlex.docx import DOCUMENT, Q, ZipLimits, _read_parts
 
-REAL = Path("var/recall-first-evaluation/p6-dev-round1-01/D01")
+# FL-D954：实物评测 fixture 随仓入库（gitignored var/ 依赖已清除，净克隆可跑）。
+REAL = Path(__file__).resolve().parent / "fixtures/evaluation/p6-dev-round1-01/D01"
 
 requires_real = pytest.mark.skipif(not (REAL / "report.json").is_file(),
                                    reason="real D01 evaluation artifact unavailable")
