@@ -200,3 +200,7 @@
   - ⛔ FL-D1001 enable 面回炉件二回中止（同两红；根因切片=finish-canary 先行拒收，嫁接点应挪 finish 评估前，INT-LOG #11）
   - 🔧 PRE 干跑：R5 候选树 /tmp/opencode/release-20261102-r5-pre @ fd019ea，构建✓/发布脚本 dry-run✓/全量 pytest 后台流——产出《R5 预组装验证单》(/tmp/opencode/qa/R5_PREASSEMBLY_VERIFICATION_20261102.md)
   - ✅ `7491177` V2·F2 Guides 三案（D988/992/993，ACCEPT 通过并入；vitest 32/32+build+tsc 0；N1 条件已入册候补派号；验收后追加 refactor 01b551b 未摘已上报）
+
+### 2026-11-02 漏项追认（用户点醒）
+台账点名但主线漏派：FL-D894 技术外泄全站清扫+小字清理（FE-E 补）、FL-D890/896 stash 处置（裁决=React 件随 V2 死/V1 件抢救重放重设计）、监督 REPORT 定期转呈制度补账、N1 英文裸显并入 D894 闭环。
+另仍挂账：BH06 受保护合同生产体验（fail-closed=not_generated，产品体验待议）、G14 天花板治理（B5 施工依赖）、REPORT 转呈欠账。
