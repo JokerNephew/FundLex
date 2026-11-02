@@ -196,3 +196,6 @@
   - ✅ `f676b78` EN2 B类14件（ACK①；合并正式说明=INT-LOG #6：2719/0 全量+2冲突先例+凭据副本；备注=该 commit 由主线会话在 INT 验证期抢跑提交，内容核验无损）
   - ✅ `84e06b4` EN1·FL-D1001 注册回流（ACK②+拆分裁决：guide_store.py 回炉/form_matrix 随 harness 批；全量 2727/0）
   - ⚠ `59721b8` FL-D987 部分落袋（D987b 审查 overlay 已复原；查看器 dialog 回退链+V2 三件因 B 期结构分叉中止，重组装/裁决请求见 INT-LOG #10）
+  - ✅ `d734855` EN1·FL-D1002 双族修复链（裁决②；冻结小刀有亲验凭；测试文件并集携带未授权 7a92027 三测已精摘除；全量 2732/0）
+  - ⛔ FL-D1001 enable 面回炉件二回中止（同两红；根因切片=finish-canary 先行拒收，嫁接点应挪 finish 评估前，INT-LOG #11）
+  - 🔧 PRE 干跑：R5 候选树 /tmp/opencode/release-20261102-r5-pre @ fd019ea，构建✓/发布脚本 dry-run✓/全量 pytest 后台流——产出《R5 预组装验证单》(/tmp/opencode/qa/R5_PREASSEMBLY_VERIFICATION_20261102.md)
