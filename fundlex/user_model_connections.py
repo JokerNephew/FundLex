@@ -36,8 +36,8 @@ PROVIDERS = {
     "deepseek": {"label": "DeepSeek（兼容接口）", "base_url": "https://api.deepseek.com/v1",
                  "models": ["deepseek-v4-pro", "deepseek-flash"],
                  "deprecated_models": [
-                     {"id": "deepseek-chat", "note": "2026-07-24 官方停用，现由 deepseek-v4-flash 接任"},
-                     {"id": "deepseek-reasoner", "note": "2026-07-24 官方停用，现由 deepseek-v4-flash（思考模式）接任"}]},
+                     {"id": "deepseek-chat", "note": "2026-07-24 官方停用，现由 deepseek-flash 接任"},
+                     {"id": "deepseek-reasoner", "note": "2026-07-24 官方停用，现由 deepseek-flash（思考模式）接任"}]},
     "alibaba": {"label": "阿里云百炼（兼容接口）",
                 "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
                 "models": ["qwen-max", "qwen-plus", "qwen-flash"],
@@ -59,7 +59,7 @@ PROVIDERS = {
               "models": ["glm-5.3", "glm-5.3-flash", "glm-4.7"],
               "deprecated_models": [
                   {"id": "glm-4-flash", "note": "官方已改为快照 glm-4-flash-250414，建议按快照名用"},
-                  {"id": "glm-4.5", "note": "现售主力为 GLM-5.x/4.6 系，建议切 glm-4.7 或 glm-5.3"}]},
+                  {"id": "glm-4.5", "note": "旧代条目（主力已迁 GLM-5.x/4.7），新单建议切 glm-4.7 或 glm-5.3"}]},
     "custom": {"label": "其他 OpenAI 兼容服务", "base_url": "", "models": [],
                "deprecated_models": []},
 }
