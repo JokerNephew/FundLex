@@ -21,6 +21,8 @@
 
 ## 三、编制：23 个会话（尾号→角色→在手件）
 
+> **2026-11-02 21:0x 用户划域令（FL-D1027）变更**：指引解析与合同修改的后端/引擎全域停做并划出总指挥职责——EVAL/GG/EN1/EN3/EN4/EN5/EN6/EN7/W3/CA 十线停线冻结（产物原位勿动），QA/QA2/PAT 剔除两域，INT 引擎合并件全冻结。在编序列仅剩：对比功能、V1 前端战区（FE/CX/V2/FE-E/FE-F/FE-G/FE-H）、QA 余域、体制四线（监督/AX2/INT/REL）、PAT。复启=用户一句话。
+
 - 界面（V1 战区）：FE(l8yCbACU=弹窗 D1014)/CX(OhgIvj8=下拉 D1015 复修+992/990/994)/V2(81FirpsQ=D1019 修后整合)/FE-E(tlj…e1d8Xza=D1011 走查)/FE-F(KGVbvA5e=D890 过验后+D1013+FE-H 收割)/FE-G(HWmLV4=D896/1018 三区塑形)/FE-H(trlakto=D1017 指引生成重设计主线基线)
 - 引擎（核心轨）：EN1(LzndoPec=G14/D1020并入验)/**EN6(WO9lC7Ko=307族)** /**EN7(zlaeZ=183族)**/EN4(B8T8AWQ=崩溃 9 族+B4 96锚点)/EN5(p1iq9N=B4 修复批,刚平反)/EN3(wLZQPE=锁B 完工+BH06 文案)/EVAL(CBU8V6tg=devfix2 收官+V2 指引临床首测 FL-D1022)
 - 解析轨：GG(XMWmAw4=A4/A6/A7+临床对标)
