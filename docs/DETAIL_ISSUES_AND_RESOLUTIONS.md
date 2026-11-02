@@ -9196,6 +9196,11 @@ H＝E×…
 ### FL-D1037（原 FL-DT-10）直通工单引用的评估文档一时间未提交入各线基线（2026-11-02，流程留档·已补救）
 - 事实：`docs/DIRECT_THROUGH_REFACTOR_ASSESSMENT_20261102.md` 在 qa-base 曾长期未跟踪，第 5 线指出工单引用缺失；已由 `a7ae212` 提交补救。仅流程教训：工单引用文档必须先入库再派工。无需代码动作。
 
+### FL-DT-12 集成冒烟脚本误加载生产 env，测试数据写入生产 MySQL（2026-11-02，open·处置中）
+- 事实（第 6 线自报，属实）：真冒烟脚本随进程完整加载 `/etc/fundlex-recall.env`，`FUNDLEX_DATABASE_URL` 进入进程后任务行被写入**生产 MySQL**：owner=`smoke-owner`，涉及 guide_versions（abd43559→ba67715a 两版本）、guide_jobs、guide_config、tasks、task_batches、batches、documents、artifacts 链路行级数据；对象文件在 /tmp 独立目录，**未触碰生产对象文件、未影响服务、无用户数据**。
+- 处置（已定）：①生产库清理由 REL 单通道审核执行（第 6 线交精确 SQL 包、本人不得在产库执行写/删），执行前后 select 计数留证；②冒烟/e2e 脚本加“发现生产 DATABASE_URL 即 fail-fast”自检并强制 sqlite 临时库，修好前停止真冒烟；③脚本键路修正（matched_report 误读 direct_edit 块）在隔离环境重跑取证。正号待接班派（占位 FL-DT-12）。
+- 教训：任何 Worker/脚本冒烟必须在启动时断言运行库地址属于临时隔离库，不得默认继承系统 env。
+
 ### FL-D1038（原 FL-DT-11）AGENTS.md 公网出口 IP 与本机实测不一致（2026-11-02，已处置·接班域完成）
 - AGENTS.md 记 `8.155.130.168`，本机 `curl ifconfig.me` 实测 `112.120.123.158`（hostname/内网/实例 ID 均与记录一致，机器为同一台）。按 AGENTS 自身规定“开工前用事实确认”，记录差异并让号段/台账方知悉；不影响本域施工，已报接班。
 - 处置（接班 `a7694ce` 通报）：双源实测 ifconfig.me/ip.sb=112.120.123.158，AGENTS.md 已更正留痕并注明机器身份同一性无变；开机自检事实判断恢复可靠。本域仅留痕，无后续动作。
@@ -9273,3 +9278,7 @@ H＝E×…
 
 ## FL-D1043 password 未登录时 guide 指引导航不隐藏不回落（2026-11-02，QA2 扫荡 F-05，open）
 - 现象：未登录状态下指引相关导航未隐藏/未回落。证据同上。待派工。
+
+### 总指挥派号映射（2026-11-03 00:2x，直通域占位第四批）
+- FL-DT-12 → FL-D1044（直通集成线真冒烟脚本误加载生产 env，测试数据写入生产 MySQL：owner=smoke-owner 全链行；对象存储/服务无污染；自报属实——诚实申报记档不追责，但同类必须零再犯）。处置：生产清理由 REL 单通道执行；脚本须加生产 URL fail-fast 隔离（验收时查代码不看承诺）。
+- 台账：下一可用 = FL-D1045。
