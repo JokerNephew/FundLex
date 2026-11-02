@@ -9283,3 +9283,4 @@ H＝E×…
 ### 总指挥派号映射（2026-11-03 00:2x，直通域占位第四批）
 - FL-DT-12 → FL-D1044（直通集成线真冒烟脚本误加载生产 env，测试数据写入生产 MySQL：owner=smoke-owner 全链行；对象存储/服务无污染；自报属实——诚实申报记档不追责，但同类必须零再犯）。处置：生产清理由 REL 单通道执行；脚本须加生产 URL fail-fast 隔离（验收时查代码不看承诺）。
 - 台账：下一可用 = FL-D1045。
+- 治理二轮（11-03 00:2x 用户令）：release-d1024/r48 两棵已飞候选树 -618M；pip cache purge；dnf clean；npm cache；全 worktree __pycache__/.pytest_cache 扫净。955M→2.6G。保留：ms-playwright 681M（浏览器测试要它）、冻结十线 worktree（产物原位令）、qa 证据与 qa-base 活树。结论：worktree 群 11G 是唯一深水区，用户解冻旧线后方可盘点瘦身。
