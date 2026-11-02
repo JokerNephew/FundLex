@@ -9060,3 +9060,8 @@ H＝E×…
 - **验证**：tsc 0 / vitest 7 文件 32 绿 / build ✓ / lint 0；自拍截图 4 张（列表+详情+移动+对照）实测断言齐通过（详情页 D993 文本断言硬过）；D993 grep 清零 0 命中。
 - **新发现报主线申请号段**：N1 `qualificationStatusText` 漏映射 `needs_review`（fundlex/guide_store.py:44/779 实写该值），详情页「可用状态」会英文裸显，已在完工报告登记。
 - **报告**：docs/frontend/GUIDES_THREENESS_COMPLETION_20261102.md（用户原话断言表/施工清单/造数错误自纠/质量双保险；子agent质检环境无工具如实申报）。
+
+## FL-D1010 处置落地：V2(React)前端已物理删除（2026-11-02，用户裁决「把v2的代码删了，不要再误导后面的工作了」）
+- 删除 React 应用本体+dist+构建链；api.py 摘除 v2 分支/`/assets` 挂载；遗留 v2 env flag 断言「不再切换」。
+- **FL-D1011 React 专属测试删除的 V1 覆盖债**（open）：test_guide_history/guides 上传-列表-版本对比走查、test_guide_diff React 游走查随删除失效——V1 侧等价走查由 FE-E/QA 在 V1 表面战与阶段二重写补齐，不许无声丢coverage。
+- V2 线转 V1 战（指引版本比对 A8 在 V1 重做）；INT 的 npm build/vitest 验证步骤失效，改为 V1 浏览器套件+api 测试。
