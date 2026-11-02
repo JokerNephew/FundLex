@@ -4806,29 +4806,14 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
         if disabled_rules:
             report["disabled_rules"] = disabled_rules
             report["guide"]["disabled_rule_ids"] = [item["rule_id"] for item in disabled_rules]
-        # Task input normalization (2026-10-31 product decision): a contract
-        # that still carries another department's tracked changes is processed
-        # from its accepted view.  The original marks are flattened into the
-        # base text up front; every later stage (scope filtering, paragraph
-        # indexing, page mapping, bookmarks, claims and the deliverables) works
-        # on that base, and the engine's own new revisions are the only tracked
-        # changes a delivery ever shows.  Inputs without marks keep their exact
-        # bytes.  The original inventory and hashes stay in the report so the
-        # run remains traceable to the uploaded file.
-        from .docx import normalize_tracked_base
-        tracked_base = normalize_tracked_base(input_path.read_bytes())
-        if tracked_base.had_tracked_changes:
-            normalized_base_dir = tempfile.TemporaryDirectory(prefix="fundlex-base-")
-            base_file = Path(normalized_base_dir.name) / "base.docx"
-            base_file.write_bytes(tracked_base.data)
-            input_path = base_file
-            report["base_had_tracked_changes"] = True
-            report["normalized_base_sha256"] = tracked_base.base_sha256
-            report["source_revisions"] = {
-                "count": len(tracked_base.source_revisions),
-                "authors": sorted({item["author"] for item in tracked_base.source_revisions}),
-                "items": [dict(item) for item in tracked_base.source_revisions],
-            }
+        # Locked strategy B (2026-11-02 user ruling, supersedes the 2026-10-31
+        # accepted-view flattening): a contract carrying another department's
+        # tracked changes keeps every foreign mark; the engine stacks its own
+        # revisions on top, each layer independently acceptable/rejectable.
+        # No strategy switch is exposed.  Shapes the overlay cannot carry
+        # honestly fail closed at intake with a typed error.  The original
+        # inventory stays in the report so the run remains traceable to the
+        # uploaded file.
         if os.environ.get("FUNDLEX_MODEL_MODE") == "record":
             from .frozen import FrozenRun
             frozen_directory = os.environ.get("FUNDLEX_FROZEN_RUN_DIR")
@@ -4839,12 +4824,12 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
         inspection = inspect_docx(input_path, full=True,
                                   allow_existing_revisions=True)
         output_dir.mkdir(parents=True, exist_ok=True)
-        report["source_sha256"] = (tracked_base.original_sha256
-                                   if tracked_base.had_tracked_changes
-                                   else inspection.source_sha256)
+        report["source_sha256"] = inspection.source_sha256
         if inspection.revisions:
-            # Existing tracked changes from another department: keep them visible
-            # and separate from FundLex revisions in the report/UI.
+            # Existing tracked changes from another department: preserved in
+            # the artifacts, visible and separate from FundLex revisions in
+            # the report/UI.
+            report["tracked_input_strategy"] = "preserve_overlay"
             report["source_revisions"] = {
                 "count": len(inspection.revisions),
                 "authors": sorted({item["author"] for item in inspection.revisions}),

@@ -26,7 +26,10 @@
   `normalize_tracked_base(disposition=accept|reject)`，生产主链默认 accept 未动。
 - 状态：**已修复已验证**。验证：合成四形状镜像断言；跨段删接受=合并/拒绝=分段+原文恢复；属性快照
   回滚 240→120；语料 30/30 两视图与独立参照实现全文全等；2 份 documentProtection 正当拒入。
-- 下一步：用户裁决（主线已转呈）：产品面是否暴露三策略开关；未拍板维持 accept-first。
+- 变更记录（2026-11-02 用户裁决落地）：**生产锁死 B（保留原痕叠加）**，无产品面开关；recall 主链
+  废除「先接受拍平」输入规整化，带痕合同直接进 overlay 通道；`disposition` 能力层保留不接生产线。
+  锚点语义 32 份硬实证 PASS 30/30（docs/engine/en3/evidence/anchor_semantics_20261102.json）。
+- 下一步：收口线并入；监督线验收界面双层呈现可读性（html_view 已按 FL-D924 配对）。
 
 ## FL-D1005 拒绝视图正确性此前无独立验证网
 

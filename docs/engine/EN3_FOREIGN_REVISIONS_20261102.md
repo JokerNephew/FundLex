@@ -1,6 +1,36 @@
 # EN3·外来修订稳健性：全路径审计 + 测试矩阵覆盖断言表（2026-11-02）
 
 用户亲令（2026-11-02）：「合同修订对带修订痕迹的合同也要能稳健的修改，这个要充分的测试检验和优化」「这是最新版的合同样本，要重点测试，不只是针对这两个任务，是全局的要求」
+用户裁决（2026-11-02 落地）：策略锁死 **B（保留原痕叠加）**——原产品部修订红字与我方修订红字两层并存、各自可独立接受/拒绝；**产品面不暴露开关**（锁死单一行为，accept-first 生产默认已废除）。
+
+## 〇、锁死 B 的生产接线（新增，随裁决落地）
+
+- `recall_pipeline` 任务输入的「先接受拍平」规整化**已拆除**（废除 2026-10-31 产品决定）：带痕合同直接进入 overlay 通道
+  （`inspect/validate/generate(allow_existing_revisions=True)` 本就在场），原始痕迹字节级进交付；
+  overlay 不能诚实承载的形状（move 系列/trPr 行标记）在摄入即 typed fail-closed（语料 0 命中）。
+- 报告迹：`tracked_input_strategy="preserve_overlay"` + 外来清单（count/authors/items）；`base_had_tracked_changes`
+  不再置真（selective 历史拍平报告兼容分支保留）；`source_revision_manifest` 由生成校验自带的
+  外来清单下落（既有接线 :6554 未动）。上传侧 `has_tracked_revisions` 仍为纯探测。
+- 双层隔离锚点（写手自证 + 独立复核）：我方 `w:id` 从全包（含页眉/脚注/批注）最大 id 向上取奇起步，
+  奇 del/偶 ins+1 成对，与外来 id 空间不相交；清单按 (part,kind,id,author,date,content_sha256) 六元组绑定。
+- 受影响测试已按新契约跟进：`test_docx_tracked_input.py` 管道 E2E 三例改写（保留双层、锚点不落外来节点、
+  reject-all 恢复+原痕不动、selected-final 与 final c14n 全等）；`test_docx_overlay_contract.py` 契约同批。
+
+## 〇.一、锚点语义硬实证（用户承诺口径，产品部 32 份逐格）
+
+工具 `tools/en3/anchor_semantics_report.py`（独立推导，非引擎自评）；证据
+`docs/engine/en3/evidence/anchor_semantics_20261102.json`：**PASS 30/30 + 2 份 documentProtection 边界**。
+
+| 检查项（每格逐份通过数/30） | 语义 | 结果 |
+|---|---|---|
+| anchor_accept_view_coords | 锚点按接受原痕后文本视图定位：plain[s:e]==expected_old（`_accepted_offsets` 显式换算）| 30/30 |
+| anchor_outside_foreign_nodes | 我方 del/ins 直接挂段落、无任何外来修订祖先——绝不插在原 w:ins/w:del 节点中间 | 30/30 |
+| final_pure | 接受全部后成品零修订标记 | 30/30 |
+| accept_all_equals_final_c14n | accept-all(redline) 与 final 逐 part c14n 全等（引擎外靠 `compare.revisions._accept_revisions` 独立复算）| 30/30 |
+| final_text_equals_reference | final 全文 == 源接受视图全文 + 编辑施加（全文拼接序独立再推导；结构已由前格锁死）| 30/30 |
+| layer_reject_restores_foreign_intact | selective 全部拒绝我方 → 我方成对消失+原文恢复+外来六元组清单逐项不变 | 30/30 |
+| layer_default_equals_final_c14n | selective 默认（全接受我方）→ selected_final 与 final c14n 全等 | 30/30 |
+| id_namespace_isolated | w:id 命名空间隔离：我方⊥外来、奇偶成对、全文唯一 | 30/30 |
 基线：FL-D924 已修（`_pair_revisions` 以 manifest 为准，commit 6afc165 在主线 qa 树就位，本树 HEAD=1b18847 含之），不重复开挖奇偶配对。
 
 ## 一、全路径审计（DOCX 摄入 → 段落 span → 编辑落点 → 输出写回）
@@ -36,7 +66,8 @@
 - 段落含外来 ins 文字的**同段格式断言**降级为空等（双侧 revision 区 segments 抽成 None 恒等）；外来内容本体由 inventory c14n 防篡，我方替换文本格式由 manifest REVISION_TEXT_MISMATCH + 干净段 format 断言共同覆盖。
 - trPr 行标记、move 系列、cellMerge 拒绝视图回滚仍拒入/拒平（语料 0 命中）；sectPr 段落标合并沿用既有 `REVISION_PARAGRAPH_MERGE_UNSUPPORTED`。
 - 2 份 documentProtection 合同全策略拒入（守卫正确）。
-- 生产主链策略仍固定「先接受再改」（2026-10-31 产品决定未动）；A/C 两策略现为引擎级能力开放，产品面是否暴露给用户属用户裁决项（登记待主线转达）。
+- 生产主链策略（2026-11-02 用户裁决，锁死）：**B 保留原痕叠加**为唯一生产行为，无产品面开关；引擎层
+  `normalize_tracked_base(disposition=accept|reject)` 能力保留供测试/评测/未来裁决使用，不接线生产。
 
 ## 二、矩阵覆盖断言表（83 项测试 ≡ 83 格；✅=测试函数 ↔ 格一一对应）
 

@@ -453,8 +453,11 @@ def test_normalize_rejects_unsupported_paragraph_merge(tmp_path: Path):
 def _tracked_contract(path: Path) -> None:
     """Synthetic recall contract carrying foreign tracked changes.
 
-    Foreign ``法律部`` marks: an insertion inside the fee-adjustment paragraph
-    (a paragraph the engine edits) and a deletion in the preface paragraph.
+    Foreign ``法律部`` marks: an insertion and a deletion, both in the
+    preface paragraph (never an engine edit target).  They must not disturb
+    the scripted offsets of the engine's own edit paragraph; the
+    same-paragraph-both-layers geometry is covered by
+    tests/test_tracked_changes_overlay.py and the EN3 corpus matrix.
     """
     from test_recall_core import build_contract
 
@@ -463,13 +466,9 @@ def _tracked_contract(path: Path) -> None:
     def mutate(parts):
         root = _document_root(parts)
         paragraphs = _body_paragraphs(root)
-        # Insertion appended to the FEE_ADJUSTMENT paragraph (engine target).
-        target = next(p for p in paragraphs
-                      if "调低赎回费率" in "".join(n.text or "" for n in p.iter(_q("t"))))
-        _append_revision_run(target, "ins", 9001, "（法律部意见：维持原表述）")
-        # Deletion appended to the preface paragraph (never edited).
         preface = next(p for p in paragraphs
                        if "经中国证监会核准" in "".join(n.text or "" for n in p.iter(_q("t"))))
+        _append_revision_run(preface, "ins", 9001, "（法律部意见：维持原表述）")
         _append_revision_run(preface, "del", 9002, "（法律部删去的旧句）", delete=True)
         _save_root(parts, root)
 
@@ -486,7 +485,9 @@ def _scripted_run(tmp_path: Path, source: Path):
     return output_dir, report
 
 
-def test_pipeline_flattens_input_and_layers_fundlex_marks(tmp_path: Path):
+def test_pipeline_preserves_foreign_marks_and_stacks_engine_layer(tmp_path: Path):
+    """Locked strategy B (2026-11-02 user ruling): foreign marks preserved,
+    engine layer stacked, two layers independently settleable."""
     source = tmp_path / "tracked-contract.docx"
     _tracked_contract(source)
     original_sha = hashlib.sha256(source.read_bytes()).hexdigest()
@@ -497,12 +498,12 @@ def test_pipeline_flattens_input_and_layers_fundlex_marks(tmp_path: Path):
     assert report["delivery_status"] == "complete", json.dumps(
         {"errors": report.get("errors"), "unresolved": report.get("unresolved")},
         ensure_ascii=False, default=str)[:2000]
-    # Traceability: the run is bound to the uploaded file, and the flattened
-    # base plus the pre-existing revision inventory are recorded.
-    assert report["base_had_tracked_changes"] is True
+    # Traceability: bound to the uploaded file; no flattening takes place any
+    # more, so no normalized base exists and the strategy is on record.
     assert report["source_sha256"] == original_sha
-    assert re.fullmatch(r"[0-9a-f]{64}", report["normalized_base_sha256"])
-    assert report["normalized_base_sha256"] != original_sha
+    assert report["base_had_tracked_changes"] is False
+    assert "normalized_base_sha256" not in report
+    assert report["tracked_input_strategy"] == "preserve_overlay"
     inventory = report["source_revisions"]
     assert inventory["authors"] == [AUTHOR_FOREIGN]
     assert {item["kind"] for item in inventory["items"]} == {"ins", "del"}
@@ -512,47 +513,78 @@ def test_pipeline_flattens_input_and_layers_fundlex_marks(tmp_path: Path):
 
     redline = (output_dir / "redline.docx").read_bytes()
     final = (output_dir / "final.docx").read_bytes()
-    red_root = etree.fromstring(_read_parts_bytes(redline, ZipLimits())[DOCUMENT])
+    red_parts = _read_parts_bytes(redline, ZipLimits())
+    red_root = etree.fromstring(red_parts[DOCUMENT])
+    ns = NSM
 
-    authors = {
-        etree.QName(node).localname: node.get(_q("author"), "")
-        for node in red_root.iter() if etree.QName(node).localname in {"ins", "del"}
-    }
-    assert authors, "redline must carry the engine's tracked changes"
-    assert set(authors.values()) == {AUTHOR_ENGINE}
+    # Two layers coexist: foreign marks intact (id author kept) + engine pairs.
+    foreign_ids = {node.get(_q("id")) for node in red_root.xpath("//w:ins|//w:del", namespaces=ns)
+                   if node.get(_q("author")) == AUTHOR_FOREIGN}
+    engine_marks = [node for node in red_root.xpath("//w:ins|//w:del", namespaces=ns)
+                    if node.get(_q("author")) == AUTHOR_ENGINE]
+    assert {"9001", "9002"} <= foreign_ids
+    assert engine_marks, "redline must carry the engine's tracked changes"
+    engine_del = {int(n.get(_q("id"))) for n in engine_marks
+                  if etree.QName(n).localname == "del"}
+    engine_ins = {int(n.get(_q("id"))) for n in engine_marks
+                  if etree.QName(n).localname == "ins"}
+    assert all(d % 2 == 1 and d + 1 in engine_ins for d in engine_del)
+    # w:id namespace isolation: engine ids never collide with foreign ids.
+    assert not ({str(d) for d in engine_del} | {str(i) for i in engine_ins}) & foreign_ids
     for tag in (b"moveFrom", b"moveTo"):
-        assert tag not in _read_parts_bytes(redline, ZipLimits())[DOCUMENT]
+        assert tag not in red_parts[DOCUMENT]
 
-    # Flattened foreign insertion now reads as plain base text, and the same
-    # paragraph carries the engine's own new revision pair.
+    # Anchor semantics: every engine wrapper hangs directly from its target
+    # paragraph, never nested inside a foreign ins/del node.
+    for node in engine_marks:
+        assert etree.QName(node.getparent()).localname == "p"
+        assert not node.xpath("ancestor::w:ins|ancestor::w:del", namespaces=ns)
+
+    # The preface paragraph carries both foreign marks and no engine edit;
+    # the engine's edit paragraph carries only the engine layer.
     flat_insertion = "（法律部意见：维持原表述）"
-    red_plain = "".join(node.text or "" for node in red_root.iter(_q("t")))
-    assert flat_insertion in red_plain
-    fee_paragraph = next(
+    preface_paragraph = next(
         p for p in red_root.find(_q("body")).iter(_q("p"))
         if flat_insertion in "".join(n.text or "" for n in p.iter())
     )
-    fee_marks = {etree.QName(node).localname for node in fee_paragraph.iter()
-                 if etree.QName(node).localname in {"ins", "del"}}
-    assert fee_marks == {"ins", "del"}
+    preface_authors = {node.get(_q("author")) for node in preface_paragraph.iter()
+                       if etree.QName(node).localname in {"ins", "del"}}
+    assert preface_authors == {AUTHOR_FOREIGN}
+    engine_paragraph = next(
+        p for p in red_root.find(_q("body")).iter(_q("p"))
+        if "调低销售服务费率" in "".join(n.text or "" for n in p.iter())
+    )
+    engine_para_authors = {node.get(_q("author")) for node in engine_paragraph.iter()
+                           if etree.QName(node).localname in {"ins", "del"}}
+    assert engine_para_authors == {AUTHOR_ENGINE}
 
     # The accepted final has no tracked marks at all and shows the accepted view.
     final_parts = _read_parts_bytes(final, ZipLimits())
     for tag in REVISION_MARKUP:
         assert tag not in final_parts[DOCUMENT]
-    final_texts = _accepted_text(final)
-    joined = "".join(final_texts)
+    joined = "".join(_accepted_text(final))
     assert flat_insertion in joined
     assert "（法律部删去的旧句）" not in joined
     assert "调低销售服务费率" in joined
-    # Accept-all and the engine final are byte-identical views.
     assert report["output_validation"]["final_sha256"] == hashlib.sha256(final).hexdigest()
     assert report["output_validation"]["redline_sha256"] == hashlib.sha256(redline).hexdigest()
-    # Round-trip through python-docx.
     assert Document(io.BytesIO(final)).paragraphs
     assert Document(io.BytesIO(redline)).paragraphs
-    # The input cleanup is gone with the run.
     assert not list(output_dir.glob("fundlex-base-*"))
+
+    # Layer independence: rejecting every engine edit restores engine wording
+    # and leaves every foreign mark untouched.
+    from fundlex.selective import generate_selected_redline
+    manifest = report["revision_manifest"]
+    rejected = {item["del_id"]: "reject" for item in manifest}
+    settled = tmp_path / "sel-reject-all.docx"
+    generate_selected_redline(output_dir / "redline.docx", settled, report, rejected)
+    settled_root = etree.fromstring(_read_parts_bytes(settled.read_bytes(), ZipLimits())[DOCUMENT])
+    assert not [n for n in settled_root.xpath("//w:ins|//w:del", namespaces=ns)
+                if n.get(_q("author")) == AUTHOR_ENGINE]
+    assert {"9001", "9002"} <= {n.get(_q("id")) for n in
+                                settled_root.xpath("//w:ins|//w:del", namespaces=ns)}
+    assert "调低赎回费率" in "".join(n.text or "" for n in settled_root.iter(_q("t")))
 
 
 def test_pipeline_plain_input_reports_no_tracked_base(tmp_path: Path):
@@ -567,18 +599,25 @@ def test_pipeline_plain_input_reports_no_tracked_base(tmp_path: Path):
     assert report["delivery_status"] == "complete"
     assert report["base_had_tracked_changes"] is False
     assert "normalized_base_sha256" not in report
+    assert "tracked_input_strategy" not in report
     assert "source_revisions" not in report
     assert report["source_sha256"] == original_sha
 
 
-def test_selection_works_on_flattened_redline(tmp_path: Path):
-    """Public review (selective accept/reject) consumes base-flattened reports."""
+def test_selection_works_on_preserved_marks_redline(tmp_path: Path):
+    """Public review (selective accept/reject) over preserved foreign marks.
+
+    Decisions address only engine ids; the foreign layer is validated against
+    the persisted source manifest and kept verbatim in selected redline,
+    while selected final accepts both layers exactly like the engine final.
+    """
     from fundlex.selective import generate_selected_artifact, generate_selected_redline
 
     source = tmp_path / "tracked-contract.docx"
     _tracked_contract(source)
     output_dir, report = _scripted_run(tmp_path, source)
     assert report["delivery_status"] == "complete"
+    assert report.get("source_revision_manifest"), "B 策略下必须持久化外来清单"
 
     selected_final = tmp_path / "selected-final.docx"
     result = generate_selected_artifact(output_dir / "redline.docx", selected_final,
@@ -602,7 +641,6 @@ def test_selection_works_on_flattened_redline(tmp_path: Path):
                               report, decisions={})
     kept = _read_parts_bytes(selected_redline.read_bytes(), ZipLimits())[DOCUMENT]
     assert AUTHOR_ENGINE.encode() in kept
-    # The foreign author survives only as flattened base *text*, never as the
-    # author of a tracked mark.
-    assert b'w:author="' + AUTHOR_FOREIGN.encode() + b'"' not in kept
-    assert "（法律部意见：维持原表述）".encode() in kept
+    # Both layers stay marked: the foreign author survives as tracked marks.
+    assert b'w:author="' + AUTHOR_FOREIGN.encode() + b'"' in kept
+    assert b'w:id="9001"' in kept and b'w:id="9002"' in kept

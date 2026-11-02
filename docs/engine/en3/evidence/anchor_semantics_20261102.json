@@ -1,0 +1,541 @@
+{
+  "generated_at": "2026-11-02T00:29:00Z",
+  "elapsed_s": 746.1,
+  "files": 32,
+  "status_counts": {
+    "PASS": 30,
+    "BOUNDARY_PROTECTED": 2
+  },
+  "check_totals": {
+    "anchor_accept_view_coords": 30,
+    "anchor_outside_foreign_nodes": 30,
+    "final_pure": 30,
+    "accept_all_equals_final_c14n": 30,
+    "final_text_equals_reference": 30,
+    "layer_reject_restores_foreign_intact": 30,
+    "layer_default_equals_final_c14n": 30,
+    "id_namespace_isolated": 30
+  },
+  "rows": [
+    {
+      "file": "广发ESG责任投资混合型证券投资基金基金合同.docx",
+      "protected": false,
+      "status": "PASS",
+      "location": "p717",
+      "foreign_marks": 97,
+      "checks": {
+        "anchor_accept_view_coords": true,
+        "anchor_outside_foreign_nodes": true,
+        "final_pure": true,
+        "accept_all_equals_final_c14n": true,
+        "final_text_equals_reference": true,
+        "layer_reject_restores_foreign_intact": true,
+        "layer_default_equals_final_c14n": true,
+        "id_namespace_isolated": true
+      }
+    },
+    {
+      "file": "广发中证A50交易型开放式指数证券投资基金联接基金合同20261020.docx",
+      "protected": false,
+      "status": "PASS",
+      "location": "p702",
+      "foreign_marks": 111,
+      "checks": {
+        "anchor_accept_view_coords": true,
+        "anchor_outside_foreign_nodes": true,
+        "final_pure": true,
+        "accept_all_equals_final_c14n": true,
+        "final_text_equals_reference": true,
+        "layer_reject_restores_foreign_intact": true,
+        "layer_default_equals_final_c14n": true,
+        "id_namespace_isolated": true
+      }
+    },
+    {
+      "file": "广发价值优选混合型证券投资基金基金合同.docx",
+      "protected": false,
+      "status": "PASS",
+      "location": "p710",
+      "foreign_marks": 63,
+      "checks": {
+        "anchor_accept_view_coords": true,
+        "anchor_outside_foreign_nodes": true,
+        "final_pure": true,
+        "accept_all_equals_final_c14n": true,
+        "final_text_equals_reference": true,
+        "layer_reject_restores_foreign_intact": true,
+        "layer_default_equals_final_c14n": true,
+        "id_namespace_isolated": true
+      }
+    },
+    {
+      "file": "广发全球稳健配置混合型证券投资基金（QDII）基金合同-修订版.docx",
+      "protected": false,
+      "status": "PASS",
+      "location": "p812",
+      "foreign_marks": 67,
+      "checks": {
+        "anchor_accept_view_coords": true,
+        "anchor_outside_foreign_nodes": true,
+        "final_pure": true,
+        "accept_all_equals_final_c14n": true,
+        "final_text_equals_reference": true,
+        "layer_reject_restores_foreign_intact": true,
+        "layer_default_equals_final_c14n": true,
+        "id_namespace_isolated": true
+      }
+    },
+    {
+      "file": "广发品质优选混合型发起式证券投资基金基金合同.docx",
+      "protected": false,
+      "status": "PASS",
+      "location": "p736",
+      "foreign_marks": 150,
+      "checks": {
+        "anchor_accept_view_coords": true,
+        "anchor_outside_foreign_nodes": true,
+        "final_pure": true,
+        "accept_all_equals_final_c14n": true,
+        "final_text_equals_reference": true,
+        "layer_reject_restores_foreign_intact": true,
+        "layer_default_equals_final_c14n": true,
+        "id_namespace_isolated": true
+      }
+    },
+    {
+      "file": "广发安颐一年持有期混合型证券投资基金基金合同-修订版.docx",
+      "protected": false,
+      "status": "PASS",
+      "location": "p743",
+      "foreign_marks": 252,
+      "checks": {
+        "anchor_accept_view_coords": true,
+        "anchor_outside_foreign_nodes": true,
+        "final_pure": true,
+        "accept_all_equals_final_c14n": true,
+        "final_text_equals_reference": true,
+        "layer_reject_restores_foreign_intact": true,
+        "layer_default_equals_final_c14n": true,
+        "id_namespace_isolated": true
+      }
+    },
+    {
+      "file": "广发富信优选六个月持有期混合型基金中基金（FOF）基金合同20261020.docx",
+      "protected": false,
+      "status": "PASS",
+      "location": "p729",
+      "foreign_marks": 133,
+      "checks": {
+        "anchor_accept_view_coords": true,
+        "anchor_outside_foreign_nodes": true,
+        "final_pure": true,
+        "accept_all_equals_final_c14n": true,
+        "final_text_equals_reference": true,
+        "layer_reject_restores_foreign_intact": true,
+        "layer_default_equals_final_c14n": true,
+        "id_namespace_isolated": true
+      }
+    },
+    {
+      "file": "广发弘利3个月滚动持有债券型证券投资基金基金合同-修订版.docx",
+      "protected": false,
+      "status": "PASS",
+      "location": "p689",
+      "foreign_marks": 57,
+      "checks": {
+        "anchor_accept_view_coords": true,
+        "anchor_outside_foreign_nodes": true,
+        "final_pure": true,
+        "accept_all_equals_final_c14n": true,
+        "final_text_equals_reference": true,
+        "layer_reject_restores_foreign_intact": true,
+        "layer_default_equals_final_c14n": true,
+        "id_namespace_isolated": true
+      }
+    },
+    {
+      "file": "广发恒昌一年持有期混合型证券投资基金基金合同20261022.docx",
+      "protected": false,
+      "status": "PASS",
+      "location": "p721",
+      "foreign_marks": 60,
+      "checks": {
+        "anchor_accept_view_coords": true,
+        "anchor_outside_foreign_nodes": true,
+        "final_pure": true,
+        "accept_all_equals_final_c14n": true,
+        "final_text_equals_reference": true,
+        "layer_reject_restores_foreign_intact": true,
+        "layer_default_equals_final_c14n": true,
+        "id_namespace_isolated": true
+      }
+    },
+    {
+      "file": "广发恒裕一年持有期混合型证券投资基金基金合同.docx",
+      "protected": true,
+      "status": "BOUNDARY_PROTECTED"
+    },
+    {
+      "file": "广发恒鑫一年持有期混合型证券投资基金基金合同20261020.docx",
+      "protected": false,
+      "status": "PASS",
+      "location": "p722",
+      "foreign_marks": 134,
+      "checks": {
+        "anchor_accept_view_coords": true,
+        "anchor_outside_foreign_nodes": true,
+        "final_pure": true,
+        "accept_all_equals_final_c14n": true,
+        "final_text_equals_reference": true,
+        "layer_reject_restores_foreign_intact": true,
+        "layer_default_equals_final_c14n": true,
+        "id_namespace_isolated": true
+      }
+    },
+    {
+      "file": "广发恒阳一年持有期混合型证券投资基金基金合同20261022.docx",
+      "protected": false,
+      "status": "PASS",
+      "location": "p722",
+      "foreign_marks": 134,
+      "checks": {
+        "anchor_accept_view_coords": true,
+        "anchor_outside_foreign_nodes": true,
+        "final_pure": true,
+        "accept_all_equals_final_c14n": true,
+        "final_text_equals_reference": true,
+        "layer_reject_restores_foreign_intact": true,
+        "layer_default_equals_final_c14n": true,
+        "id_namespace_isolated": true
+      }
+    },
+    {
+      "file": "广发恒隆一年持有期混合型证券投资基金基金合同20261020.docx",
+      "protected": false,
+      "status": "PASS",
+      "location": "p720",
+      "foreign_marks": 131,
+      "checks": {
+        "anchor_accept_view_coords": true,
+        "anchor_outside_foreign_nodes": true,
+        "final_pure": true,
+        "accept_all_equals_final_c14n": true,
+        "final_text_equals_reference": true,
+        "layer_reject_restores_foreign_intact": true,
+        "layer_default_equals_final_c14n": true,
+        "id_namespace_isolated": true
+      }
+    },
+    {
+      "file": "广发招利混合型证券投资基金基金合同.docx",
+      "protected": false,
+      "status": "PASS",
+      "location": "p714",
+      "foreign_marks": 136,
+      "checks": {
+        "anchor_accept_view_coords": true,
+        "anchor_outside_foreign_nodes": true,
+        "final_pure": true,
+        "accept_all_equals_final_c14n": true,
+        "final_text_equals_reference": true,
+        "layer_reject_restores_foreign_intact": true,
+        "layer_default_equals_final_c14n": true,
+        "id_namespace_isolated": true
+      }
+    },
+    {
+      "file": "广发景宁纯债债券型证券投资基金基金合同.docx",
+      "protected": false,
+      "status": "PASS",
+      "location": "p689",
+      "foreign_marks": 93,
+      "checks": {
+        "anchor_accept_view_coords": true,
+        "anchor_outside_foreign_nodes": true,
+        "final_pure": true,
+        "accept_all_equals_final_c14n": true,
+        "final_text_equals_reference": true,
+        "layer_reject_restores_foreign_intact": true,
+        "layer_default_equals_final_c14n": true,
+        "id_namespace_isolated": true
+      }
+    },
+    {
+      "file": "广发景荣纯债债券型证券投资基金基金合同（修订版）.docx",
+      "protected": false,
+      "status": "PASS",
+      "location": "p655",
+      "foreign_marks": 99,
+      "checks": {
+        "anchor_accept_view_coords": true,
+        "anchor_outside_foreign_nodes": true,
+        "final_pure": true,
+        "accept_all_equals_final_c14n": true,
+        "final_text_equals_reference": true,
+        "layer_reject_restores_foreign_intact": true,
+        "layer_default_equals_final_c14n": true,
+        "id_namespace_isolated": true
+      }
+    },
+    {
+      "file": "广发沪深300指数增强型发起式证券投资基金基金合同（销售费用新规修订版）.docx",
+      "protected": false,
+      "status": "PASS",
+      "location": "p705",
+      "foreign_marks": 115,
+      "checks": {
+        "anchor_accept_view_coords": true,
+        "anchor_outside_foreign_nodes": true,
+        "final_pure": true,
+        "accept_all_equals_final_c14n": true,
+        "final_text_equals_reference": true,
+        "layer_reject_restores_foreign_intact": true,
+        "layer_default_equals_final_c14n": true,
+        "id_namespace_isolated": true
+      }
+    },
+    {
+      "file": "广发沪港深精选混合型证券投资基金基金合同.docx",
+      "protected": false,
+      "status": "PASS",
+      "location": "p711",
+      "foreign_marks": 167,
+      "checks": {
+        "anchor_accept_view_coords": true,
+        "anchor_outside_foreign_nodes": true,
+        "final_pure": true,
+        "accept_all_equals_final_c14n": true,
+        "final_text_equals_reference": true,
+        "layer_reject_restores_foreign_intact": true,
+        "layer_default_equals_final_c14n": true,
+        "id_namespace_isolated": true
+      }
+    },
+    {
+      "file": "广发港股通恒生综合中型股指数证券投资基金（LOF）基金合同（销售费用新规修订版）.docx",
+      "protected": false,
+      "status": "PASS",
+      "location": "p734",
+      "foreign_marks": 131,
+      "checks": {
+        "anchor_accept_view_coords": true,
+        "anchor_outside_foreign_nodes": true,
+        "final_pure": true,
+        "accept_all_equals_final_c14n": true,
+        "final_text_equals_reference": true,
+        "layer_reject_restores_foreign_intact": true,
+        "layer_default_equals_final_c14n": true,
+        "id_namespace_isolated": true
+      }
+    },
+    {
+      "file": "广发瑞誉一年持有期混合型证券投资基金基金合同-修订版.docx",
+      "protected": false,
+      "status": "PASS",
+      "location": "p724",
+      "foreign_marks": 260,
+      "checks": {
+        "anchor_accept_view_coords": true,
+        "anchor_outside_foreign_nodes": true,
+        "final_pure": true,
+        "accept_all_equals_final_c14n": true,
+        "final_text_equals_reference": true,
+        "layer_reject_restores_foreign_intact": true,
+        "layer_default_equals_final_c14n": true,
+        "id_namespace_isolated": true
+      }
+    },
+    {
+      "file": "广发睿明优质企业混合型证券投资基金基金合同.docx",
+      "protected": false,
+      "status": "PASS",
+      "location": "p709",
+      "foreign_marks": 62,
+      "checks": {
+        "anchor_accept_view_coords": true,
+        "anchor_outside_foreign_nodes": true,
+        "final_pure": true,
+        "accept_all_equals_final_c14n": true,
+        "final_text_equals_reference": true,
+        "layer_reject_restores_foreign_intact": true,
+        "layer_default_equals_final_c14n": true,
+        "id_namespace_isolated": true
+      }
+    },
+    {
+      "file": "广发稳信六个月持有期混合型证券投资基金基金合同-修订版.docx",
+      "protected": true,
+      "status": "BOUNDARY_PROTECTED"
+    },
+    {
+      "file": "广发稳健养老目标一年持有期混合型基金中基金（FOF）基金合同-修订版.docx",
+      "protected": false,
+      "status": "PASS",
+      "location": "p711",
+      "foreign_marks": 19,
+      "checks": {
+        "anchor_accept_view_coords": true,
+        "anchor_outside_foreign_nodes": true,
+        "final_pure": true,
+        "accept_all_equals_final_c14n": true,
+        "final_text_equals_reference": true,
+        "layer_reject_restores_foreign_intact": true,
+        "layer_default_equals_final_c14n": true,
+        "id_namespace_isolated": true
+      }
+    },
+    {
+      "file": "广发稳宏一年持有期混合型证券投资基金基金合同-修订版.docx",
+      "protected": false,
+      "status": "PASS",
+      "location": "p740",
+      "foreign_marks": 241,
+      "checks": {
+        "anchor_accept_view_coords": true,
+        "anchor_outside_foreign_nodes": true,
+        "final_pure": true,
+        "accept_all_equals_final_c14n": true,
+        "final_text_equals_reference": true,
+        "layer_reject_restores_foreign_intact": true,
+        "layer_default_equals_final_c14n": true,
+        "id_namespace_isolated": true
+      }
+    },
+    {
+      "file": "广发纳斯达克生物科技指数型发起式证券投资基金基金合同.docx",
+      "protected": false,
+      "status": "PASS",
+      "location": "p799",
+      "foreign_marks": 124,
+      "checks": {
+        "anchor_accept_view_coords": true,
+        "anchor_outside_foreign_nodes": true,
+        "final_pure": true,
+        "accept_all_equals_final_c14n": true,
+        "final_text_equals_reference": true,
+        "layer_reject_restores_foreign_intact": true,
+        "layer_default_equals_final_c14n": true,
+        "id_namespace_isolated": true
+      }
+    },
+    {
+      "file": "广发美国房地产指数证券投资基金基金合同（销售费用新规修订版）.docx",
+      "protected": false,
+      "status": "PASS",
+      "location": "p585",
+      "foreign_marks": 145,
+      "checks": {
+        "anchor_accept_view_coords": true,
+        "anchor_outside_foreign_nodes": true,
+        "final_pure": true,
+        "accept_all_equals_final_c14n": true,
+        "final_text_equals_reference": true,
+        "layer_reject_restores_foreign_intact": true,
+        "layer_default_equals_final_c14n": true,
+        "id_namespace_isolated": true
+      }
+    },
+    {
+      "file": "广发聚安混合型证券投资基金基金合同.docx",
+      "protected": false,
+      "status": "PASS",
+      "location": "p711",
+      "foreign_marks": 53,
+      "checks": {
+        "anchor_accept_view_coords": true,
+        "anchor_outside_foreign_nodes": true,
+        "final_pure": true,
+        "accept_all_equals_final_c14n": true,
+        "final_text_equals_reference": true,
+        "layer_reject_restores_foreign_intact": true,
+        "layer_default_equals_final_c14n": true,
+        "id_namespace_isolated": true
+      }
+    },
+    {
+      "file": "广发道琼斯美国石油开发与生产指数证券投资基金（QDII-LOF）基金合同（销售费用新规修订版）.docx",
+      "protected": false,
+      "status": "PASS",
+      "location": "p768",
+      "foreign_marks": 166,
+      "checks": {
+        "anchor_accept_view_coords": true,
+        "anchor_outside_foreign_nodes": true,
+        "final_pure": true,
+        "accept_all_equals_final_c14n": true,
+        "final_text_equals_reference": true,
+        "layer_reject_restores_foreign_intact": true,
+        "layer_default_equals_final_c14n": true,
+        "id_namespace_isolated": true
+      }
+    },
+    {
+      "file": "广发鑫裕灵活配置混合型证券投资基金基金合同.docx",
+      "protected": false,
+      "status": "PASS",
+      "location": "p705",
+      "foreign_marks": 60,
+      "checks": {
+        "anchor_accept_view_coords": true,
+        "anchor_outside_foreign_nodes": true,
+        "final_pure": true,
+        "accept_all_equals_final_c14n": true,
+        "final_text_equals_reference": true,
+        "layer_reject_restores_foreign_intact": true,
+        "layer_default_equals_final_c14n": true,
+        "id_namespace_isolated": true
+      }
+    },
+    {
+      "file": "广发锐意进取3个月持有期混合型发起式基金中基金（FOF）基金合同（销售费用新规修订版）.docx",
+      "protected": false,
+      "status": "PASS",
+      "location": "p735",
+      "foreign_marks": 175,
+      "checks": {
+        "anchor_accept_view_coords": true,
+        "anchor_outside_foreign_nodes": true,
+        "final_pure": true,
+        "accept_all_equals_final_c14n": true,
+        "final_text_equals_reference": true,
+        "layer_reject_restores_foreign_intact": true,
+        "layer_default_equals_final_c14n": true,
+        "id_namespace_isolated": true
+      }
+    },
+    {
+      "file": "广发集利一年定期开放债券型证券投资基金基金合同-修订版.docx",
+      "protected": false,
+      "status": "PASS",
+      "location": "p715",
+      "foreign_marks": 195,
+      "checks": {
+        "anchor_accept_view_coords": true,
+        "anchor_outside_foreign_nodes": true,
+        "final_pure": true,
+        "accept_all_equals_final_c14n": true,
+        "final_text_equals_reference": true,
+        "layer_reject_restores_foreign_intact": true,
+        "layer_default_equals_final_c14n": true,
+        "id_namespace_isolated": true
+      }
+    },
+    {
+      "file": "广发集盛债券型证券投资基金基金合同.docx",
+      "protected": false,
+      "status": "PASS",
+      "location": "p720",
+      "foreign_marks": 60,
+      "checks": {
+        "anchor_accept_view_coords": true,
+        "anchor_outside_foreign_nodes": true,
+        "final_pure": true,
+        "accept_all_equals_final_c14n": true,
+        "final_text_equals_reference": true,
+        "layer_reject_restores_foreign_intact": true,
+        "layer_default_equals_final_c14n": true,
+        "id_namespace_isolated": true
+      }
+    }
+  ]
+}
