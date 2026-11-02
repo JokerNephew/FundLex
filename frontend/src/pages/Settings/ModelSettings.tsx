@@ -62,6 +62,7 @@ function RoleCard({ name, role, saved, value, editing, verified, busy, providers
     } finally { setTesting(false) }
   }
   const suggestions = providers.find(provider => provider.id === value.provider)?.models || []
+  const retired = providers.find(provider => provider.id === value.provider)?.deprecated_models || []
   const isPersonal = saved?.source === 'personal'
   const providerLabel = providers.find(provider => provider.id === saved?.provider)?.label || saved?.provider || '—'
   const badge = !isPersonal
@@ -79,6 +80,7 @@ function RoleCard({ name, role, saved, value, editing, verified, busy, providers
         {value.source === 'personal' ? <>
           <label>供应商<select value={value.provider} disabled={busy} onChange={event => update('provider', event.target.value)}>{providers.map(provider => <option value={provider.id} key={provider.id}>{provider.label}</option>)}</select></label>
           <label>模型<input value={value.model} list={`model-${role}-suggestions`} required disabled={busy} placeholder="选择建议或填写供应商提供的模型名称" onChange={event => update('model', event.target.value)} /><datalist id={`model-${role}-suggestions`}>{suggestions.map(model => <option key={model} value={model} />)}</datalist></label>
+          {retired.length > 0 ? <p className="muted form-grid-full model-deprecated-hint">已停用或拟停用<span aria-hidden>（灰置不可选）</span>：{retired.map(item => <span key={item.id} className="model-deprecated-item"><del>{item.id}</del> — {item.note}</span>)}</p> : null}
           {value.provider === 'custom' ? <label className="form-grid-full">服务地址<input type="url" value={value.base_url} disabled={busy} required placeholder="https://你的服务商地址/v1" onChange={event => update('base_url', event.target.value)} /></label> : null}
           <label className="form-grid-full">访问密钥（API Key）<input type="password" autoComplete="new-password" maxLength={4096} required={!value.connection_id} value={value.api_key} disabled={busy} placeholder={value.connection_id ? '已保存；留空保留，填写可更换' : '粘贴供应商提供的访问密钥'} onChange={event => update('api_key', event.target.value)} /><span className="muted">在供应商控制台获取，仅供你本人使用，加密保存，不回显。</span></label>
         </> : null}

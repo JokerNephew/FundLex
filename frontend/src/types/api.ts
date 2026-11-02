@@ -173,7 +173,8 @@ export interface ModelSettings {
   review_inherits: boolean
   task_roles?: Record<string, string>
   legacy_preferences?: boolean
-  providers: Array<{ id: string; label: string; base_url: string; models: string[] }>
+  providers: Array<{ id: string; label: string; base_url: string; models: string[];
+    deprecated_models?: Array<{ id: string; note: string }> }>
 }
 
 export type TaskStatus = 'uploading' | 'queued' | 'running' | 'paused' | 'completed' | 'completed_with_exceptions' | 'failed' | string

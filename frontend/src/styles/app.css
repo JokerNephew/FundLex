@@ -754,3 +754,8 @@ body.compare-fullscreen-open{overflow:hidden!important}
 @keyframes panel-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
 .main-content > * { animation: view-in var(--dur-med) var(--ease-standard); }
 .notification-panel { animation: panel-in var(--dur-med) var(--ease-standard); }
+
+/* FL-D937(7)：已停用/拟停用模型条目灰置展示（可选列表中不出现） */
+.model-deprecated-hint { color: var(--muted); font-size: var(--list-meta-size, 12px); }
+.model-deprecated-item { display: inline-block; margin-right: 0.75em; color: var(--muted); }
+.model-deprecated-item del { opacity: 0.65; }
