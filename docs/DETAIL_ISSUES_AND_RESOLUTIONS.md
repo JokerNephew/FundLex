@@ -9196,9 +9196,10 @@ H＝E×…
 ### FL-D1037（原 FL-DT-10）直通工单引用的评估文档一时间未提交入各线基线（2026-11-02，流程留档·已补救）
 - 事实：`docs/DIRECT_THROUGH_REFACTOR_ASSESSMENT_20261102.md` 在 qa-base 曾长期未跟踪，第 5 线指出工单引用缺失；已由 `a7ae212` 提交补救。仅流程教训：工单引用文档必须先入库再派工。无需代码动作。
 
-### FL-DT-12 集成冒烟脚本误加载生产 env，测试数据写入生产 MySQL（2026-11-02，open·处置中）
+### FL-D1044（原 FL-DT-12）集成冒烟脚本误加载生产 env，测试数据写入生产 MySQL（2026-11-02，open·处置中）
 - 事实（第 6 线自报，属实）：真冒烟脚本随进程完整加载 `/etc/fundlex-recall.env`，`FUNDLEX_DATABASE_URL` 进入进程后任务行被写入**生产 MySQL**：owner=`smoke-owner`，涉及 guide_versions（abd43559→ba67715a 两版本）、guide_jobs、guide_config、tasks、task_batches、batches、documents、artifacts 链路行级数据；对象文件在 /tmp 独立目录，**未触碰生产对象文件、未影响服务、无用户数据**。
-- 处置（已定）：①生产库清理由 REL 单通道审核执行（第 6 线交精确 SQL 包、本人不得在产库执行写/删），执行前后 select 计数留证；②冒烟/e2e 脚本加“发现生产 DATABASE_URL 即 fail-fast”自检并强制 sqlite 临时库，修好前停止真冒烟；③脚本键路修正（matched_report 误读 direct_edit 块）在隔离环境重跑取证。正号待接班派（占位 FL-DT-12）。
+- 处置（已定）：①生产库清理由 REL 单通道审核执行（第 6 线交精确 SQL 包、本人不得在产库执行写/删），执行前后 select 计数留证；②冒烟/e2e 脚本加“发现生产 DATABASE_URL 即 fail-fast”自检并强制 sqlite 临时库，修好前停止真冒烟；③脚本键路修正（matched_report 误读 direct_edit 块）在隔离环境重跑取证。
+- 编号与验收要件（2026-11-02，接班 `beb723f` 权威映射 FL-DT-12→FL-D1044，下一可用 FL-D1045）：自报属实记档不追责；①生产清理只走 REL 单通道，清完 REL 须报**事务号**留证；②fail-fast 隔离验收**以代码 diff 为准，不看承诺**——冒烟脚本加载 env 命中生产 URL 必须即时自爆，否则同类零再犯不成立。状态保持 open 至两项证据到齐。
 - 教训：任何 Worker/脚本冒烟必须在启动时断言运行库地址属于临时隔离库，不得默认继承系统 env。
 
 ### FL-D1038（原 FL-DT-11）AGENTS.md 公网出口 IP 与本机实测不一致（2026-11-02，已处置·接班域完成）
