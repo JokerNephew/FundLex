@@ -983,7 +983,8 @@ def test_v1_password_late_401_from_previous_account_does_not_logout_new_session(
         page.locator("#login-password").fill("frontend-a-password")
         page.locator("#login-submit").click()
         page.locator("#topbar-user").wait_for(state="visible")
-        page.locator('.sidebar [data-nav="settings"]').click()
+        # FL-D989：飞书绑定已拆为独立页（ACCEPT-FL-D989），绑定请求在 #feishu 页触发
+        page.locator('.sidebar [data-nav="feishu"]').click()
         deadline = time.monotonic() + 5
         while not held and time.monotonic() < deadline:
             page.wait_for_timeout(50)

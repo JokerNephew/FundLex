@@ -124,9 +124,15 @@ def test_upload_list_and_compare_view(browser, live_app, tmp_path):
         # Compare view: defaults current-vs-previous and shows the rule delta.
         page.wait_for_selector("h2:has-text('版本对比')", timeout=15_000)
         against = page.get_by_label("基准版本")
-        against.select_option(ids["first"])
+        # FL-D991：下拉已由原生 <select> 换为 listbox 组件（监督验收 ACCEPT-FL-D991）
+        against.click()
+        # FL-D991：listbox 组件替换（ACCEPT-FL-D991）；两个自定义版同名 guide-v1.docx，
+        # 以「（当前）」徽标区分新旧：基准=非当前旧版。
+        page.get_by_role("option").filter(has_text="guide-v1.docx").filter(has_not_text="（当前）").first.click()
         target = page.get_by_label("对比版本")
-        target.select_option(ids["second"])
+        target.click()
+        # 目标下拉里已排除基准项，同名两个自定义版只剩新版（CompareCard options 过滤 effectiveAgainst）
+        page.get_by_role("option").filter(has_text="guide-v1.docx").first.click()
         summary = page.locator("[data-testid='guide-diff-summary']")
         summary.wait_for(timeout=15_000)
         text = summary.inner_text().replace(" ", "").replace("\u00a0", "")

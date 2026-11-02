@@ -554,10 +554,10 @@ def test_model_and_feishu_pages_are_separate(ui):
     expect(page.locator('#model-settings-card')).to_be_visible()
     expect(page.locator('#feishu-connect-card')).to_be_hidden()
     requests.clear()
-    page.locator('.sidebar [data-nav="settings"]').click()
+    # FL-D989：飞书绑定已拆为独立页（ACCEPT-FL-D989），绑定卡移驻 #feishu 页
+    page.locator('.sidebar [data-nav="feishu"]').click()
     expect(page.locator('#feishu-connect-card')).to_be_visible()
     expect(page.locator('#model-settings-card')).to_be_hidden()
-    expect(page.locator('#breadcrumb')).to_contain_text('设置')
     assert not any('/api/settings/model' in url for url in requests)
 
 
