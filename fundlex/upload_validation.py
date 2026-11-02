@@ -73,10 +73,10 @@ def validate_docx_upload(name: str, data: bytes) -> str:
 def has_tracked_revisions(data: bytes) -> bool:
     """Detect Word tracked changes in an uploaded document.
 
-    Detection helper only: tracked inputs are **not** rejected.  The recall
-    pipeline normalizes them to the accepted view at task input
-    (:func:`fundlex.docx.normalize_tracked_base`) and layers the engine's own
-    new revisions on that base.
+    Detection helper only: tracked inputs are **not** rejected.  Locked
+    strategy B (2026-11-02 user ruling): the recall pipeline carries foreign
+    marks into delivery and stacks its own new revisions on top; no flattening
+    is applied at task input.
     """
     try:
         with zipfile.ZipFile(io.BytesIO(data)) as archive:

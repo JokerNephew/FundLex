@@ -197,27 +197,56 @@ def test_same_author_foreign_revision_remains_distinguishable(tmp_path):
     assert _revision_inventory(selected) == []
 
 
-def test_paragraph_mark_revision_is_rejected_at_entry(tmp_path):
+def test_paragraph_mark_revision_is_carried_as_opaque_metadata(tmp_path):
+    # EN3 (2026-11-02): paragraph-mark revisions (pPr/rPr/ins|del) are Word's
+    # standard shape for an inserted/deleted pilcrow.  They carry no text and
+    # shift no projection offsets, so the overlay admits them as opaque
+    # metadata.  Row marks and moves keep their fail-closed rejection.
     body = ("<w:p><w:pPr><w:rPr><w:del w:id=\"10\" w:author=\"" + FOREIGN
             + "\" w:date=\"2026-10-01T00:00:00Z\"/></w:rPr></w:pPr>"
             + HELPERS["run"]("前文") + "</w:p><w:p>" + HELPERS["run"]("旧文") + "</w:p>")
     source = _build(tmp_path, body)
+    inspection = editor.inspect_docx(source, full=True, allow_existing_revisions=True)
+    assert any(entry["kind"] == "del" and entry["id"] == "10"
+               for entry in inspection.revisions)
+    # The paragraph text is unchanged by the mark revision and stays editable.
+    assert inspection.by_location("p1").editable
+    # A table-row mark still changes topology and stays rejected.
+    row_body = ("<w:tbl><w:tr><w:trPr><w:del w:id=\"10\" w:author=\"" + FOREIGN
+                + "\" w:date=\"2026-10-01T00:00:00Z\"/></w:trPr>"
+                + "<w:tc><w:p>" + HELPERS["run"]("单元格") + "</w:p></w:tc></w:tr></w:tbl>")
+    row_source = _build(tmp_path, row_body, name="row.docx")
     with pytest.raises(editor.DocxError) as error:
-        editor.inspect_docx(source, full=True, allow_existing_revisions=True)
+        editor.inspect_docx(row_source, full=True, allow_existing_revisions=True)
     assert error.value.code == "EXISTING_REVISION_STRUCTURE_UNSUPPORTED"
     assert "paragraph-or-row-mark" in str(error.value)
 
 
-def test_nested_revision_is_rejected_at_entry(tmp_path):
+def test_nested_inline_revision_is_carried_as_opaque_region(tmp_path):
+    # EN3 (2026-11-02): Word legally nests inline revisions (a reviewer
+    # retracting part of their own insertion, ins>del).  The outermost wrapper
+    # is one opaque foreign region: the projection already handles both
+    # branches and the writer never enters a foreign wrapper.
     body = ("<w:p><w:ins w:id=\"10\" w:author=\"" + FOREIGN
             + "\" w:date=\"2026-10-01T00:00:00Z\"><w:del w:id=\"11\" w:author=\""
             + FOREIGN + "\" w:date=\"2026-10-01T00:00:00Z\"><w:r><w:delText>旧</w:delText>"
             + "</w:r></w:del><w:r><w:t>新</w:t></w:r></w:ins></w:p>")
     source = _build(tmp_path, body)
+    inspection = editor.inspect_docx(source, full=True, allow_existing_revisions=True)
+    assert inspection.by_location("p0").text.replace("\ufff9", "") == "新"
+    ids = {entry["id"] for entry in inspection.revisions}
+    assert "10" in ids
+    # A move still carries topology the overlay cannot preserve: rejected.
     with pytest.raises(editor.DocxError) as error:
-        editor.inspect_docx(source, full=True, allow_existing_revisions=True)
+        editor.inspect_docx(
+            _build(tmp_path, "<w:moveFromRangeStart w:id=\"20\" w:name=\"m\"/>"
+                   "<w:p>" + HELPERS["run"]("挪动") + "</w:p>"
+                   "<w:moveFromRangeEnd w:id=\"20\"/>"
+                   "<w:moveFrom w:id=\"21\" w:author=\"" + FOREIGN
+                   + "\" w:date=\"2026-10-01T00:00:00Z\"><w:r><w:delText>挪</w:delText></w:r></w:moveFrom>",
+                   name="move.docx"),
+            full=True, allow_existing_revisions=True)
     assert error.value.code == "EXISTING_REVISION_STRUCTURE_UNSUPPORTED"
-    assert "nested-revision" in str(error.value)
 
 
 def test_low_level_reject_restores_source_with_foreign_marks(tmp_path):

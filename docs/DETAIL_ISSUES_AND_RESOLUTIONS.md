@@ -9065,3 +9065,9 @@ H＝E×…
 - 删除 React 应用本体+dist+构建链；api.py 摘除 v2 分支/`/assets` 挂载；遗留 v2 env flag 断言「不再切换」。
 - **FL-D1011 React 专属测试删除的 V1 覆盖债**（open）：test_guide_history/guides 上传-列表-版本对比走查、test_guide_diff React 游走查随删除失效——V1 侧等价走查由 FE-E/QA 在 V1 表面战与阶段二重写补齐，不许无声丢coverage。
 - V2 线转 V1 战（指引版本比对 A8 在 V1 重做）；INT 的 npm build/vitest 验证步骤失效，改为 V1 浏览器套件+api 测试。
+
+## FL-D1012 全部工作树被批量误抹事件（2026-11-02 10:4x，严重事故，处置中）
+- 现场：worktree/29a9a9 下 18 棵树仅剩 qa-frontend-e（当时活跃会话）；会话报 LocationNotFound（QA/GG/EN2）。
+- 定损：committed 工作基本幸存（分支全在）；损失=EN2 四个未并入 commit（03:16/06:14/06:17(D4)/08:48(C1) 对象库不可寻回，EN2 重做）、EVAL devfix 47/75 在跑运行时状态（var 不入库，重跑认损）。
+- 根因（高度疑似未终证）：opencode 位置闲置卸载（唯一幸存=当时活跃树）——处置：实验项 location_idle_timeout=false 已写入全局配置；全部树已从分支重建；EN2 树以救援分支重建。
+- 后续：看 INT-LOG 与 dispatch-log 追溯是否有第二原因；重建后各线复工令已发。
