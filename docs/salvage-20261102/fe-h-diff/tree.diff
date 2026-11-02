@@ -1,0 +1,476 @@
+diff --git a/docs/DETAIL_ISSUES_AND_RESOLUTIONS.md b/docs/DETAIL_ISSUES_AND_RESOLUTIONS.md
+index 968434d..7151db1 100644
+--- a/docs/DETAIL_ISSUES_AND_RESOLUTIONS.md
++++ b/docs/DETAIL_ISSUES_AND_RESOLUTIONS.md
+@@ -6621,3 +6621,24 @@ H＝E×…
+ - 验证：主工作区workspace浏览器1 passed；干净候选V1浏览器15 passed，入口单测3 passed。正式注册/登录→上传公开指引比对任务→回工作台，用真实API created_at核对表格显示、说明节点0、任务名无small、成功状态空、表头创建时间、页面错误0；证据`/tmp/opencode/prod-workspace-copy.json`及`prod-workspace-copy.png`。脚本首轮直接fetch未带应用鉴权401已改为受支持的FundLexWorkbench.json，不作为产品认证故障。
+ - 发布范围：先合并最新生产877a980独立模型页面到原Compare发布线，保留此前对齐修复；本轮主代码a58a36b/66f1787，最终发布b5226bd，事务`/opt/.fundlex-publish-Gdn7dG`；五服务active，engine6a16258e/service8b6c9472。无模型调用，不改合同引擎和业务含义，不以UI验证宣称合同引擎整体验收。
+ - 状态：**已实施、已发布、生产页面验证通过**。此前FL-D541生成文本不匹配仍待修，本轮未修改。
++
++## FL-D548 服务器系统盘100%占满导致常驻opencode启动失败（2026-11-02）
++
++- 发现日期：2026-11-02。Windows 端桌面快捷方式 connect-agent.cmd 报 `UnknownError: An error occurred in Effect.tryPromise`，cause 为 `Error: ENOSPC: no space left on device, mkdir '/home/opencode/.local/state/opencode/locks/…lock'`，ssh exit 1，无法连上常驻 agent。
++- 根因与影响：`/dev/vda3`（40G）使用100%、可用0（inode 32% 正常）。最大来源是 `~/.local/share/opencode/worktree/29a9a9/` 下 10-31~11-02 QA 并行会话遗留的 21 个 qa-* git worktree 共 8.4G（移除前经 `git status` 逐一核对，仅含 node_modules 与复制合同等未跟踪文件）；另有 /tmp/opencode 下 QA 暂存与临时 worktree 约 3G、root 属主的发布暂存 `/opt/.fundlex-publish-*` 约 600M、`/home/opencode/fundlex-publish-source-f4bb2b7` 460M（均为 10-27~11-02 遗留产物）、journal 136M、npm 缓存约 401M。磁盘写满使 TUI 启动 mkdir 锁文件即失败；生产 fundlex 各服务未中断。
++- 处理（已实施，经密钥 SSH 登录 opencode 用户 + sudo -n）：先 `git worktree list --porcelain` 与进程排查确认无进程占用后，`git worktree remove --force` 移除 27 个 QA worktree 并 `git worktree prune`（qa-* 分支与提交全部保留在仓库中，不丢历史；qa-gg-audit 因 prune 后登记失效改为直接删目录）；sudo 删除 `/opt/.fundlex-publish-{EiZEXw,mSMm07,8NkJHh}`、`/home/opencode/fundlex-publish-source-f4bb2b7`、`/tmp/opencode/fundlex-compare-revisions-20261028`；`journalctl --vacuum-size=50M` 释放 88M；清 `~/.npm/_cacache`。避让：运行中的 merge-watcher 所在 /tmp/opencode/qa-base（709M）及其状态目录 /tmp/opencode/qa 未动；~/.cache/ms-playwright 681M 为可复用浏览器缓存，未动；生产服务未重启。
++- 验证：`df -h /` 由 100%、0 可用恢复为 68%、12G 可用；锁目录 `~/.local/state/opencode/locks` 写入测试通过；`git worktree list` 仅剩主仓库与 qa-base。
++- 状态：**已恢复**，桌面快捷方式可重新连接。本轮未改任何业务代码与生产配置。
++- 防复发（建议，未实施）：QA 并行会话结束后及时 `git worktree remove`；对 /home 与 /tmp 增长设磁盘巡检或 df 告警；`~/.local/share/opencode/opencode.db` 已达 799MB 且持续增长，评估是否归档旧会话；/tmp/opencode 仍余 qa-base/qa/fundlex-candidate-20261028 等共约 4.4G 遗留，待确认无进程引用后再清理。
++- 变更记录：2026-11-02 新增。
++
++## FL-D549 指引生成·任务详情与工作台设计语言彻底重统一（2026-11-02）
++
++- 发现日期：2026-11-02，用户开工令 FE-H（外部任务编号 FL-D1017 第 6 条）。用户原话：「配色还有各个组件和其他页面根本不一样…指引生成 › 任务详情一页的方方面面要大改，不要只在原来的格式上小修小补」。
++- 问题与影响（看懂报告摘要）：指引生成页（`frontend/guide_generation.js+css`）自造一套 `gg-*` 组件体系，与工作台体系（`compare.html+app.css/app.js`）并存：详情头为裸标题+贴片徽章行而非 `.card.card-pad` 头卡；徽章为 `.gg-badge` 四色（running 缺蓝色）而非 `.badge b-*` 五色；KPI 为带边框 `.gg-metric` 而非无边框 `.mini-kpi`；阶段为 15 格 `.gg-stages` 而非 `.stage-rail/.stage-tile`；工具栏/表格/分页三件套（gg-toolbar/gg-table/gg-pagination）各有私有形制；`.gg-note` 米黄硬编码色值 vs `.scope-callout`；`.gg-quote` vs `.evidence.quote`。逐件对照见 [`GUIDE_GENERATION_DETAIL_REDESIGN_20261102.md`](GUIDE_GENERATION_DETAIL_REDESIGN_20261102.md) §1 差异地图；现状截图档（before，存根 API 无模型调用）在 `docs/screenshots/gg-redesign-20261102/before/`（工作台参照 wb-01~03 + 指引生成 gg-01~10，含 390px）。
++- 范围与禁区：仅 V1 静态层；后端 API 契约、任务提交与轮询逻辑不动；DOM id 如需改动同步 JS 引用并回归。
++- 重设计信息架构：头卡/badge/KPI/阶段分组/Tab/三件套/便签/证据引用/版本链/导出全部改挂工作台设计语言，5 段语义 stage-rail + 15 真实阶段明细 tile；徽章语义映射 gg tone→b-green/b-amber/b-red/b-blue/b-gray。完整 IA 见同文档 §3。
++- 状态与验证：**已实施、本地断言与截图回归通过（待监督/AX2 判定）**。一号工序看懂报告+差异地图+IA 已按开工令记录后动工；纯渲染层重构完成（提交、保存、resume、审批发布、下载、轮询、路由守卫均未改）。`guide_generation.css` 全重写、`guide_generation.js` 渲染层统一工作台语言；新增 `tests/browser/test_guide_generation_redesign.py` 三态截图断言 4 passed；旧 `.gg-badge/gg-warning` 断言改写为新徽章语言；V1 前端回归 15 passed + 指引生成完整流程 1 passed（合计 **19 passed**）；`node --check`、`git diff --check` 通过；13 张 after 截图（`docs/screenshots/gg-redesign-20261102/after/`）无页面错误，390px 无横向滚动。独立子代理 QA：PASS（P2 已全部处理或确认 by design）。
++- 边界：本轮为静态层视觉/结构重构，未在生产跑真实指引生成任务（需真实模型与 Worker），不声称生产端到端验收；`docs/screenshots/gg-redesign-20261102/before|after` 均为 localhost 存根 API 拍摄。
++- 下一步：由监督/AX2 判定收工；如需生产观感确认，待发布窗口连发布事务一并处理。
++- 变更记录：2026-11-02 新增（阶段更新：看懂报告）；同日记实施、三态断言、after 截图、子代理 QA 通过。
+diff --git a/frontend/guide_generation.css b/frontend/guide_generation.css
+index 45cdb30..b495190 100644
+--- a/frontend/guide_generation.css
++++ b/frontend/guide_generation.css
+@@ -1,94 +1,152 @@
+-/* Scoped V1 guide-generation pages; shared shell and .btn styling stay in app.css. */
+-.gg-workspace{min-width:0;color:var(--ink);font-size:14px;line-height:1.6}
++/* V1 guide-generation business space. 2026-11-02 重设计：组件形制全部对齐工作台
++   （card/section-title/batch-title/badge b-*/mini-kpi/stage-tile/toolbar/table/pagination），
++   gg-* 类仅保留指引生成特有的业务结构；颜色、圆角、阴影、字号一律走 app.css tokens。 */
++.gg-workspace{min-width:0}
+ .gg-workspace *{box-sizing:border-box}
+-.gg-workspace h1{font-size:24px;line-height:1.35;margin:0 0 6px;font-weight:700}
+-.gg-workspace h2{font-size:16px;margin:0 0 12px;font-weight:650}
+-.gg-workspace h3{font-size:13px;margin:16px 0 7px;font-weight:650}
+-.gg-workspace p{margin:7px 0 12px}
+-.gg-workspace code,.gg-workspace small{font-size:12px}
+-.gg-workspace code{overflow-wrap:anywhere;white-space:normal}
+-.gg-workspace .btn{min-height:36px;white-space:normal;justify-content:center}
+-.gg-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:18px}
+-.gg-heading>div{min-width:0}.gg-heading h1{overflow-wrap:anywhere}.gg-heading p{margin:0}
++
++/* —— 页内 tab：与工作台 .business-tabs 同款药丸形制 —— */
++.gg-tabs{display:flex;gap:5px;flex-wrap:wrap;border-bottom:1px solid var(--line);padding-bottom:12px;margin-bottom:16px}
++.gg-tab{border:0;background:transparent;color:var(--muted);font:inherit;font-size:13px;font-weight:600;border-radius:6px;padding:8px 14px;cursor:pointer}
++.gg-tab:hover{background:#f6f7f9}
++.gg-tab.is-active{color:var(--accent-dark);background:var(--accent-soft)}
++
++/* —— 状态信息带：沿用 .task-guide-meta 左橙条信息带语言，仅补字段间距 —— */
++.gg-run-meta{gap:6px 14px}
++.gg-run-meta .badge{margin-left:0}
++
++/* —— 提示/告警条：对齐 .guide-note 与 .scope-callout 语言 —— */
++.gg-note{border:1px solid #e9d9c9;background:#fff9f4;border-radius:7px;padding:10px 12px;font-size:12px;line-height:1.65;color:#684a35;margin:0 0 12px;overflow-wrap:anywhere}
++.gg-note.gg-warning{border-color:#ead9c8;background:#fffaf4;color:#6b5136}
++.gg-note.gg-error{border-color:#efcbd0;background:var(--red-soft);color:var(--red)}
++.gg-technical summary{cursor:pointer;font-size:12px;color:inherit}
++.gg-technical code{display:block;margin-top:6px;font-size:11px;overflow-wrap:anywhere}
++
++/* —— 处理尝试（continuing/retry）条：沿用 .guide-binding 软面板语言 —— */
++.gg-retry{border:1px solid var(--line-soft);background:#fafbfc;border-radius:7px;padding:10px 12px;margin:0 0 14px;display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;font-size:12px}
++.gg-retry p,.gg-retry #gg-resume-status{flex-basis:100%;margin:0;overflow-wrap:anywhere}
++
++/* —— 通用辅助 —— */
++.gg-workspace h3{font-size:13px;margin:16px 0 8px;color:#525e69;font-weight:650}
++.gg-workspace p{margin:7px 0}
+ .gg-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+-.gg-heading>.gg-actions{flex:0 0 auto}
+ .gg-muted{color:var(--muted);font-size:12px;overflow-wrap:anywhere}
+-.gg-card{padding:20px;margin-bottom:16px;min-width:0;border:1px solid var(--line);border-radius:var(--radius);background:var(--paper)}
+-.gg-toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px}
+-.gg-toolbar label,.gg-field{display:flex;flex-direction:column;gap:5px;font-size:12px;font-weight:600;min-width:0}
+-.gg-toolbar .gg-search{flex:1 1 220px;max-width:480px}
+-.gg-workspace input:not([type=checkbox]),.gg-workspace select,.gg-workspace textarea{font:inherit;font-weight:400;color:var(--ink);background:#fff;border:1px solid #cfd5db;border-radius:6px;padding:9px 10px;max-width:100%;min-width:0}
+-.gg-workspace textarea{resize:vertical;line-height:1.65;width:100%;font-size:13px}
+-.gg-workspace input[readonly],.gg-workspace input:disabled,.gg-workspace textarea:disabled,.gg-workspace select:disabled{background:#f7f8fa;color:#56616d;opacity:1}
+-.gg-workspace textarea:focus-visible{outline:3px solid #f3a56f;outline-offset:2px}
+-.gg-field{margin:14px 0}.gg-field input{width:100%}
++.gg-workspace .gg-error{color:var(--red)}
++.gg-workspace .gg-success{color:var(--green)}
++.gg-workspace .gg-warning{color:var(--amber)}
++.gg-workspace code{font-size:12px;overflow-wrap:anywhere;white-space:normal}
++.gg-workspace .subnote{margin:0 0 12px}
++.gg-workspace .card+.card{margin-top:14px}
++
++/* —— 表单控件：沿用工作台输入框 tokens（#cfd5db 边框 / 6px 圆角） —— */
++.gg-field{display:flex;flex-direction:column;gap:5px;font-size:12px;font-weight:600;margin:12px 0;min-width:0}
++.gg-field .gg-muted{font-weight:400}
++.gg-field>input,.gg-field>select,.gg-field>textarea,
++.gg-workspace textarea{font:inherit;font-weight:400;color:var(--ink);background:#fff;border:1px solid #cfd5db;border-radius:6px;padding:9px 10px;max-width:100%;min-width:0}
++.gg-field>textarea,.gg-workspace textarea{resize:vertical;line-height:1.65;width:100%;font-size:13px}
++.gg-field>input[readonly],.gg-field>input:disabled,.gg-field>select:disabled,.gg-field>textarea:disabled,.gg-workspace textarea:disabled{background:#f7f8fa;color:#56616d;opacity:1}
++.gg-field>textarea:focus-visible,.gg-workspace textarea:focus-visible{outline:3px solid #f3a56f;outline-offset:2px}
+ .gg-check{display:flex;gap:8px;align-items:flex-start;font-size:12px;margin:12px 0;line-height:1.7}
+-.gg-check input{margin-top:4px;flex:none;accent-color:var(--accent)}
+-.gg-badge{display:inline-block;vertical-align:middle;font-size:11px;line-height:1.55;padding:3px 7px;border-radius:5px;background:#f1f3f5;color:#56616d;font-weight:600;max-width:100%;overflow-wrap:anywhere}
+-.gg-badge.gg-success{background:var(--green-soft);color:var(--green)}
+-.gg-badge.gg-warning{background:var(--amber-soft);color:var(--amber)}
+-.gg-badge.gg-error{background:var(--red-soft);color:var(--red)}
+-.gg-note{border:1px solid #e8ddcd;border-radius:7px;background:#fffbf5;color:#6d5335;font-size:12px;padding:11px 13px;margin:12px 0;overflow-wrap:anywhere}
+-.gg-note.gg-error{background:var(--red-soft);border-color:#efcbd0;color:var(--red)}
+-.gg-note.gg-warning{background:var(--amber-soft);border-color:#eedab9;color:var(--amber)}
+-.gg-workspace .gg-error{color:var(--red)}.gg-workspace .gg-success{color:var(--green)}.gg-workspace .gg-warning{color:var(--amber)}
+-.gg-empty{text-align:center;color:var(--muted);padding:30px 14px;font-size:13px;overflow-wrap:anywhere}
+-.gg-table-wrap{overflow-x:auto;max-width:100%;border:1px solid var(--line-soft);border-radius:6px}
+-.gg-table{border-collapse:collapse;width:100%;min-width:760px;text-align:left;font-size:12px}
+-.gg-table th{background:#fafbfc;color:var(--muted);font-weight:600;padding:10px 12px;white-space:nowrap}
+-.gg-table td{border-top:1px solid var(--line-soft);padding:12px;vertical-align:middle;max-width:300px;overflow-wrap:anywhere}
+-.gg-table td small{display:block;color:var(--muted);margin-top:4px}
+-.gg-table tbody tr:hover{background:#fdfbf9}
+-.gg-create-layout{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(280px,1fr);gap:18px;align-items:start}
+-.gg-create-layout>.gg-card{margin-bottom:0}
+-.gg-create-layout aside .btn-primary{width:100%;margin-top:10px}
+-.gg-upload{padding:24px 16px;border:1px dashed #cfd5db;border-radius:7px;background:#fafbfc;display:flex;align-items:center;flex-wrap:wrap;gap:14px;margin:18px 0}
+-.gg-upload span{overflow-wrap:anywhere;min-width:0;flex:1 1 150px}
+-.gg-advanced{border-top:1px solid var(--line-soft);margin-top:20px;padding-top:14px}
+-.gg-advanced summary,.gg-requirement summary{cursor:pointer;font-size:13px}
+-.gg-task-status{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:18px;font-size:12px}.gg-status-field{display:inline-flex;align-items:center;gap:5px}.gg-status-field>strong{color:var(--muted);font-size:11px;font-weight:600}
+-.gg-retry{display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px;border:1px solid var(--line);background:var(--paper);border-radius:7px;padding:12px;margin-bottom:16px;font-size:12px}
+-.gg-retry p,.gg-retry #gg-resume-status{flex-basis:100%;margin:0;overflow-wrap:anywhere}
+-.gg-tabs{display:flex;flex-wrap:wrap;gap:4px;border-bottom:1px solid var(--line);margin:0 0 18px}
+-.gg-tab{font:inherit;font-size:13px;border:0;border-bottom:2px solid transparent;background:transparent;padding:10px 15px;color:var(--muted);border-radius:5px 5px 0 0}
+-.gg-tab:hover{background:var(--accent-soft);color:var(--accent-dark)}
+-.gg-tab.is-active{border-bottom-color:var(--accent);color:var(--accent-dark);font-weight:650;background:var(--accent-soft)}
+-.gg-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:16px 0}
+-.gg-metric{background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:14px;min-width:0;display:flex;flex-direction:column;gap:3px}
+-.gg-metric span,.gg-metric small{font-size:12px;color:var(--muted)}.gg-metric strong{font-size:24px;line-height:1.3;font-variant-numeric:tabular-nums}
+-.gg-stages{list-style:none;padding:0;margin:12px 0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+-.gg-stages li{border:1px solid var(--line-soft);border-radius:6px;padding:9px 11px;display:flex;align-items:center;flex-wrap:wrap;gap:6px;font-size:12px;justify-content:space-between}
+-.gg-stages li.is-current{border-color:#e4bfa5;background:var(--accent-soft)}
+-.gg-stages li small{flex-basis:100%;overflow-wrap:anywhere}
+-.gg-checklist{padding:0;list-style:none;font-size:12px;line-height:1.8;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px 16px}
+-.gg-checklist span{display:inline-block;font-weight:650;min-width:67px}
+-.gg-meta{display:grid;grid-template-columns:115px minmax(0,1fr);gap:7px 12px;font-size:12px;margin:12px 0}
+-.gg-meta dt{color:var(--muted)}.gg-meta dd{margin:0;min-width:0;overflow-wrap:anywhere}
++.gg-check input{margin-top:3px;flex:none;accent-color:var(--accent)}
++
++/* —— 表格内副标题 —— */
++.gg-workspace .table td>small{display:block;margin-top:3px;color:var(--muted);font-size:11px}
++
++/* —— 工具栏内带标签字段 —— */
++.gg-toolbar-field{display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:600;color:var(--muted);min-width:0}
++.gg-toolbar-field .control-select{font-weight:400;color:var(--ink)}
++
++/* —— KPI：工作台 .mini-kpi 裸排语言；四列密度修饰 —— */
++.gg-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px;margin-bottom:15px}
++
++/* —— 处理进度：5 段语义 stage-rail + 真实阶段明细 tile —— */
++.gg-stage-rail{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin-bottom:10px}
++.gg-stage-detail{list-style:none;padding:0;margin:0;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
++.gg-stage-detail li{border:1px solid var(--line);border-radius:7px;background:#fff;padding:9px 11px;display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-size:12px;justify-content:space-between}
++.gg-stage-detail li.is-current{border-color:#eebd9d;background:#fff8f3}
++.gg-stage-detail li .badge{margin-left:0}
++.gg-stage-detail li small{flex-basis:100%;overflow-wrap:anywhere}
++
++/* —— 门禁清单 —— */
++.gg-checklist{padding:0;margin:0;list-style:none;font-size:12px;line-height:1.8;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 16px}
++.gg-checklist span{display:inline-block;font-weight:650;min-width:64px}
++
++/* —— 元数据 dl —— */
++.gg-meta{display:grid;grid-template-columns:130px minmax(0,1fr);gap:6px 12px;font-size:12px;margin:0}
++.gg-meta dt{color:var(--muted)}
++.gg-meta dd{margin:0;min-width:0;overflow-wrap:anywhere}
++
++/* —— 候选指引三栏 —— */
+ .gg-guide-bar{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:12px}
+-.gg-guide-bar p{margin:3px 0}.gg-guide-bar .gg-actions{font-size:12px;flex:0 0 auto;max-width:45%}
+-.gg-guide-layout{display:grid;grid-template-columns:190px minmax(0,1fr) 250px;gap:14px;align-items:start}
+-.gg-directory{padding:8px;max-height:75vh;overflow-y:auto}
+-.gg-item-link{display:flex;flex-direction:column;gap:4px;border:0;border-radius:6px;background:transparent;width:100%;padding:11px 10px;text-align:left;font:inherit;overflow-wrap:anywhere}
+-.gg-item-link small{color:var(--muted);font-size:11px}.gg-item-link strong{font-size:12px;font-weight:600}
++.gg-guide-bar>div{min-width:0}
++.gg-guide-bar .gg-actions{flex:0 0 auto;font-size:12px}
++.gg-guide-layout{display:grid;grid-template-columns:220px minmax(0,1fr) 280px;gap:14px;align-items:start}
++.gg-directory{padding:10px;max-height:75vh;overflow-y:auto;overscroll-behavior:contain}
++/* 目录条目：沿用工作台 .rev-item 列表项语言 */
++.gg-item-link{display:flex;flex-direction:column;gap:4px;border:1px solid var(--line);border-radius:9px;background:#fff;width:100%;padding:9px 11px;margin:0 0 9px;text-align:left;font:inherit;cursor:pointer;overflow-wrap:anywhere}
++.gg-item-link:hover{border-color:#b9c3cc}
++.gg-item-link.is-active{border-color:var(--accent);box-shadow:0 0 0 2px rgba(181,71,30,.12);background:#fffdfb}
++.gg-item-link small{color:var(--muted);font-size:11px}
++.gg-item-link strong{font-size:12px;font-weight:600}
+ .gg-item-link>span{font-size:11px;color:var(--amber)}
+-.gg-item-link:hover{background:#f6f7f9}.gg-item-link.is-active{background:var(--accent-soft);color:var(--accent-dark)}
+-.gg-editor-fields{min-width:0}#gg-save-status{font-size:12px;overflow-wrap:anywhere;flex-basis:100%}
+-.gg-evidence-entry{padding:14px 0;font-size:12px;overflow-wrap:anywhere}
++.gg-editor-fields{min-width:0}
++#gg-save-status{font-size:12px;overflow-wrap:anywhere}
++
++/* —— 证据引用：沿用工作台 .evidence.quote 语言（卡片面板内引用块） —— */
++.gg-evidence-entry{padding:12px 0;font-size:12px;overflow-wrap:anywhere}
+ .gg-evidence-entry+.gg-evidence-entry{border-top:1px solid var(--line-soft)}
+-.gg-quote{margin:10px 0;padding:10px 12px;border-left:3px solid #c8d1da;background:#f7f9fb;font-size:12px;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.8}
+-.gg-quote small{display:block;color:var(--muted);font-size:10px;margin-bottom:5px}
+-.gg-requirement{border-top:1px solid var(--line-soft);padding:12px 0}
+-.gg-requirement summary{overflow-wrap:anywhere;line-height:1.8}.gg-requirement summary>span:last-child:not(.gg-badge){display:block;margin:5px 0 0;color:#56616d;font-size:12px}
++.gg-quote{margin:10px 0;padding:10px 12px;background:#f7f9fa;border:1px solid var(--line-soft);border-radius:6px;font-size:12px;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.8}
++.gg-quote small{display:block;color:#88919a;font-size:10px;font-weight:700;letter-spacing:.08em;margin-bottom:5px}
++
++/* —— 明细行（法规要求/质量/影响/补漏轮次）：rev-item 卡片行语言 —— */
++.gg-requirement{border:1px solid var(--line);border-radius:9px;background:#fff;padding:10px 12px;margin:0 0 9px}
++.gg-requirement summary{cursor:pointer;overflow-wrap:anywhere;line-height:1.7;font-size:13px;display:list-item}
++.gg-requirement summary .badge{margin-left:0;margin-right:5px}
++.gg-requirement summary>span:last-child:not(.badge){display:block;margin:5px 0 0;color:#56616d;font-size:12px}
+ .gg-requirement .gg-evidence-entry{padding:10px 0 2px}
+ .gg-issue-row{border-top:1px solid var(--line-soft);padding:12px 0;font-size:12px;overflow-wrap:anywhere}
+-.gg-issue-row strong{margin-left:5px}.gg-issue-row p{margin-bottom:0}
+-.gg-pagination{display:flex;align-items:center;justify-content:flex-end;gap:12px;margin-top:16px;font-size:12px}
+-.gg-version-id{display:block;border:1px solid var(--line-soft);padding:9px 12px;border-radius:6px;background:#fafbfc;margin:12px 0}
+-.gg-version-chain{padding-left:22px;margin:0}.gg-version-chain li{padding:12px 0;border-bottom:1px solid var(--line-soft)}
++.gg-issue-row .badge{margin-left:0;margin-right:5px}
++.gg-issue-row p{margin:6px 0 0}
++
++/* —— 版本链与版本对照 —— */
++.gg-version-id{display:inline-block;border:1px solid var(--line-soft);background:#fafbfc;padding:6px 10px;border-radius:5px;margin:8px 0;font-size:11px;overflow-wrap:anywhere}
++.gg-version-chain{list-style:none;padding:0;margin:0}
++.gg-version-chain li{border:1px solid var(--line);border-radius:9px;padding:10px 12px;margin:0 0 9px}
+ .gg-diff{border-top:1px solid var(--line-soft);padding:12px 0;font-size:12px;overflow-wrap:anywhere}
+ .gg-diff-columns{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:8px}
+-.gg-diff-columns>div{background:#f7f9fb;border-radius:6px;padding:11px;min-width:0}.gg-diff-columns>div+div{background:var(--green-soft)}
+-.gg-diff small{font-size:10px;color:var(--muted)}.gg-diff pre{font:inherit;margin:6px 0 0;white-space:pre-wrap;overflow-wrap:anywhere}
+-@media(max-width:1200px){.gg-guide-layout{grid-template-columns:170px minmax(0,1fr)}#gg-guide-evidence{grid-column:2}.gg-stages{grid-template-columns:repeat(2,minmax(0,1fr))}.gg-guide-bar{flex-wrap:wrap}.gg-guide-bar .gg-actions{max-width:100%}}
+-@media(max-width:900px){.gg-create-layout{grid-template-columns:minmax(0,1fr)}.gg-heading{flex-wrap:wrap}.gg-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.gg-checklist{grid-template-columns:minmax(0,1fr)}}
+-@media(max-width:680px){.gg-workspace h1{font-size:20px}.gg-heading{gap:10px;margin-bottom:14px}.gg-card{padding:15px}.gg-toolbar>*{max-width:100%}.gg-toolbar label{flex:1 1 140px}.gg-toolbar .gg-search{max-width:none;flex-basis:100%}.gg-tabs{gap:2px}.gg-tab{padding:9px 10px;font-size:12px}.gg-guide-layout{grid-template-columns:minmax(0,1fr)}.gg-directory{max-height:210px}.gg-item-link{padding:8px 10px}#gg-guide-evidence{grid-column:auto}.gg-metrics{gap:8px}.gg-metric{padding:12px}.gg-metric strong{font-size:21px}.gg-stages{grid-template-columns:minmax(0,1fr)}.gg-meta{grid-template-columns:85px minmax(0,1fr);gap:7px}.gg-diff-columns{grid-template-columns:minmax(0,1fr)}.gg-pagination{justify-content:center}.gg-create-layout{gap:14px}}
++.gg-diff-columns>div{background:#f7f9fa;border:1px solid var(--line-soft);border-radius:6px;padding:11px;min-width:0}
++.gg-diff-columns>div+div{background:var(--green-soft);border-color:#cde3d3}
++.gg-diff small{font-size:10px;color:var(--muted);font-weight:700;letter-spacing:.08em}
++.gg-diff pre{font:inherit;margin:6px 0 0;white-space:pre-wrap;overflow-wrap:anywhere}
++
++/* —— 新建任务双栏 —— */
++.gg-create-layout{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(280px,1fr);gap:14px;align-items:start}
++.gg-create-layout aside .btn-primary{width:100%;margin-top:10px}
++.gg-upload{padding:18px 14px;border:1px dashed #cfd5db;border-radius:7px;background:#fafbfc;display:flex;align-items:center;flex-wrap:wrap;gap:14px;margin:14px 0}
++.gg-upload span{overflow-wrap:anywhere;min-width:0;flex:1 1 150px}
++.gg-advanced{border-top:1px solid var(--line-soft);margin-top:16px;padding-top:14px}
++.gg-advanced summary{cursor:pointer;font-size:13px;font-weight:600}
++#gg-create-status{font-size:12px;margin-top:10px;overflow-wrap:anywhere}
++
++/* —— 响应式 —— */
++@media(max-width:1200px){
++  .gg-guide-layout{grid-template-columns:200px minmax(0,1fr)}
++  #gg-guide-evidence{grid-column:2}
++  .gg-stage-rail{grid-template-columns:repeat(3,minmax(0,1fr))}
++  .gg-stage-detail{grid-template-columns:repeat(3,minmax(0,1fr))}
++  .gg-guide-bar{flex-wrap:wrap}.gg-guide-bar .gg-actions{flex-basis:100%}
++}
++@media(max-width:900px){
++  .gg-create-layout{grid-template-columns:minmax(0,1fr)}
++  .gg-checklist{grid-template-columns:minmax(0,1fr)}
++}
++@media(max-width:680px){
++  .gg-guide-layout{grid-template-columns:minmax(0,1fr)}
++  .gg-directory{max-height:210px}
++  #gg-guide-evidence{grid-column:auto}
++  .gg-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
++  .gg-stage-rail{grid-template-columns:minmax(0,1fr)}
++  .gg-stage-detail{grid-template-columns:minmax(0,1fr)}
++  .gg-meta{grid-template-columns:90px minmax(0,1fr)}
++  .gg-diff-columns{grid-template-columns:minmax(0,1fr)}
++  .gg-retry{padding:9px 10px}
++}
+diff --git a/frontend/guide_generation.js b/frontend/guide_generation.js
+index 4a6eba9..39282fb 100644
+--- a/frontend/guide_generation.js
++++ b/frontend/guide_generation.js
+@@ -78,18 +78,22 @@
+     return note(message, "error") + `<details class="gg-technical"><summary>查看技术原因</summary><code>${esc(code)}</code></details>`;
+   };
+   const button = (action, title, extra = "") => `<button type="button" class="btn ${extra}" data-gg-action="${action}">${title}</button>`;
++  // 徽章形制与工作台 .badge b-* 五色语义一致（见差异地图 FL-D549）。
+   const badge = (value) => {
+-    const tone = ["failed", "error", "fail", "critical", "gap", "unresolved", "uncovered", "not_ready"].includes(value) ? "error"
+-      : ["candidate_with_findings", "human_draft", "human_review_pending", "complete_with_unresolved", "pass_with_findings", "uncertain", "possible", "incomplete", "complete_with_exceptions"].includes(value) ? "warning"
+-        : ["approved", "published", "pass", "passed", "covered", "resolved"].includes(value) ? "success" : "neutral";
+-    return `<span class="gg-badge gg-${tone}">${esc(label(value))}</span>`;
++    const tone = ["failed", "error", "fail", "critical", "gap", "unresolved", "uncovered", "not_ready", "cancelled", "budget_exhausted"].includes(value) ? "red"
++      : ["candidate_with_findings", "human_draft", "human_review_pending", "complete_with_unresolved", "pass_with_findings", "uncertain", "possible", "incomplete", "complete_with_exceptions", "paused", "retry_wait", "new_uncovered", "skipped", "ambiguous", "not_covered"].includes(value) ? "amber"
++        : ["approved", "published", "pass", "passed", "covered", "resolved", "complete", "completed", "succeeded", "satisfied", "clean", "saturated", "modify_contract"].includes(value) ? "green"
++          : ["queued", "running", "uploading", "processing", "leased", "parsing"].includes(value) ? "blue" : "gray";
++    return `<span class="badge b-${tone}">${esc(label(value))}</span>`;
+   };
+   const note = (message, tone = "notice") => `<div class="gg-note gg-${tone}">${esc(message)}</div>`;
+-  const empty = (message) => `<div class="gg-empty" role="status">${esc(message)}</div>`;
+-  const loading = (message = "正在读取…") => `<div class="gg-empty" role="status" aria-live="polite">${esc(message)}</div>`;
++  const empty = (message) => `<div class="empty" role="status"><strong>${esc(message)}</strong></div>`;
++  const loading = (message = "正在读取…") => `<div class="empty" role="status" aria-live="polite"><strong>${esc(message)}</strong></div>`;
+   const quote = (value, title = "原文证据") => value ? `<blockquote class="gg-quote"><small>${esc(title)}</small>${esc(value)}</blockquote>` : '<p class="gg-muted">尚无原文证据。</p>';
+-  const card = (title, body) => `<section class="card gg-card"><h2>${esc(title)}</h2>${body}</section>`;
+-  const metric = (title, value, hint = "") => `<div class="gg-metric"><span>${esc(title)}</span><strong>${esc(value ?? "—")}</strong><small>${esc(hint)}</small></div>`;
++  // 卡片形制与工作台 .card.card-pad + .section-title 一致。
++  const card = (title, body) => `<section class="card card-pad"><div class="section-title"><h2>${esc(title)}</h2></div>${body}</section>`;
++  // KPI 沿用工作台 .mini-kpi 语言（无边框、label/b 两级）。
++  const metric = (title, value, hint = "") => `<div class="mini-kpi" title="${esc(hint)}"><label>${esc(title)}</label><b>${esc(value ?? "—")}</b></div>`;
+   function errorMessage(error) {
+     const message = String(error?.message || "读取失败，请稍后重试。");
+     // The shared helper preserves machine-readable errors in .raw/.code.
+@@ -122,9 +126,14 @@
+     workbench().navigate("generation", { page: String(state.listPage), q: state.query, status: state.status, ...options });
+   }
+   function routePage(value) { return /^\d+$/.test(String(value)) && Number.isSafeInteger(Number(value)) && Number(value) > 0 ? Number(value) : 1; }
+-  function heading(title, subtitle, actions = "") {
+-    return `<header class="gg-heading"><div><h1 class="object-title">${esc(title)}</h1><p class="gg-muted">${esc(subtitle)}</p></div><div class="gg-actions">${actions}</div></header>`;
+-  }
++  // 15 个真实处理阶段按业务语义分 5 段，与工作台 stage-rail 语言一致；明细仍逐阶段展示。
++  const STAGE_GROUPS = [
++    ["读取与核对法规", ["INGEST_REGULATION", "EXTRACT_REQUIREMENTS", "VERIFY_REQUIREMENTS"]],
++    ["发现合同影响", ["BUILD_CORPUS_SNAPSHOT", "DISCOVERY_REQUIREMENT_RETRIEVAL", "DISCOVERY_CONTRACT_SWEEP"]],
++    ["影响判定", ["ADJUDICATE_IMPACTS"]],
++    ["起草与归并候选", ["BUILD_LOCAL_GUIDE_CANDIDATES", "MERGE_AND_GENERALIZE"]],
++    ["核验与产出", ["GUIDE_QUALITY_REVIEW", "GUIDE_REPAIR", "SEMANTIC_COVERAGE", "RESIDUAL_MINING", "FINALIZE_GUIDE", "BUILD_EVIDENCE"]],
++  ];
+ 
+   async function open(route = {}) {
+     clearTimeout(state.timer);
+@@ -164,7 +173,7 @@
+   }
+ 
+   async function loadList(ctx) {
+-    root().innerHTML = `<section class="card gg-card"><form id="gg-filter" class="gg-toolbar"><label class="gg-search">搜索任务<input id="gg-query" type="search" placeholder="任务名或法规文件名" value="${esc(state.query)}"></label><label>任务状态<select id="gg-status"><option value="">全部状态</option>${["queued", "running", "paused", "failed", "complete", "complete_with_unresolved"].map((value) => `<option value="${value}" ${state.status === value ? "selected" : ""}>${esc(label(value))}</option>`).join("")}</select></label><button class="btn" type="submit">筛选</button>${button("refresh", "刷新")}${button("new", "＋ 新建生成任务", "btn-primary page-primary")}</form><p class="gg-muted" id="gg-list-scope">正在读取任务…</p><div id="gg-list-results">${loading()}</div><div id="gg-list-pages" class="gg-pagination"></div></section>`;
++    root().innerHTML = `<section class="card card-pad"><form id="gg-filter" class="toolbar"><div class="searchbox"><svg><use href="#i-search"/></svg><input id="gg-query" type="search" placeholder="任务名或法规文件名" value="${esc(state.query)}" aria-label="搜索生成任务"></div><select id="gg-status" class="control-select" aria-label="任务状态筛选"><option value="">全部状态</option>${["queued", "running", "paused", "failed", "complete", "complete_with_unresolved"].map((value) => `<option value="${value}" ${state.status === value ? "selected" : ""}>${esc(label(value))}</option>`).join("")}</select><button class="btn" type="submit">筛选</button>${button("refresh", "刷新")}${button("new", "＋ 新建生成任务", "btn-primary page-primary")}</form><p class="subnote" id="gg-list-scope">正在读取任务…</p><div id="gg-list-results">${loading()}</div><div id="gg-list-pages" class="pagination"></div></section>`;
+     try {
+       const params = new URLSearchParams({ page: String(state.listPage), page_size: "20", q: state.query, status: state.status });
+       let data = await request(`${API}/runs?${params}`, {}, ctx);
+@@ -182,14 +191,14 @@
+     $("gg-list-scope").textContent = state.listMeta
+       ? `当前账号共 ${state.listMeta.total} 个匹配任务 · 第 ${state.listPage} 页 · 每页 20 个（服务端搜索与精确状态筛选）`
+       : `当前服务未返回可靠分页信息，仅检索最近最多 200 个生成任务（已载入 ${state.runs.length} 个）；当前筛选 ${runs.length} 个，不代表全量任务统计。`;
+-    $("gg-list-results").innerHTML = runs.length ? `<div class="gg-table-wrap"><table class="gg-table"><thead><tr><th>任务 / 法规</th><th>任务状态</th><th>当前阶段</th><th>候选门禁</th><th>更新时间</th><th>操作</th></tr></thead><tbody>${runs.map((run) => `<tr><td><strong>${esc(run.title || run.filename || "未命名任务")}</strong><small>${esc(run.filename)}</small></td><td>${badge(run.status)}</td><td>${esc(stage(run.stage))}</td><td>${badge(run.qualification_status || "draft")}</td><td>${esc(date(run.updated_at || run.created_at))}</td><td><button class="btn btn-sm" type="button" data-gg-run="${esc(run.id)}" aria-label="查看 ${esc(run.title || run.filename)}">查看</button></td></tr>`).join("")}</tbody></table></div>` : empty(state.listMeta ? "当前页没有匹配任务，请调整筛选或返回上一页。" : state.runs.length ? "当前范围内没有符合筛选条件的任务。" : "还没有生成任务。上传一份法规开始。");
+-    $("gg-list-pages").innerHTML = state.listMeta ? `<button type="button" class="btn btn-sm" data-gg-list-page="${state.listPage - 1}" ${state.listPage <= 1 ? "disabled" : ""}>上一页</button><span>第 ${state.listPage} / ${Math.max(1, Math.ceil(state.listMeta.total / 20))} 页</span><button type="button" class="btn btn-sm" data-gg-list-page="${state.listPage + 1}" ${state.listPage * 20 >= state.listMeta.total ? "disabled" : ""}>下一页</button>` : "";
++    $("gg-list-results").innerHTML = runs.length ? `<div class="table-wrap"><table class="table"><thead><tr><th>任务 / 法规</th><th>任务状态</th><th>当前阶段</th><th>候选门禁</th><th>更新时间</th><th>操作</th></tr></thead><tbody>${runs.map((run) => `<tr><td><strong>${esc(run.title || run.filename || "未命名任务")}</strong><small class="gg-muted">${esc(run.filename)}</small></td><td>${badge(run.status)}</td><td>${esc(stage(run.stage))}</td><td>${badge(run.qualification_status || "draft")}</td><td>${esc(date(run.updated_at || run.created_at))}</td><td><button class="btn btn-sm" type="button" data-gg-run="${esc(run.id)}" aria-label="查看 ${esc(run.title || run.filename)}">查看</button></td></tr>`).join("")}</tbody></table></div>` : empty(state.listMeta ? "当前页没有匹配任务，请调整筛选或返回上一页。" : state.runs.length ? "当前范围内没有符合筛选条件的任务。" : "还没有生成任务。上传一份法规开始。");
++    $("gg-list-pages").innerHTML = state.listMeta ? `<span>共 ${state.listMeta.total} 条 · 第 ${state.listPage} / ${Math.max(1, Math.ceil(state.listMeta.total / 20))} 页</span><div class="controls"><button type="button" class="btn btn-sm" data-gg-list-page="${state.listPage - 1}" ${state.listPage <= 1 ? "disabled" : ""}>上一页</button><button type="button" class="btn btn-sm" data-gg-list-page="${state.listPage + 1}" ${state.listPage * 20 >= state.listMeta.total ? "disabled" : ""}>下一页</button></div>` : "";
+   }
+ 
+   async function renderNew(ctx) {
+     const advancedOptions = `<details class="gg-advanced"><summary>高级选项</summary><label class="gg-field" for="gg-corpus-limit">参考合同样本上限（选填）<input id="gg-corpus-limit" type="number" min="1" max="${CORPUS_LIMIT_MAX}" step="1" inputmode="numeric" placeholder="留空使用服务端默认范围" aria-describedby="gg-corpus-limit-hint gg-corpus-limit-error"></label><p id="gg-corpus-limit-hint" class="gg-muted">填写 1—${CORPUS_LIMIT_MAX} 的整数。留空沿用服务端默认范围（可为全库）。设置上限后，输出仅是所选样本范围下的候选指引，不代表全库覆盖；该选项不是费用上限。</p><p id="gg-corpus-limit-error" class="gg-error" role="status" aria-live="polite"></p><label class="gg-check"><input id="gg-latest" type="checkbox" checked> 语义扫描仅参考已知最新合同；历史版本仍参与词法扫描</label><p class="gg-muted">模型、预算上限和语料路径由服务端管理。</p></details>`;
+     root().innerHTML =
+-      `<form id="gg-create" class="gg-create-layout"><section class="card gg-card"><h2>法规文件</h2><p class="gg-muted">支持 DOCX、带文本层 PDF，最大 80 MB。扫描件不支持，不进行 OCR。</p><input id="gg-file" type="file" accept=".docx,.pdf" hidden><div class="gg-upload">${button("pick", "选择法规文件")}<span id="gg-file-label" class="gg-muted">尚未选择文件</span></div><label class="gg-field">任务名称<input id="gg-task-name" readonly value="" placeholder="由法规文件名自动生成"></label>${advancedOptions}<div id="gg-create-status" role="status" aria-live="polite"></div></section><aside class="card gg-card"><h2>生成前确认</h2><h3>参考合同语料（只读）</h3><div id="gg-corpus">${loading()}</div>${note("生成的是候选指引，需人工审阅；发布不会自动启用修改指引。") }<p class="gg-muted">提交后会调用模型并按实际调用计费，受服务端预算限制；上传不保证候选通过核验。</p><label class="gg-check"><input id="gg-cost-ack" type="checkbox" required> 我已确认输入范围及模型调用费用</label><button id="gg-submit" class="btn btn-primary" type="submit" disabled>上传并生成</button></aside></form>`;
++      `<form id="gg-create" class="gg-create-layout"><section class="card card-pad"><div class="section-title"><h2>法规文件</h2></div><p class="subnote">支持 DOCX、带文本层 PDF，最大 80 MB。扫描件不支持，不进行 OCR。</p><input id="gg-file" type="file" accept=".docx,.pdf" hidden><div class="gg-upload">${button("pick", "选择法规文件")}<span id="gg-file-label" class="gg-muted">尚未选择文件</span></div><label class="gg-field" for="gg-task-name">任务名称<input id="gg-task-name" readonly value="" placeholder="由法规文件名自动生成"></label>${advancedOptions}<div id="gg-create-status" role="status" aria-live="polite"></div></section><aside class="card card-pad"><div class="section-title"><h2>生成前确认</h2></div><h3>参考合同语料（只读）</h3><div id="gg-corpus">${loading()}</div>${note("生成的是候选指引，需人工审阅；发布不会自动启用修改指引。") }<p class="subnote">提交后会调用模型并按实际调用计费，受服务端预算限制；上传不保证候选通过核验。</p><label class="gg-check"><input id="gg-cost-ack" type="checkbox" required> 我已确认输入范围及模型调用费用</label><button id="gg-submit" class="btn btn-primary" type="submit" disabled>上传并生成</button></aside></form>`;
+     try {
+       const data = await request(`${API}/corpus`, {}, ctx);
+       $("gg-corpus").innerHTML = `<p>合同版本 ${esc(data.contracts ?? "—")} 份 · 已知最新 ${esc(data.latest_contracts ?? "—")} 份</p><p class="gg-muted">已解析 ${esc(data.parsed ?? "—")} · 解析失败 ${esc(data.parse_failed ?? "—")}</p><p class="gg-muted">当前显示的是可用语料概况；本次任务实际使用范围和快照以任务详情为准。</p>`;
+@@ -264,13 +273,17 @@
+       showError($("gg-detail-error"), error, ctx);
+     }
+   }
++  // 头卡与工作台任务详情同语言：.card.card-pad + .section-title(.batch-title+.head-actions)
++  // + .subnote + .task-guide-meta 信息带 + .scope-callout + 卡内告警/续跑条。
+   function renderDetailHead() {
+     const run = state.detail;
+     if (!$("gg-detail-head")) return;
+     workbench().setObjectTitle?.("generation", run.title || run.filename);
+     const source = run.filename && run.filename !== run.title ? `${run.filename} · ` : "";
+-    $("gg-detail-head").innerHTML = heading(run.title || run.filename || "未命名任务", `${source}更新 ${date(run.updated_at || run.created_at)}`, button("refresh", "刷新")) +
+-      `<div class="gg-task-status"><span class="gg-status-field"><strong>任务</strong>${badge(run.status)}</span><span class="gg-status-field"><strong>候选门禁</strong>${badge(run.qualification_status || "draft")}</span>${run.candidate && run.candidate.status !== run.qualification_status ? `<span class="gg-status-field"><strong>当前版本</strong>${badge(run.candidate.status)}</span>` : ""}<span class="gg-status-field"><strong>阶段</strong>${esc(stage(run.stage))}</span></div>${Number.isInteger(run.config?.corpus_limit) ? `<div id="gg-run-scope">${note(`本任务参考合同样本上限：${run.config.corpus_limit} 份。输出仅是所选样本范围下的候选指引，不代表全库覆盖；实际使用范围以任务快照为准。`, "warning")}</div>` : ""}${runProblem(run.error_code)}${run.retry ? `<div class="gg-retry"><span>处理尝试 ${esc(run.retry.attempts ?? "—")} / ${esc(run.retry.max_attempts ?? "—")} 次</span>${run.retry.can_resume === true && ["failed", "paused"].includes(run.status) ? `${button("resume", "继续处理/重试")}<p class="gg-muted">继续处理将再次调用模型、消耗预算并可能产生费用；仍受服务端预算及尝试次数上限约束。不会自动执行付费重试。</p>` : ""}<span id="gg-resume-status" role="status" aria-live="polite"></span></div>` : ""}`;
++    const meta = `<div class="task-guide-meta gg-run-meta"><span>候选门禁</span><strong>${badge(run.qualification_status || "draft")}</strong>${run.candidate && run.candidate.status !== run.qualification_status ? `<span>当前版本</span><strong>${badge(run.candidate.status)}</strong>` : ""}<span>阶段</span><strong>${esc(stage(run.stage))}</strong></div>`;
++    const scope = Number.isInteger(run.config?.corpus_limit) ? `<p class="scope-callout" id="gg-run-scope">本任务参考合同样本上限：${esc(run.config.corpus_limit)} 份。输出仅是所选样本范围下的候选指引，不代表全库覆盖；实际使用范围以任务快照为准。</p>` : "";
++    const retry = run.retry ? `<div class="gg-retry"><span>处理尝试 ${esc(run.retry.attempts ?? "—")} / ${esc(run.retry.max_attempts ?? "—")} 次</span>${run.retry.can_resume === true && ["failed", "paused"].includes(run.status) ? `${button("resume", "继续处理/重试", "btn-sm btn-primary")}<p class="gg-muted">继续处理将再次调用模型、消耗预算并可能产生费用；仍受服务端预算及尝试次数上限约束。不会自动执行付费重试。</p>` : ""}<span id="gg-resume-status" role="status" aria-live="polite"></span></div>` : "";
++    $("gg-detail-head").innerHTML = `<section class="card card-pad"><div class="section-title"><div class="batch-title"><h1 class="object-title">${esc(run.title || run.filename || "未命名任务")}</h1>${badge(run.status)}</div><div class="head-actions">${button("refresh", "刷新", "btn-sm")}</div></div><p class="subnote">${esc(source)}更新 ${esc(date(run.updated_at || run.created_at))}</p>${meta}${scope}${runProblem(run.error_code)}${retry}</section>`;
+   }
+   async function resumeRun(trigger) {
+     if (state.busy || state.detail?.retry?.can_resume !== true || !["failed", "paused"].includes(state.detail.status)) return;
+@@ -322,8 +335,20 @@
+     const finalize = summary.finalize || {};
+     const stats = run.stats || {};
+     const steps = new Map((run.stages || []).map((step) => [step.stage, step]));
+-    return `<div class="gg-metrics">${metric("法规要求", stats.requirements, "来自上传法规")}${metric("合同影响", stats.impacts, "包括可能影响")}${metric("候选条目", stats.guide_items, "尚需人工审阅")}${metric("关键质量问题", finalize.critical_quality_findings, "非全部质量问题")}</div>` +
+-      card("处理进度", `<p class="gg-muted">只展示实际阶段记录，不估算完成百分比。生成结束后仍需完成候选核验。</p><ol class="gg-stages">${Object.entries(STAGES).map(([key, title]) => { const step = steps.get(key); return `<li class="${step?.status === "running" ? "is-current" : ""}"><span>${esc(title)}</span>${step ? badge(step.status) : '<span class="gg-muted">尚无记录</span>'}${step?.error_code ? `<small class="gg-error">${esc(step.error_code)}</small>` : ""}</li>`; }).join("")}</ol>`) +
++    const groupTile = ([label, keys]) => {
++      const rows = keys.map((key) => steps.get(key));
++      const done = rows.filter((step) => step && ["complete", "completed", "succeeded", "passed", "pass"].includes(step.status)).length;
++      const currentKey = keys.find((key) => steps.get(key)?.status === "running");
++      const failedKey = keys.find((key) => steps.get(key)?.status === "failed");
++      const noteText = failedKey ? `卡在「${esc(STAGES[failedKey])}」` : currentKey ? `当前：${esc(STAGES[currentKey])}` : done === keys.length ? "本段全部完成" : "尚未开始或排队中";
++      return `<div class="stage-tile${currentKey ? " current" : ""}"><strong>${esc(label)}</strong><small>${done} / ${keys.length} 阶段完成 · ${noteText}</small></div>`;
++    };
++    const detailTiles = Object.entries(STAGES).map(([key, title]) => {
++      const step = steps.get(key);
++      return `<li class="${step?.status === "running" ? "is-current" : ""}"><span>${esc(title)}</span>${step ? badge(step.status) : '<span class="gg-muted">尚无记录</span>'}${step?.error_code ? `<small class="gg-error">${esc(step.error_code)}</small>` : ""}</li>`;
++    }).join("");
++    return `<div class="gg-kpis">${metric("法规要求", stats.requirements, "来自上传法规")}${metric("合同影响", stats.impacts, "包括可能影响")}${metric("候选条目", stats.guide_items, "尚需人工审阅")}${metric("关键质量问题", finalize.critical_quality_findings, "非全部质量问题")}</div>` +
++      card("处理进度", `<p class="subnote">只展示实际阶段记录，不估算完成百分比。生成结束后仍需完成候选核验。</p><div class="gg-stage-rail">${STAGE_GROUPS.map(groupTile).join("")}</div><ol class="gg-stage-detail">${detailTiles}</ol>`) +
+       card("候选审阅门禁", gateChecklist(finalize) + `<div class="gg-actions">${button("issues", "查看待处理问题")}${button("versions", "查看版本与导出")}</div>`) +
+       card("来源与使用边界", `<dl class="gg-meta"><dt>任务编号</dt><dd><code>${esc(run.id)}</code></dd><dt>参考合同快照</dt><dd><code>${esc(run.corpus_snapshot_id || "尚未建立")}</code></dd><dt>候选版本</dt><dd><code>${esc(run.candidate?.current_version_id || "尚未生成")}</code></dd></dl>`);
+   }
+@@ -356,7 +381,7 @@
+   }
+   function renderGuide() {
+     const items = state.guide.items || [];
+-    $("gg-panel").innerHTML = `<div class="gg-guide-bar"><div><strong>${items.length} 条候选指引</strong><p class="gg-muted">逐条审阅适用范围、新文及法规证据。保存会创建可追溯的人工版本，不自动进行付费模型复核。</p></div><div class="gg-actions"><span id="gg-dirty-count" role="status">${state.drafts.size ? `${state.drafts.size} 条未保存` : "无未保存编辑"}</span>${button("discard", "放弃未保存编辑")}</div></div>${!editable() ? note(state.detail.candidate?.status === "published" ? "该候选已发布，内容只读，不能静默改写已发布版本。" : "任务尚未结束或候选版本尚不可用；当前仅供查看。") : note("人工修订会使该条目的质量状态变为待审阅；既有质量、覆盖和补漏结论不等于新版本已复核。")}${items.length ? `<div class="gg-guide-layout"><nav class="card gg-card gg-directory" aria-label="候选条目目录">${items.map((item, index) => `<button type="button" class="gg-item-link ${item.guide_item_id === state.selected ? "is-active" : ""}" data-gg-item="${esc(item.guide_item_id)}" aria-current="${item.guide_item_id === state.selected ? "true" : "false"}"><small>${index + 1} · ${esc(item.section || "未分组")}</small><strong>${esc(item.title || item.guide_item_id)}</strong><span data-gg-dirty-item="${esc(item.guide_item_id)}">${state.drafts.has(item.guide_item_id) ? "未保存" : ""}</span></button>`).join("")}</nav><section class="card gg-card" id="gg-editor"></section><aside class="card gg-card" id="gg-guide-evidence"></aside></div>` : empty("尚无候选指引。可返回总览查看处理进度或异常。")}`;
++    $("gg-panel").innerHTML = `<div class="gg-guide-bar"><div><strong>${items.length} 条候选指引</strong><p class="subnote">逐条审阅适用范围、新文及法规证据。保存会创建可追溯的人工版本，不自动进行付费模型复核。</p></div><div class="gg-actions"><span id="gg-dirty-count" class="gg-muted" role="status">${state.drafts.size ? `${state.drafts.size} 条未保存` : "无未保存编辑"}</span>${button("discard", "放弃未保存编辑", "btn-sm")}</div></div>${!editable() ? note(state.detail.candidate?.status === "published" ? "该候选已发布，内容只读，不能静默改写已发布版本。" : "任务尚未结束或候选版本尚不可用；当前仅供查看。") : note("人工修订会使该条目的质量状态变为待审阅；既有质量、覆盖和补漏结论不等于新版本已复核。")}${items.length ? `<div class="gg-guide-layout"><nav class="card card-pad gg-directory" aria-label="候选条目目录">${items.map((item, index) => `<button type="button" class="gg-item-link ${item.guide_item_id === state.selected ? "is-active" : ""}" data-gg-item="${esc(item.guide_item_id)}" aria-current="${item.guide_item_id === state.selected ? "true" : "false"}"><small>${index + 1} · ${esc(item.section || "未分组")}</small><strong>${esc(item.title || item.guide_item_id)}</strong><span data-gg-dirty-item="${esc(item.guide_item_id)}">${state.drafts.has(item.guide_item_id) ? "未保存" : ""}</span></button>`).join("")}</nav><section class="card card-pad" id="gg-editor"></section><aside class="card card-pad" id="gg-guide-evidence"></aside></div>` : empty("尚无候选指引。可返回总览查看处理进度或异常。")}`;
+     if (items.length) renderEditor();
+   }
+   function renderEditor() {
+@@ -364,9 +389,9 @@
+     if (!item) return;
+     const values = state.drafts.get(state.selected) || itemValues(item);
+     const disabled = !editable() || state.busy;
+-    $("gg-editor").innerHTML = `<h2>${esc(item.title || item.guide_item_id)}</h2><p><code>${esc(item.guide_item_id)}</code> ${badge(item.quality_status)} ${badge(item.coverage_status)}</p><div class="gg-editor-fields">${Object.entries(FIELDS).map(([field, title]) => `<label class="gg-field">${title}${field === "new_text_origin" ? `<select data-gg-field="${field}" ${disabled ? "disabled" : ""}>${["model_drafted", "regulation_verbatim", "contract_pattern_adapted"].map((origin) => `<option value="${origin}" ${values[field] === origin ? "selected" : ""}>${esc(label(origin))}</option>`).join("")}</select>` : field === "title" ? `<input data-gg-field="${field}" value="${esc(values[field])}" ${disabled ? "disabled" : ""}>` : `<textarea data-gg-field="${field}" rows="${field === "new_text" ? 7 : 3}" ${disabled ? "disabled" : ""}>${esc(text(values[field]))}</textarea>`}</label>`).join("")}</div><div class="gg-actions"><button type="button" class="btn btn-primary" data-gg-action="save" ${disabled || !state.drafts.has(item.guide_item_id) ? "disabled" : ""}>保存本条人工修订</button><span id="gg-save-status" role="status" aria-live="polite"></span></div>`;
++    $("gg-editor").innerHTML = `<div class="section-title"><h2>${esc(item.title || item.guide_item_id)}</h2></div><p class="gg-muted"><code>${esc(item.guide_item_id)}</code> ${badge(item.quality_status)} ${badge(item.coverage_status)}</p><div class="gg-editor-fields">${Object.entries(FIELDS).map(([field, title]) => `<label class="gg-field">${title}${field === "new_text_origin" ? `<select data-gg-field="${field}" ${disabled ? "disabled" : ""}>${["model_drafted", "regulation_verbatim", "contract_pattern_adapted"].map((origin) => `<option value="${origin}" ${values[field] === origin ? "selected" : ""}>${esc(label(origin))}</option>`).join("")}</select>` : field === "title" ? `<input data-gg-field="${field}" value="${esc(values[field])}" ${disabled ? "disabled" : ""}>` : `<textarea data-gg-field="${field}" rows="${field === "new_text" ? 7 : 3}" ${disabled ? "disabled" : ""}>${esc(text(values[field]))}</textarea>`}</label>`).join("")}</div><div class="gg-actions"><button type="button" class="btn btn-primary" data-gg-action="save" ${disabled || !state.drafts.has(item.guide_item_id) ? "disabled" : ""}>保存本条人工修订</button><span id="gg-save-status" class="gg-muted" role="status" aria-live="polite"></span></div>`;
+     const reqs = state.requirements.filter((req) => (item.requirement_ids || []).includes(req.requirement_id));
+-    $("gg-guide-evidence").innerHTML = `<h2>本条证据</h2><h3>法规要求</h3>${reqs.map((req) => `<div class="gg-evidence-entry"><strong>${esc(req.article || req.requirement_id)}</strong><p>${esc(req.requirement)}</p>${quote(req.source_quote)}<small>${esc(req.requirement_id)}</small></div>`).join("") || empty("尚无法读取关联法规原文，请到“法规依据”核对。") }<h3>合同影响</h3><p class="gg-muted">关联 ${(item.impact_ids || []).length} 条影响；完整合同原文和处理理由请查看法规依据。</p><p class="gg-muted">${esc((item.impact_ids || []).join("、"))}</p>${button("requirements", "查看法规与合同证据")}<h3>建议新文来源</h3><p>${esc(label(values.new_text_origin))}</p>`;
++    $("gg-guide-evidence").innerHTML = `<div class="section-title"><h2>本条证据</h2></div><h3>法规要求</h3>${reqs.map((req) => `<div class="gg-evidence-entry"><strong>${esc(req.article || req.requirement_id)}</strong><p>${esc(req.requirement)}</p>${quote(req.source_quote)}<small class="gg-muted">${esc(req.requirement_id)}</small></div>`).join("") || empty("尚无法读取关联法规原文，请到“法规依据”核对。") }<h3>合同影响</h3><p class="gg-muted">关联 ${(item.impact_ids || []).length} 条影响；完整合同原文和处理理由请查看法规依据。</p><p class="gg-muted">${esc((item.impact_ids || []).join("、"))}</p>${button("requirements", "查看法规与合同证据", "btn-sm")}<h3>建议新文来源</h3><p>${esc(label(values.new_text_origin))}</p>`;
+   }
+   function recordDraft() {
+     const item = state.guide?.items?.find((entry) => entry.guide_item_id === state.selected);
+@@ -415,8 +440,8 @@
+   }
+ 
+   function renderRequirements() {
+-    $("gg-panel").innerHTML = card("法规要求与原文", `<p class="gg-muted">共 ${state.requirements.length} 条法规要求；每条要求的适用条件、例外与处理去向均需结合原文审阅。</p>${state.requirements.map((req) => `<details class="gg-requirement"><summary><strong>${esc(req.article || req.requirement_id)}</strong> ${badge(req.disposition || "pending")}<span>${esc(req.requirement)}</span></summary><div class="gg-evidence-entry"><p>${esc(req.requirement)}</p>${quote(req.source_quote, "法规原文")}<dl class="gg-meta"><dt>要求编号</dt><dd>${esc(req.requirement_id)}</dd><dt>处理理由</dt><dd>${esc(req.disposition_reason || "尚未说明")}</dd><dt>条件</dt><dd>${esc((req.conditions || []).join("；") || "未列出")}</dd><dt>例外</dt><dd>${esc((req.exceptions || []).join("；") || "未列出")}</dd></dl><button class="btn btn-sm" type="button" data-gg-req="${esc(req.requirement_id)}">查看本要求的合同影响</button></div></details>`).join("") || empty("尚无已提取的法规要求。")}`) +
+-      card("合同影响与证据", `<form id="gg-impact-filter" class="gg-toolbar"><label>关联要求<select id="gg-impact-req"><option value="">全部要求</option>${state.requirements.map((req) => `<option value="${esc(req.requirement_id)}" ${req.requirement_id === state.impactRequirement ? "selected" : ""}>${esc(req.requirement_id)} · ${esc(req.article || "法规要求")}</option>`).join("")}</select></label><label>影响状态<select id="gg-impact-status"><option value="">全部影响</option>${["definite", "possible", "unlikely"].map((value) => `<option value="${value}" ${value === state.impactStatus ? "selected" : ""}>${label(value)}</option>`).join("")}</select></label><button type="submit" class="btn">筛选</button></form><div id="gg-impacts">${loading()}</div>`);
++    $("gg-panel").innerHTML = card("法规要求与原文", `<p class="subnote">共 ${state.requirements.length} 条法规要求；每条要求的适用条件、例外与处理去向均需结合原文审阅。</p>${state.requirements.map((req) => `<details class="gg-requirement"><summary><strong>${esc(req.article || req.requirement_id)}</strong> ${badge(req.disposition || "pending")}<span>${esc(req.requirement)}</span></summary><div class="gg-evidence-entry"><p>${esc(req.requirement)}</p>${quote(req.source_quote, "法规原文")}<dl class="gg-meta"><dt>要求编号</dt><dd>${esc(req.requirement_id)}</dd><dt>处理理由</dt><dd>${esc(req.disposition_reason || "尚未说明")}</dd><dt>条件</dt><dd>${esc((req.conditions || []).join("；") || "未列出")}</dd><dt>例外</dt><dd>${esc((req.exceptions || []).join("；") || "未列出")}</dd></dl><button class="btn btn-sm" type="button" data-gg-req="${esc(req.requirement_id)}">查看本要求的合同影响</button></div></details>`).join("") || empty("尚无已提取的法规要求。")}`) +
++      card("合同影响与证据", `<form id="gg-impact-filter" class="toolbar"><label class="gg-toolbar-field">关联要求<select id="gg-impact-req" class="control-select" aria-label="关联法规要求筛选"><option value="">全部要求</option>${state.requirements.map((req) => `<option value="${esc(req.requirement_id)}" ${req.requirement_id === state.impactRequirement ? "selected" : ""}>${esc(req.requirement_id)} · ${esc(req.article || "法规要求")}</option>`).join("")}</select></label><label class="gg-toolbar-field">影响状态<select id="gg-impact-status" class="control-select" aria-label="影响状态筛选"><option value="">全部影响</option>${["definite", "possible", "unlikely"].map((value) => `<option value="${value}" ${value === state.impactStatus ? "selected" : ""}>${label(value)}</option>`).join("")}</select></label><button type="submit" class="btn">筛选</button></form><div id="gg-impacts">${loading()}</div>`);
+   }
+   async function loadImpacts(ctx) {
+     const seq = ++state.impactsSerial;
+@@ -426,7 +451,7 @@
+     try {
+       const data = await request(runPath(`/impacts?${params}`), {}, ctx);
+       if (seq !== state.impactsSerial) return;
+-      target.innerHTML = `<p class="gg-muted">筛选结果 ${esc(data.total ?? "—")} 条 · 第 ${state.impactPage} 页</p>${(data.items || []).map((impact) => `<details class="gg-requirement"><summary>${badge(impact.impact_status)}<strong>${esc(impact.impact_id)}</strong><span>${esc(impact.impact_reason || "查看合同原文与处理去向")}</span></summary><div class="gg-evidence-entry"><p class="gg-muted">合同版本：${esc(impact.contract_version_id)} · 法规要求：${esc(impact.requirement_id)}</p>${quote(impact.source_text, "合同原文")}<p><strong>影响理由：</strong>${esc(impact.impact_reason || "未说明")}</p><p><strong>处理去向：</strong>${esc(label(impact.disposition || "pending"))}</p><p>${esc(impact.disposition_reason)}</p><p class="gg-muted">关联候选条目：${esc((impact.guide_item_ids || []).join("、") || "尚无")}</p></div></details>`).join("") || empty("当前筛选下尚无合同影响记录。") }<div class="gg-pagination"><button class="btn btn-sm" type="button" data-gg-page="${state.impactPage - 1}" ${state.impactPage <= 1 ? "disabled" : ""}>上一页</button><span>第 ${state.impactPage} 页</span><button class="btn btn-sm" type="button" data-gg-page="${state.impactPage + 1}" ${state.impactPage * 50 >= (data.total || 0) ? "disabled" : ""}>下一页</button></div>`;
++      target.innerHTML = `<p class="subnote">筛选结果 ${esc(data.total ?? "—")} 条 · 第 ${state.impactPage} 页</p>${(data.items || []).map((impact) => `<details class="gg-requirement"><summary>${badge(impact.impact_status)}<strong>${esc(impact.impact_id)}</strong><span>${esc(impact.impact_reason || "查看合同原文与处理去向")}</span></summary><div class="gg-evidence-entry"><p class="gg-muted">合同版本：${esc(impact.contract_version_id)} · 法规要求：${esc(impact.requirement_id)}</p>${quote(impact.source_text, "合同原文")}<p><strong>影响理由：</strong>${esc(impact.impact_reason || "未说明")}</p><p><strong>处理去向：</strong>${esc(label(impact.disposition || "pending"))}</p><p>${esc(impact.disposition_reason)}</p><p class="gg-muted">关联候选条目：${esc((impact.guide_item_ids || []).join("、") || "尚无")}</p></div></details>`).join("") || empty("当前筛选下尚无合同影响记录。") }<div class="pagination"><span>共 ${esc(data.total ?? "—")} 条 · 第 ${state.impactPage} 页</span><div class="controls"><button class="btn btn-sm" type="button" data-gg-page="${state.impactPage - 1}" ${state.impactPage <= 1 ? "disabled" : ""}>上一页</button><button class="btn btn-sm" type="button" data-gg-page="${state.impactPage + 1}" ${state.impactPage * 50 >= (data.total || 0) ? "disabled" : ""}>下一页</button></div></div>`;
+     } catch (error) { if (seq === state.impactsSerial) showError(target, error, ctx); }
+   }
+ 
+@@ -439,7 +464,7 @@
+     const findings = quality?.findings || [];
+     const openFindings = findings.filter((entry) => !["resolved", "closed", "dismissed"].includes(entry.status));
+     const rows = (coverage?.items || []).filter((row) => ["gap", "uncertain", "unresolved"].includes(row.status));
+-    const counts = `<div class="gg-metrics">${metric("待处理质量记录", quality ? openFindings.length : null, "不含已解决 / 已关闭记录")}${metric("法规要求缺口", finalize.requirement_gaps, "生成时完整统计")}${metric("未解决合同影响", finalize.unresolved_impacts, "生成时完整统计")}${metric("最新合同不确定项", finalize.latest_contract_uncertain, "生成时完整统计")}</div>`;
++    const counts = `<div class="gg-kpis">${metric("待处理质量记录", quality ? openFindings.length : null, "不含已解决 / 已关闭记录")}${metric("法规要求缺口", finalize.requirement_gaps, "生成时完整统计")}${metric("未解决合同影响", finalize.unresolved_impacts, "生成时完整统计")}${metric("最新合同不确定项", finalize.latest_contract_uncertain, "生成时完整统计")}</div>`;
+     const failed = results.map((result, index) => result.status === "rejected" ? note(`${["质量核验", "覆盖核验", "补漏核验"][index]}读取失败：${errorMessage(result.reason)}`, "error") : "").join("");
+     $("gg-panel").innerHTML = failed + counts +
+       card("质量核验", `${badge(quality?.summary?.run_status || "not_run")}<p class="gg-muted">质量记录共 ${quality ? findings.length : "—"} 条；待处理 ${quality ? openFindings.length : "—"} 条，其中关键 ${quality ? openFindings.filter((entry) => entry.severity === "critical").length : "—"} 条。关键发布门禁以总览清单为准。</p>${findings.map((finding) => `<details class="gg-requirement"><summary>${badge(finding.severity)} ${badge(finding.status || "open")}<span>${esc(finding.description || finding.category)}</span></summary><div class="gg-evidence-entry"><p>${esc(finding.description)}</p><p><strong>建议：</strong>${esc(finding.recommendation || "请人工核对证据与候选条目。")}</p><p class="gg-muted">条目：${esc(finding.guide_item_id || "未关联")} · 类别：${esc(finding.category)}</p>${quote(finding.evidence_quote)}</div></details>`).join("") || empty(quality ? "暂无质量问题记录；不代表未运行的质量核验已通过。" : "质量数据不可用。")}`) +
+@@ -468,8 +493,8 @@
+     const canPublish = complete() && current?.status === "approved";
+      $("gg-panel").innerHTML = card("当前候选与发布", `<p>当前版本 v${esc(current?.version_no ?? "—")} · ${badge(candidate.status)}</p><p class="gg-muted">审批和发布仅针对下列精确版本，若版本发生变化服务端将拒绝操作。发布后内容只读。</p><code class="gg-version-id">${esc(candidate.current_version_id)}</code>${qualification === "candidate_with_findings" ? note("生成资格仍为“存在待处理问题”，不作为 AI 候选可批准的依据。人工草稿也必须由审阅者结合原问题重新确认。", "warning") : ""}${current?.status === "human_draft" ? note("人工修订未自动重跑模型核验。批准表示你已审阅当前人工版本及尚存问题，不表示系统重新验证通过。", "warning") : ""}<div class="gg-actions"><button type="button" class="btn" data-gg-transition="approve" ${canApprove ? "" : "disabled"}>批准当前精确版本</button><button type="button" class="btn btn-primary" data-gg-transition="publish" ${canPublish ? "" : "disabled"}>发布已批准版本</button></div>${boundary()}`) +
+        card("不可变版本链", `${versions.length ? `<ol class="gg-version-chain">${versions.map((version) => `<li><div class="gg-actions"><strong>版本 ${esc(version.version_no)}</strong>${badge(version.status)}${version.candidate_version_id === candidate.current_version_id ? '<span class="gg-muted">当前版本</span>' : ""}</div><dl class="gg-meta"><dt>版本编号</dt><dd><code>${esc(version.candidate_version_id)}</code></dd><dt>父版本</dt><dd><code>${esc(version.parent_version_id || "初始版本")}</code></dd><dt>创建时间</dt><dd>${esc(date(version.created_at))}</dd>${version.approved_at ? `<dt>批准</dt><dd>${esc(version.approved_by)} · ${esc(date(version.approved_at))}</dd>` : ""}${version.published_at ? `<dt>发布</dt><dd>${esc(version.published_by)} · ${esc(date(version.published_at))}</dd>` : ""}</dl></li>`).join("")}</ol>` : empty("尚无可审阅候选版本。")}`) +
+-      card("版本内容对照", versions.length > 1 ? `<div class="gg-toolbar"><label>原版本<select id="gg-version-from">${versions.map((version, index) => `<option value="${index}" ${index === versions.length - 2 ? "selected" : ""}>版本 ${esc(version.version_no)}</option>`).join("")}</select></label><label>新版本<select id="gg-version-to">${versions.map((version, index) => `<option value="${index}" ${index === versions.length - 1 ? "selected" : ""}>版本 ${esc(version.version_no)}</option>`).join("")}</select></label>${button("compare-versions", "比较内容")}</div><div id="gg-version-diff"></div>` : empty("至少有两个版本后可进行内容对照。")) +
+-       card("授权导出", `<p class="gg-muted">下载文件仅供当前候选审阅；正式使用前请完成批准、发布和修改指引启用。历史版本仅在服务端实际提供时显示。</p><div class="gg-actions">${Object.entries(DOWNLOADS).filter(([kind]) => Boolean(state.detail.artifacts?.[kind])).map(([kind, [title]]) => `<button type="button" class="btn" data-gg-download="${kind}">${title}</button>`).join("") || empty("尚无可下载产物。")}</div><p class="gg-muted">引擎兼容状态：${esc(label(state.detail.engine_status || "not_run"))}；兼容报告不等于质量与覆盖已通过。</p>`);
++      card("版本内容对照", versions.length > 1 ? `<div class="toolbar"><label class="gg-toolbar-field">原版本<select id="gg-version-from" class="control-select" aria-label="对照原版本">${versions.map((version, index) => `<option value="${index}" ${index === versions.length - 2 ? "selected" : ""}>版本 ${esc(version.version_no)}</option>`).join("")}</select></label><label class="gg-toolbar-field">新版本<select id="gg-version-to" class="control-select" aria-label="对照新版本">${versions.map((version, index) => `<option value="${index}" ${index === versions.length - 1 ? "selected" : ""}>版本 ${esc(version.version_no)}</option>`).join("")}</select></label>${button("compare-versions", "比较内容")}</div><div id="gg-version-diff"></div>` : empty("至少有两个版本后可进行内容对照。")) +
++       card("授权导出", `<p class="subnote">下载文件仅供当前候选审阅；正式使用前请完成批准、发布和修改指引启用。历史版本仅在服务端实际提供时显示。</p><div class="gg-actions">${Object.entries(DOWNLOADS).filter(([kind]) => Boolean(state.detail.artifacts?.[kind])).map(([kind, [title]]) => `<button type="button" class="btn" data-gg-download="${kind}">${title}</button>`).join("") || empty("尚无可下载产物。")}</div><p class="gg-muted">引擎兼容状态：${esc(label(state.detail.engine_status || "not_run"))}；兼容报告不等于质量与覆盖已通过。</p>`);
+     if (versions.length > 1) compareVersions();
+   }
+   function compareVersions() {
+diff --git a/tests/browser/test_v1_frontend_remediation.py b/tests/browser/test_v1_frontend_remediation.py
+index 7b471eb..34eb098 100644
+--- a/tests/browser/test_v1_frontend_remediation.py
++++ b/tests/browser/test_v1_frontend_remediation.py
+@@ -887,13 +887,14 @@ def test_guide_badges_use_warning_not_green_pass_and_download_names(browser, liv
+     try:
+         open_dev(page, base, "#generation?mode=detail&id=A")
+         page.locator("#gg-detail-head").filter(has_text="Regulation A").wait_for()
+-        badge = page.locator(".gg-badge").filter(has_text="生成结束 · 仍有问题").first
++        # 重设计后徽章与工作台同语言：.badge b-amber（琥珀，不是绿色通过）。
++        badge = page.locator("#gg-detail-head .badge").filter(has_text="生成结束 · 仍有问题").first
+         badge.wait_for()
+-        assert "gg-warning" in (badge.get_attribute("class") or "")
++        assert "b-amber" in (badge.get_attribute("class") or "")
+         colour = badge.evaluate("node => getComputedStyle(node).color")
+         assert "22, 101, 52" not in colour and "rgb(22, 101, 52)" not in colour
+-        finding = page.locator(".gg-badge").filter(has_text="存在问题").first
+-        assert "gg-warning" in (finding.get_attribute("class") or "")
++        finding = page.locator(".badge").filter(has_text="存在问题").first
++        assert "b-amber" in (finding.get_attribute("class") or "")
+ 
+         page.locator('[data-gg-tab="versions"]').click()
+         names = {}
