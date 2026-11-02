@@ -1080,14 +1080,25 @@
     state.classicRendered=true;state.diffPositions=null;refreshDiffMarks();markActiveDiff();
   }
   // The result area is an inline region below the task header (chip strip
-  // replaces the old fullscreen dialog: no backdrop, no Esc, no close button,
-  // FL-D843).
+  // FL-D987 全屏回退（用户「原来的全屏弹窗很好啊」）：
+  // 恢复 9f5b61d 出生的全屏 dialog——遮罩铺满视口 + body 滚动锁 + Esc/关闭钮。
   function setViewerOpen(open) {
     const viewer=$('compare-viewer'); if(!viewer)return;
+    document.body.classList.toggle('compare-fullscreen-open', Boolean(open));
     viewer.hidden=!open;
-    // preventScroll：region 化后聚焦不再把主滚动区甩到结果区顶部，
-    // 保持任务头/合同组 chip 条在视野内（FL-D843 走查发现的跳动）。
-    if(open)requestAnimationFrame(()=>viewer.focus?.({preventScroll:true}));
+    const backdrop=$('compare-viewer-backdrop'); if(backdrop)backdrop.hidden=!open;
+    if(open){syncViewerNav();requestAnimationFrame(()=>viewer.focus?.({preventScroll:true}));}
+  }
+  function syncViewerNav(){
+    const total=state.pairs?.length||0,idx=Number.isInteger(state.pairIndex)?state.pairIndex:-1;
+    const counter=$('compare-pair-counter');if(counter)counter.textContent=(idx>=0&&total)?`${idx+1} / ${total}`:'';
+    const prev=$('compare-prev-pair'),next=$('compare-next-pair');
+    if(prev)prev.disabled=idx<=0;
+    if(next)next.disabled=idx<0||idx>=total-1;
+  }
+  function closeViewer() {
+    setViewerOpen(false);
+    document.querySelector('.compare-pair-status.is-selected')?.focus?.();
   }
   // Pairs without a result yet (processing / failed) still open the region so
   // their status reason reads in place instead of leaving stale results of
@@ -1220,7 +1231,12 @@
     document.addEventListener('click',event=>{const chip=$('compare-coverage-chip');if(chip&&chip.open&&!event.target.closest('#compare-coverage-chip'))chip.open=false;});
     $('compare-prev-diff')?.addEventListener('click',()=>focusDiff(state.diffIndex-1)); $('compare-next-diff')?.addEventListener('click',()=>focusDiff(state.diffIndex+1)); $('compare-selection-left-all')?.addEventListener('click',()=>setAllSelections('left')); $('compare-selection-right-all')?.addEventListener('click',()=>setAllSelections('right')); $('compare-selection-pending')?.addEventListener('click',()=>{const index=visibleDiffs().findIndex(item=>selectionDecision(item.id)==='pending');if(index>=0)focusDiff(index);}); $('compare-selection-save')?.addEventListener('click',()=>saveSelectionDraft()); $('compare-selection-generate')?.addEventListener('click',generateSelection); $('compare-active-only')?.addEventListener('change',drawLines); $('compare-diff-filter')?.addEventListener('change',()=>{state.diffIndex=0;renderDiffList();focusDiff(0);}); $('compare-diff-list')?.addEventListener('scroll',onDiffListScroll,{passive:true}); $('compare-retry')?.addEventListener('click',continueUploads); document.querySelectorAll('[data-word-pane]').forEach(btn=>btn.addEventListener('click',()=>setMobilePane(btn.dataset.wordPane))); $('compare-show-sources')?.addEventListener('change',e=>setSourcesVisible(e.target.checked)); $('compare-markup-mode')?.addEventListener('change',e=>setMarkupMode(e.target.value)); document.querySelectorAll('[data-compare-sources-close]').forEach(btn=>btn.addEventListener('click',()=>setSourcesVisible(false)));
       document.addEventListener('click',e=>{ const back=e.target.closest('[data-compare-back-list]');if(back){api.navigate?.('compare',{mode:'list'});return;}const task=e.target.closest('[data-compare-task]');if(task){openTask(task.dataset.compareTask);return;}const pair=e.target.closest('[data-compare-pair]');if(pair){openPair(Number(pair.dataset.comparePair));return;}const download=e.target.closest('[data-selection-download]');if(download){downloadSelection(download.dataset.selectionDownload,download.dataset.selectionFilename);return;}const diff=e.target.closest('[data-compare-diff]');if(diff&&!e.target.closest('input')){focusDiff(visibleDiffs().findIndex(x=>x.id===diff.dataset.compareDiff));return;}const mark=e.target.closest('#compare-word-merged-pane [data-diff-id],#compare-word-left-pane [data-diff-id],#compare-word-right-pane [data-diff-id],#compare-left-pane [data-diff-id],#compare-right-pane [data-diff-id]');if(mark){focusDiff(visibleDiffs().findIndex(x=>x.id===mark.dataset.diffId));return;}const remove=e.target.closest('[data-compare-remove]');if(remove){const index=Number(remove.dataset.compareRemove),row=remove.closest('.compare-pair-input');state.inputs.splice(index,1);row?.remove();if(!state.inputs.length){state.inputs=[{}];renderInputs();}else syncInputIndexes();return;} });
-     document.addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&e.target.matches('#compare-word-merged-pane [data-diff-id],#compare-word-left-pane [data-diff-id],#compare-word-right-pane [data-diff-id],#compare-left-pane [data-diff-id],#compare-right-pane [data-diff-id]')){e.preventDefault();focusDiff(visibleDiffs().findIndex(x=>x.id===e.target.dataset.diffId));}});
+           $('compare-close-viewer')?.addEventListener('click',closeViewer);
+      $('compare-viewer-backdrop')?.addEventListener('click',closeViewer);
+      $('compare-prev-pair')?.addEventListener('click',()=>{if(state.pairIndex>0)openPair(state.pairIndex-1);});
+      $('compare-next-pair')?.addEventListener('click',()=>{if(state.pairIndex>=0&&state.pairIndex<(state.pairs?.length||0)-1)openPair(state.pairIndex+1);});
+      document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!$('compare-viewer')?.hidden){event.preventDefault();closeViewer();}});
+document.addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&e.target.matches('#compare-word-merged-pane [data-diff-id],#compare-word-left-pane [data-diff-id],#compare-word-right-pane [data-diff-id],#compare-left-pane [data-diff-id],#compare-right-pane [data-diff-id]')){e.preventDefault();focusDiff(visibleDiffs().findIndex(x=>x.id===e.target.dataset.diffId));}});
       document.addEventListener('change',e=>{const choice=e.target.closest('[data-selection-choice]');if(choice){chooseSelection(choice.dataset.diffId,choice.value);return;}const row=e.target.closest('.compare-pair-input');if(row&&e.target.matches('input[type=file]')){const i=Number(row.dataset.pairIndex),entry=state.inputs[i]||(state.inputs[i]={}),file=e.target.files?.[0]||null;entry[e.target.matches('[data-compare-left]')?'_left':'_right']=file;row.querySelector('.compare-file-label').textContent=[entry._left?.name,entry._right?.name].filter(Boolean).join(' / ')||'尚未选择文件';
         // FL-D859: 选择文件后同步更新卡片文件名、has-file 态与按钮文案，
         // 原实现只更新 sr-only 摘要，用户无法确认选择成功。
