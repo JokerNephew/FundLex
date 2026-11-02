@@ -9206,6 +9206,7 @@ H＝E×…
 - 附带观察（2026-11-03，非阻塞，既有行为）：`db.py` 对 `sqlite:///绝对路径` 既有剥离为相对路径的约定会在冒烟脚本层踩坑（生产代码不依赖该约定，非本次重构引入）；第 6 线已在冒烟脚本用纯路径形规避。仅留档，不定责不立项。
 - 附带观察 2（2026-11-03，回归环境伪影，已修工具链）：**systemd EnvironmentFile 与 shell source 语义不同**——`/etc/fundlex-recall.env` 的 `FUNDLEX_MODEL_REQUEST_OPTIONS_JSON` 为合法 JSON 但整值未加引号；`sh set -a; .` 会吞掉值内 10 个双引号（57→47 字符）致 `ModelGateway.from_env` json.loads 秒崩，生产 systemd 按字面读取故正常。首轮 A/B/D 回归全秒败均是伪影、不计入引擎分母。处置：统一通道 `/tmp/opencode/batch-run/env_exec.py`（systemd 字面语义解析，已实测恢复合法 JSON），后续一切回归/冒烟进程一律走该通道；不修改生产 env 文件（它是 systemd 语义下的合法配置）。本条与 FL-D1044 的隔离教训同族：测试环境的入场方式永远不要假设与生产等价。
 - 用户新口径（2026-11-03，已下发各线）：**后续全面使用新指引解析/合同修改逻辑，当前无正式用户，不考虑旧格式兼容**。默认指引=卡包文档；旧 guide-rules-v1 的渲染表格、重解析路径、新任务入口、兼容分支不再投入维护，下一窗口随删旧清单一并评估删除；历史数据仅存库不主动暴露。首发版不动。
+- 授权与运维动作留档（2026-11-03，用户授权）：①用户批准装 LibreOffice 并要求护磁盘——已装 `libreoffice-core/writer 6.3.6.2-3.2.al8`（93 包/194M 下载；安装前清 pytest 缓存+journal，净余 813M，未触发磁盘风险；系统自带 alinux3-os 内网镜像 502，以 `/etc/yum.repos.d/alinux-public.repo` 临时公共镜像完成，用后建议 REL 决定是否保留）；②用户批准清滞留进程——冻结 QA 驱动 `drive_worker.py`(PID 1848258,16h) 已 kill（来源=衔接期遗留，非生产单元）；`/opt/fundlex-test` 的 `fundlex-test-worker.service` 已 disable+stop（该测试环境与生产 MySQL 无 FUNDLEX_DATABASE_URL 关联、本就无害可隔离运行，REL 需要金丝雀时可重新 enable）。③用户全权委托后续测试/优化/上线节奏；样本目标=产品部32+原始文件33（19 DOCX + 14 .doc）“完美跑通”，funds_word 全量后置不急上线。LibreOffice 对样例 `.doc` 首次转换报 `source file could not be loaded`，转换兼容性在排查中，未宣称 .doc 支持已就绪。
 - 教训：任何 Worker/脚本冒烟必须在启动时断言运行库地址属于临时隔离库，不得默认继承系统 env。
 
 ### FL-D1048（原 FL-DT-14）直通引擎提速专项：并发调用 + 同章共窗定位（2026-11-03，open·性能项·与 FL-D1047 同窗）
