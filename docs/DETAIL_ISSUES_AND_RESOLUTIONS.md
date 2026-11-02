@@ -9068,3 +9068,10 @@ H＝E×…
 ## FL-D1009 fc+wrong+旁路第三复合形态（2026-11-02，holdoutfix 修复后复测，open）
 - FL-D1002 修复实证双愈（W2H04 gate 诚实拦截/W2H12 同愈），但重跑冒出 W2H22 新复合 fc+wrong+旁路形态；根因派 EN1（FL-D1002 同款规程）；总判定继续冻结。
 - 同册：devfix 批崩于案43（磁盘爆棚 100% 期 shell 失联事故波及），EVAL 按 --resume 续跑。
+
+## FL-D1010 qa-frontend-e 工作树被外部清空事件（2026-11-02，open）
+- **问题与影响**：2026-11-02 约 11:27，FE-E 工作树 `.local/share/opencode/worktree/29a9a9/qa-frontend-e` 整树内容被清空（仅剩新写入的 docs/ 目录），主仓 `.git/worktrees/qa-frontend-e` 管理目录同时消失，特征符合 `git worktree remove --force`（或等价手工删除）。事发时磁盘余量 11G/72%，排除 cc5f85b 所载磁盘爆满清理；肇事方未确认（疑似并行 agent 清理流程误伤）。
+- **影响面**：FE-E 两个施工 commit（c614096、9df4632）已提交分支 `qa-frontend-e-20261102`，对象库存主仓，零损失；正在撰写的完工报告为未提交文件，事前已拷至 /tmp/opencode/qa/ 备份。
+- **处理方法**：核实分支 HEAD 完好后，以 `git worktree add` 原味重建工作树（不改历史/指针），报告文件回填 `docs/frontend/FE_E_COMPLETION_REPORT_20261102.md` 并随报告 uncommitted 交付验收。
+- **状态**：已重建并复核（node --check 通过、删除类断言 grep 复测一致）。**防范建议（待总指挥裁决）**：各线 worktree remove 前必须先 `git -C <worktree> status`+分支差异检查并报监督；worktree 清理集中登记。
+- **下一步**：监督确认验收后，报告文档随批提交；若查明肇事流程在此追加变更记录。
