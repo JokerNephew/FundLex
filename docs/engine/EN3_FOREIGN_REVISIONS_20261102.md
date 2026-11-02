@@ -125,4 +125,6 @@
 - 读实际产物：battery 全部以 python-docx 真读 DOCX + zip part 级断言；final 与 accept-all(redline) c14n 全等即「Word 打开无修复提示」的结构保证（python-docx 双开为零修复代理）。
 - 机制面证明：四处改动均落在通用抽象层（摄入白名单谓词、规范化镜像、验证吞错移除、校验锚定坐标系）；无任何按文件名/费率文本/样本条件的分支。
 - 留史：本文件 + evidence JSON + 状态文件 `/tmp/opencode/qa/status/qa-engine-tracked.md`。
-- 编号说明：发现已由总指挥 2026-11-02 派定正式号段 **FL-D1003~FL-D1007**（映射顺序 EN3-F1..F5；FL-D1007=坐标错位根级缺陷，标最高危）；集中册登记见 [DETAIL_APPEND_EN3](../DETAIL_APPEND_EN3.md)。施工版本 cbcf3cc 起；完工=矩阵 83 格全绿 + 定版全量回归 **2802 passed / 145 skipped / 0 failed** + 真实语料 32 份过机证据 + 真实模型双 PASS。
+- 编号说明：发现已由总指挥 2026-11-02 派定正式号段 **FL-D1003~FL-D1007**（映射顺序 EN3-F1..F5；FL-D1007=坐标错位根级缺陷，标最高危）；集中册登记见 [DETAIL_APPEND_EN3](../DETAIL_APPEND_EN3.md)。施工版本 cbcf3cc 起，锁死 B 接线 dbf6495。
+- 回归留史（如实并排）：cbcf3cc 树 2802/0；b927818 树 2802/0；锁死 B 后首轮全量曾现 6F/632E 异常轮——隔离复跑全部转绿+资源采样（磁盘 94%/内存紧张）指向环境抖动，**未作定版**；dbf6495 终树全量复跑 **2802 passed / 145 skipped / 0 failed / 0 errors**（33m01s）。
+- 完工=矩阵 83 格全绿 + 真实语料 32 份过机证据 + 锚点语义 32 份八项实证（30/30 PASS + 2 防护边界）+ 真实模型双 PASS + 上述定版回归。
