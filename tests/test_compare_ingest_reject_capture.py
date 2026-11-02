@@ -55,3 +55,34 @@ def test_rejected_upload_bytes_and_traceback_are_captured(tmp_path, monkeypatch)
     captured = diag / f"reject-{sha}.docx"
     assert captured.exists(), f"capture missing: {list(diag.iterdir())}"
     assert captured.read_bytes() == left
+
+
+def test_ingest_strips_inert_attached_template_link(tmp_path):
+    """Word .doc→.docx saves keep an attachedTemplate rel; ingest must accept (FL-D1024)."""
+    import io, zipfile, hashlib
+    from fundlex.compare.ingest import prepare_compare_upload
+    try:
+        from docx import Document
+    except ImportError:
+        import pytest; pytest.skip("python-docx unavailable")
+    doc = Document()
+    doc.add_paragraph("第一条 基金合同当事人及权利义务")
+    doc.add_paragraph("基金管理人：广发基金管理有限公司")
+    buf = io.BytesIO()
+    doc.save(buf)
+    raw = buf.getvalue()
+    attached = (
+        '<Relationship Id="rIdAttachedTpl1" '
+        'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/attachedTemplate" '
+        'Target="file:///C:/Templates/Normal.dotm" TargetMode="External"/>')
+    rebuilt = io.BytesIO()
+    with zipfile.ZipFile(io.BytesIO(raw)) as src, zipfile.ZipFile(rebuilt, "w") as dst:
+        for item in src.namelist():
+            content = src.read(item)
+            if item == "word/_rels/settings.xml.rels":
+                content = content.replace(b"</Relationships>", attached.encode() + b"</Relationships>")
+            dst.writestr(item, content)
+    data = rebuilt.getvalue()
+    out = prepare_compare_upload("converted.docx", data)
+    assert out["original_sha256"] == hashlib.sha256(data).hexdigest()
+    assert out["original_size"] == len(data)

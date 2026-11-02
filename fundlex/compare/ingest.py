@@ -23,14 +23,19 @@ def prepare_compare_upload(name: str, data: bytes) -> dict[str, Any]:
     """
     filename = Path((name or "").replace("\\", "/")).name
     validate_docx_upload(filename, data)
-    normalized = data
     original_sha256 = hashlib.sha256(data).hexdigest()
+    original_size = len(data)
+    # FL-D1024: Word saves may carry an inert attachedTemplate link; strip it
+    # before every downstream validator sees the package.  Recorded identity
+    # (sha/size) stays bound to the user's raw bytes.
+    from .revisions import normalize_external_links
+    data = normalize_external_links(data)
+    normalized = data
     revisions_accepted = 0
     if prepare_compare_input is not None:
         try:
             prepared = prepare_compare_input(data)
             normalized = prepared.data
-            original_sha256 = prepared.original_sha256
             revisions_accepted = prepared.revisions_accepted
         except Exception as exc:
             raise ValueError("COMPARE_INVALID_DOCX") from exc
@@ -39,4 +44,4 @@ def prepare_compare_upload(name: str, data: bytes) -> dict[str, Any]:
     except Exception as exc:
         raise ValueError("COMPARE_INVALID_DOCX") from exc
     return {"data": normalized, "original_sha256": original_sha256,
-            "original_size": len(data), "revisions_accepted": revisions_accepted}
+            "original_size": original_size, "revisions_accepted": revisions_accepted}

@@ -361,6 +361,56 @@ def _write_normalized_package(path: Path, parts: dict[str, bytes], document_xml:
             output.writestr(info, document_xml if name == DOCUMENT else data)
 
 
+def _strip_attached_template_links(parts: dict[str, bytes], limits: ZipLimits) -> dict[str, bytes]:
+    """Drop inert ``attachedTemplate`` links kept by Word .doc→.docx saves (FL-D1024).
+
+    The link only points at the original document template; Compare never
+    reads it, and refusing the file locks out ordinary Word output.  Strip
+    the relationship and its settings element before package validation.
+    """
+    rels_name = "word/_rels/settings.xml.rels"
+    if rels_name not in parts:
+        return parts
+    office_r = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+    root = _xml(parts[rels_name], limits)
+    removed_ids: set[str] = set()
+    for rel in list(root):
+        if str(rel.get("Type", "")).endswith("/attachedTemplate"):
+            removed_ids.add(str(rel.get("Id", "")))
+            root.remove(rel)
+    if not removed_ids:
+        return parts
+    stripped = dict(parts)
+    stripped[rels_name] = etree.tostring(root, encoding="UTF-8", xml_declaration=True)
+    settings_name = "word/settings.xml"
+    if settings_name in stripped:
+        sroot = _xml(stripped[settings_name], limits)
+        sremoved = False
+        for el in list(sroot.iter("{" + W + "}attachedTemplate")):
+            parent = el.getparent()
+            if el.get("{" + office_r + "}id") in removed_ids and parent is not None:
+                parent.remove(el)
+                sremoved = True
+        if sremoved:
+            stripped[settings_name] = etree.tostring(sroot, encoding="UTF-8", xml_declaration=True)
+    return stripped
+
+
+def normalize_external_links(data: bytes) -> bytes:
+    """Return DOCX bytes with inert external template links removed (FL-D1024)."""
+    with TemporaryDirectory(prefix="fundlex-compare-links-") as directory:
+        limits = ZipLimits()
+        source = Path(directory) / "source.docx"
+        source.write_bytes(data)
+        parts = _read_parts(source, limits)
+        stripped = _strip_attached_template_links(parts, limits)
+        if all(stripped.get(name) == content for name, content in parts.items()):
+            return data
+        output = Path(directory) / "linked.docx"
+        _write_normalized_package(output, stripped, stripped[DOCUMENT])
+        return output.read_bytes()
+
+
 def prepare_compare_input(data: bytes, *, limits: ZipLimits | None = None) -> PreparedInput:
     """Return a validated DOCX with all existing Word revisions accepted."""
     limits = limits or ZipLimits()
@@ -368,7 +418,7 @@ def prepare_compare_input(data: bytes, *, limits: ZipLimits | None = None) -> Pr
     with TemporaryDirectory(prefix="fundlex-compare-revisions-") as directory:
         source = Path(directory) / "source.docx"
         source.write_bytes(data)
-        parts = _read_parts(source, limits)
+        parts = _strip_attached_template_links(_read_parts(source, limits), limits)
         _validate_package(parts, limits, full=True, allow_existing_revisions=True)
         changed = dict(parts)
         accepted = 0
