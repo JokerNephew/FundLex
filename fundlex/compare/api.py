@@ -42,6 +42,31 @@ def _upload_rejection_code(name: str, data: bytes) -> str:
     return "COMPARE_INVALID_DOCX"
 
 
+def _capture_ingest_reject(name: str, data: bytes, exc: BaseException) -> None:
+    """Persist parser-rejected DOCX bytes + traceback for diagnosis (FL-D1024).
+
+    The ingest guard swallows the cause for clients; without a server-side
+    capture a real user file that passes package checks but fails the compare
+    parser leaves zero evidence. Captures go to FUNDLEX_REJECT_DIAG_DIR
+    (default <FUNDLEX_DATA_DIR>/diagnostics); capture failures must never
+    affect the upload response.
+    """
+    import logging, os, traceback
+    try:
+        diag_dir = os.environ.get("FUNDLEX_REJECT_DIAG_DIR") or os.path.join(
+            os.environ.get("FUNDLEX_DATA_DIR", "/var/lib/fundlex"), "diagnostics")
+        os.makedirs(diag_dir, exist_ok=True)
+        sha = hashlib.sha256(data).hexdigest()[:16]
+        path = os.path.join(diag_dir, f"reject-{sha}.docx")
+        with open(path, "wb") as fh:
+            fh.write(data)
+        logging.getLogger("fundlex.compare").warning(
+            "COMPARE_INVALID_DOCX captured: name=%r sha=%s file=%s\n%s",
+            name, sha, path, "".join(traceback.format_exception(exc)))
+    except Exception:
+        logging.getLogger("fundlex.compare").exception("reject capture failed")
+
+
 class CompareFileManifest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     client_id: str = Field(min_length=1, max_length=128)
@@ -208,9 +233,10 @@ def register_compare_routes(application, compare_store: CompareStore, user_depen
                     from .ingest import prepare_compare_upload
                     try:
                         prepared = prepare_compare_upload(name, data)
-                    except Exception:
+                    except Exception as _ingest_exc:
                         error = "COMPARE_INVALID_DOCX"
                         prepared = None
+                        _capture_ingest_reject(name, data, _ingest_exc)
                 uploads.append({
                     "client_id": cid,
                     "name": name,
