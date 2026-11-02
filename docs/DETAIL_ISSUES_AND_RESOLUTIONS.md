@@ -9200,6 +9200,7 @@ H＝E×…
 - 事实（第 6 线自报，属实）：真冒烟脚本随进程完整加载 `/etc/fundlex-recall.env`，`FUNDLEX_DATABASE_URL` 进入进程后任务行被写入**生产 MySQL**：owner=`smoke-owner`，涉及 guide_versions（abd43559→ba67715a 两版本）、guide_jobs、guide_config、tasks、task_batches、batches、documents、artifacts 链路行级数据；对象文件在 /tmp 独立目录，**未触碰生产对象文件、未影响服务、无用户数据**。
 - 处置（已定）：①生产库清理由 REL 单通道审核执行（第 6 线交精确 SQL 包、本人不得在产库执行写/删），执行前后 select 计数留证；②冒烟/e2e 脚本加“发现生产 DATABASE_URL 即 fail-fast”自检并强制 sqlite 临时库，修好前停止真冒烟；③脚本键路修正（matched_report 误读 direct_edit 块）在隔离环境重跑取证。
 - 编号与验收要件（2026-11-02，接班 `beb723f` 权威映射 FL-DT-12→FL-D1044，下一可用 FL-D1045）：自报属实记档不追责；①生产清理只走 REL 单通道，清完 REL 须报**事务号**留证；②fail-fast 隔离验收**以代码 diff 为准，不看承诺**——冒烟脚本加载 env 命中生产 URL 必须即时自爆，否则同类零再犯不成立。状态保持 open 至两项证据到齐。
+- 要件②已验收（2026-11-02，代码实核）：`/tmp/opencode/line6-real-smoke.py` L35-44 将 env 携带的 `FUNDLEX_DATABASE_URL` 一律作废、强制重指临时 sqlite 并打印拒绝沿用；L61 再断言 `store.database.dialect` 非 sqlite 即 `SystemExit` 自爆。语义=“泄漏中和 + fail-fast 兜底”双保险，生产写不可达，以代码为准通过，已同步接班。要件①（REL 事务号 + 第 6 线 select=0 复核）到齐后整体关闭本条。
 - 教训：任何 Worker/脚本冒烟必须在启动时断言运行库地址属于临时隔离库，不得默认继承系统 env。
 
 ### FL-D1038（原 FL-DT-11）AGENTS.md 公网出口 IP 与本机实测不一致（2026-11-02，已处置·接班域完成）
