@@ -948,3 +948,6 @@ body:has(.detail-overlay.inline-contract-detail:not([hidden]) .review-layout){ov
 .model-deprecated-hint { color: var(--muted, #888); font-size: 12px; }
 .model-deprecated-item { display: inline-block; margin-right: .75em; color: var(--muted, #888); }
 .model-deprecated-item del { opacity: .65; }
+
+/* FL-D1041：aria-disabled 替代原生 disabled（原生态静默 click 致解释 toast 死分支） */
+.btn[aria-disabled="true"]{opacity:.48;cursor:not-allowed}

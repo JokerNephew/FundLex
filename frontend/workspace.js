@@ -17,7 +17,13 @@
     const current=++token,epoch=api.epoch();busy=true;
     $('workspace-state').textContent='正在读取全部业务任务…';$('workspace-task-rows').setAttribute('aria-busy','true');
     try{
-      const params=new URLSearchParams({...route,page:route.page||'1',page_size:'20'});params.delete('view');
+      // FL-D1042（P1）：date 清空后内存 route 残留 date_from=''，原样透传 → /api/workspace/tasks 422
+      // 工作台错误态自我锁死（后续一切请求都带）。与 app.js param() 同一口径：空串/空值不入查询串。
+      const params=new URLSearchParams();
+      for(const [k,v] of Object.entries({...route,page:route.page||'1',page_size:'20'})){
+        if(v!==''&&v!=null)params.set(k,v);
+      }
+      params.delete('view');
       const data=await api.json(`/api/workspace/tasks?${params}`);
       if(current!==token||epoch!==api.epoch()||api.view()!=='workspace')return;
       const stats=data.stats||{};
