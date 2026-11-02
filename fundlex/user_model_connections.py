@@ -18,21 +18,50 @@ from .user_agent import USER_AGENT
 from .models.config import ModelRoleConfig
 
 
+# Built-in suggestion catalog (FL-D937(7), user-decided refresh on 2026-11-02).
+# ``models`` = currently on-sale suggestions (official catalog checked 2026-11-02,
+# read-only). ``deprecated_models`` entries render grayed-out in the UI (如实灰置
+# 不藏) with the retirement source note, so users with stale saved settings see
+# what happened; the ``custom`` lane remains the manual fallback. Sources:
+# moonshot platform.kimi.com/docs/models（2026-11-02 官方页）; DeepSeek
+# api-docs.deepseek.com/quick_start/pricing; 阿里云 help.aliyun.com model-studio;
+# 智谱 docs.bigmodel.cn model-overview; OpenAI platform docs+退役公告（快照
+# 2027-01-14 计划以官方公告为准）; siliconflow api-docs release notes。
 PROVIDERS = {
     "openai": {"label": "OpenAI（兼容接口）", "base_url": "https://api.openai.com/v1",
-               "models": ["gpt-4.1", "gpt-4.1-mini"]},
+               "models": ["gpt-5.5", "gpt-5.2", "gpt-5-mini"],
+               "deprecated_models": [
+                   {"id": "gpt-4.1", "note": "官方列入快照退役计划（2027-01-14 起），建议切 GPT-5 系列"},
+                   {"id": "gpt-4.1-mini", "note": "官方列入快照退役计划（2027-01-14 起），建议切 GPT-5 mini"}]},
     "deepseek": {"label": "DeepSeek（兼容接口）", "base_url": "https://api.deepseek.com/v1",
-                 "models": ["deepseek-chat", "deepseek-reasoner"]},
+                 "models": ["deepseek-v4-pro", "deepseek-flash"],
+                 "deprecated_models": [
+                     {"id": "deepseek-chat", "note": "2026-07-24 官方停用，现由 deepseek-flash 接任"},
+                     {"id": "deepseek-reasoner", "note": "2026-07-24 官方停用，现由 deepseek-flash（思考模式）接任"}]},
     "alibaba": {"label": "阿里云百炼（兼容接口）",
                 "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-                "models": ["qwen-plus", "qwen-max", "qwen-turbo"]},
+                "models": ["qwen-max", "qwen-plus", "qwen-flash"],
+                "deprecated_models": [
+                    {"id": "qwen-turbo", "note": "现售目录未列（高速线由 qwen-flash 接任），仅供参考名灰置"}]},
     "moonshot": {"label": "月之暗面 Kimi（兼容接口）", "base_url": "https://api.moonshot.cn/v1",
-                 "models": ["moonshot-v1-8k", "moonshot-v1-32k", "moonshot-v1-128k"]},
+                 "models": ["kimi-k3.1-pro", "kimi-k3.1-pro-highspeed", "kimi-k3"],
+                 "deprecated_models": [
+                     {"id": "moonshot-v1-8k", "note": "2026-08-31 官方下线，建议切 kimi-k3.1-pro"},
+                     {"id": "moonshot-v1-32k", "note": "2026-08-31 官方下线，建议切 kimi-k3.1-pro"},
+                     {"id": "moonshot-v1-128k", "note": "2026-08-31 官方下线，建议切 kimi-k3 或 kimi-k3.1-pro"}]},
     "siliconflow": {"label": "硅基流动（兼容接口）", "base_url": "https://api.siliconflow.cn/v1",
-                    "models": ["Qwen/Qwen3-8B", "deepseek-ai/DeepSeek-V3"]},
+                    "models": ["deepseek-ai/DeepSeek-V4.1-Flash",
+                               "Qwen/Qwen3-235B-A22B-Instruct-2507"],
+                    "deprecated_models": [
+                        {"id": "deepseek-ai/DeepSeek-V3", "note": "平台 2026-10 升级公告由 V4.1 接任，旧名单灰置"},
+                        {"id": "Qwen/Qwen3-8B", "note": "现行目录未核到（以云平台控制台为准），灰置仅供参考"}]},
     "zhipu": {"label": "智谱 AI（兼容接口）", "base_url": "https://open.bigmodel.cn/api/paas/v4",
-              "models": ["glm-4-flash", "glm-4-plus", "glm-4.5"]},
-    "custom": {"label": "其他 OpenAI 兼容服务", "base_url": "", "models": []},
+              "models": ["glm-5.3", "glm-5.3-flash", "glm-4.7"],
+              "deprecated_models": [
+                  {"id": "glm-4-flash", "note": "官方已改为快照 glm-4-flash-250414，建议按快照名用"},
+                  {"id": "glm-4.5", "note": "旧代条目（主力已迁 GLM-5.x/4.7），新单建议切 glm-4.7 或 glm-5.3"}]},
+    "custom": {"label": "其他 OpenAI 兼容服务", "base_url": "", "models": [],
+               "deprecated_models": []},
 }
 
 

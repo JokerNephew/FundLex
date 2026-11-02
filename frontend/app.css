@@ -951,3 +951,8 @@ body:has(.detail-overlay.inline-contract-detail:not([hidden]) .review-layout){ov
 .feishu-wizard-done .btn{margin-left:auto}
 @media(max-width:900px){.feishu-wizard-steps{grid-template-columns:repeat(2,minmax(0,1fr))}.feishu-config-grid{grid-template-columns:minmax(0,1fr)}}
 @media(max-width:760px){.feishu-wizard{padding:18px}.feishu-wizard-steps li{padding:8px 9px}.feishu-wizard-steps small{display:none}.feishu-code-row code{font-size:17px}.feishu-wizard-done{flex-wrap:wrap}.feishu-wizard-done .btn{margin-left:0}}
+
+/* FL-D937(7)：已停用/拟停用模型条目灰置展示（可选列表中不出现） */
+.model-deprecated-hint { color: var(--muted, #888); font-size: 12px; }
+.model-deprecated-item { display: inline-block; margin-right: .75em; color: var(--muted, #888); }
+.model-deprecated-item del { opacity: .65; }
