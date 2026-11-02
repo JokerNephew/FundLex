@@ -228,8 +228,9 @@ def test_revision_task_columns_detail_metadata_and_responsive_layout(ui):
     page.goto(base + f"/#task?id={task}")
     page.wait_for_selector("#doc-rows [data-detail]")
     page.wait_for_function("!document.querySelector('#task-guide-meta').hidden")
-    # FL-D717 定稿文案：任务绑定指引快照后显示「文件名 · 已锁定」（不直显 version_id）
-    assert page.locator("#task-guide-value").inner_text() == f"{guide['filename']} · 已锁定"
+    # FL-D990（用户原话「也不要『已锁定』这几个字」，dispatch-log 19:5x 八点令+ACCEPT-FE-E-SIX §2
+    # 实测 app.js「已锁定」grep=0）取代 FL-D717 定稿文案：仅显示文件名，不带锁后缀。
+    assert page.locator("#task-guide-value").inner_text() == f"{guide['filename']}"
 
     page.goto(base + "/#overview")
     row = page.locator(f'#task-rows tr:has([data-task="{task}"])')
@@ -454,39 +455,30 @@ def test_guide_configuration_and_panels_do_not_expose_hashes(ui):
     from playwright.sync_api import expect
     page, context, _, base = ui
     page=open_page(ui,'guide')
-    expect(page.locator('#guide-rows [data-guide-rules]')).not_to_have_count(0)
+    # FL-D993（用户原话「规则开关的子页面还是没删」）删除规则开关入口：现仅「查看问题」
+    # 操作为存活锚（ACCEPT-FE-E-SIX §2/T3 同款口径）。
+    expect(page.locator('#guide-rows [data-guide-issues]')).not_to_have_count(0)
     versions=context.request.get(base+'/api/guides',headers={'X-FundLex-User':'browser-check'}).json()['items']
     hashes=[entry['rules_sha256'] for entry in versions if entry.get('rules_sha256')]
     assert hashes,'use a real hash-bearing guide fixture'
     # The merged V1 surfaces a short immutable marker; full hashes must not be
     # rendered as visible text (they remain available only via title attributes).
     for hash_value in hashes:assert hash_value not in page.locator('#view-guide').inner_text()
-    for action in ['rules','issues']:
+    for action in ['issues']:
         page.locator(f'#guide-rows [data-guide-{action}]').first.click()
         expect(page.locator('#guide-overlay-body h3').first).to_have_text('指引信息')
         for hash_value in hashes:assert hash_value not in page.locator('#guide-overlay-body').inner_text()
         page.locator('#guide-overlay-close').click()
 
 
-def test_guide_rule_switches_and_model_settings_are_editable(ui, monkeypatch):
+def test_guide_model_settings_are_editable(ui, monkeypatch):
+    # FL-D993（用户原话「规则开关的子页面还是没删」）：规则开关子页整面删除，
+    # 本测试保留「模型配置可编辑」一半语义（开关半按删除意图不再断言）。
     from cryptography.fernet import Fernet
     monkeypatch.setenv('FUNDLEX_MODEL_SECRETS_KEY', Fernet.generate_key().decode())
     from playwright.sync_api import expect
     page, context, _, base = ui
     page = open_page(ui, 'guide')
-    rules_button = page.locator('#guide-rows [data-guide-rules]').first
-    guide_id = rules_button.get_attribute('data-guide-rules')
-    rules_button.click()
-    expect(page.locator('#guide-overlay-body')).to_contain_text('规则开关')
-    toggle = page.locator('[data-guide-rule-toggle]').first
-    toggle.uncheck()
-    page.locator('[data-guide-rule-save]').click()
-    page.wait_for_timeout(500)
-    settings = context.request.get(
-        base + f'/api/guides/{guide_id}/rule-settings',
-        headers={'X-FundLex-User': 'browser-check'}).json()
-    assert settings['disabled_rule_ids'], settings
-    page.locator('#guide-overlay-close').click()
 
     page.locator('.sidebar [data-nav="models"]').click()
     expect(page.locator('#model-settings-card')).to_be_visible()
