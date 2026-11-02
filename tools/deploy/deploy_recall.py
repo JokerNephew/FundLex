@@ -15,7 +15,17 @@ Credentials come from the Windows User-scope FUNDLEX_SSH_* variables (never prin
 Usage:
   .venv\\Scripts\\python.exe -X utf8 -m tools.deploy.deploy_recall [--skip-pack] [--verify-only]
 """
+# FL-D940: this legacy deployer is physically retired.  It can tar-overwrite
+# /opt, install unsandboxed same-name units, inject stale cost gates and leave
+# half-formed installs on failure — the reviewed publisher is
+# tools/deploy/publish_workspace.sh (fundlex-publish).  History remains
+# readable in git; running any path below is impossible by construction.
 from __future__ import annotations
+
+raise SystemExit(
+    "tools/deploy/deploy_recall.py is retired (FL-D940); use "
+    "tools/deploy/publish_workspace.sh (fundlex-publish). "
+    "See docs/DETAIL_APPEND_PL2.md.")
 
 import argparse
 import os
