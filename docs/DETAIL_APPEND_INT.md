@@ -11,3 +11,10 @@
 - 证据：qa-base 内 `git ls-tree 2821da8 frontend/node_modules` 返回 120000 blob；主线 `git ls-files | grep -c node_modules`=0。
 - 处理方法：阻塞 FE-C 摘取；待该线在 HEAD 再移除一次（git rm --cached 语义）并验证后取件。ACCEPT-D989（T3 复拍）不涉及 git 树态，通过判定本身不受影响，但取件必须等树态清洁。
 - 状态：已阻塞登记，报总指挥+FE-C；待修复。
+
+## INT-003 N1 英文裸显族（候补派号登记，随 ACCEPT-FL-D988/992/993 §4 条件）
+- 问题与影响：V2 Guides/index.tsx `qualificationStatusText`（:27）映射表仅 certified/frozen_builtin/not_run/failed 四键；后端 guide_store qualification_status 实写 `needs_review`，前端未映射值直接 `|| status` 英文裸显（监督实证截图含 `eligible` 同族裸显）。
+- 证据：overseer-reports/ACCEPT-FL-D988-992-993.md §3-§4；证据图 docs/frontend/evidence/guides-20261102/d993-guide-detail.png。
+- 处理口径（监督 §4 原话判定机关）：前端映射表对后端枚举**闭集完整覆盖**+未知值回退人话通用句（不回显原码）；一处补丁只补一个值会漏——需先由主线枚举后端 qualification_status 全集。
+- 处置建议：派号后由前端域线按「全枚举映射审计」一次补修；属用户第六轮「技术内容怼给用户」族活样本。
+- 状态：已登记候补派号（INT 不自封编号），实现侧 V2 已提报、监督独立确认成立。
