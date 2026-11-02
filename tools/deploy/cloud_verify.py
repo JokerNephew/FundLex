@@ -119,26 +119,33 @@ try:
                 break
             time.sleep(1)
         results["task_terminal"] = terminal_status
+        # FL-D946⑥ 护栏收紧：未终态则在清理段连行都不动（如实保留现场供排障），
+        # 不制造「验证完成但丢证据」的假象。
+        results["terminal_reached"] = bool(terminal_status in terminal)
         results["ok"] = True
 finally:
     # FL-D946④：旧的 dir() 死代码已删（占位无作用且误导读法）。
     try:
-        with store.database.connect() as db:
-            rows = db.execute("SELECT id FROM tasks WHERE owner=?", (username,)).fetchall()
-            task_ids = [r["id"] if isinstance(r, dict) else r[0] for r in rows]
-            for tid in task_ids:
-                batches = db.execute("SELECT batch_id FROM task_batches WHERE task_id=?", (tid,)).fetchall()
-                for batch in batches:
-                    bid = batch["batch_id"] if isinstance(batch, dict) else batch[0]
-                    db.execute("DELETE FROM artifacts WHERE document_id IN (SELECT id FROM documents WHERE batch_id=?)", (bid,))
-                    db.execute("DELETE FROM documents WHERE batch_id=?", (bid,))
-                    db.execute("DELETE FROM task_batches WHERE batch_id=?", (bid,))
-                    db.execute("DELETE FROM batches WHERE id=?", (bid,))
-                db.execute("DELETE FROM task_files WHERE task_id=?", (tid,))
-                db.execute("DELETE FROM tasks WHERE id=?", (tid,))
-            db.execute("DELETE FROM sessions WHERE user_id=?", (user["id"],))
-            db.execute("DELETE FROM users WHERE id=?", (user["id"],))
-        results["cleanup"] = "done"
+        if not results.get("terminal_reached", True):
+            # 未终态不动任何落账行——保持现场供排障；rc 由文末 cleanup 校验落到 2。
+            results["cleanup"] = "skipped_nonterminal_rows_kept"
+        else:
+            with store.database.connect() as db:
+                rows = db.execute("SELECT id FROM tasks WHERE owner=?", (username,)).fetchall()
+                task_ids = [r["id"] if isinstance(r, dict) else r[0] for r in rows]
+                for tid in task_ids:
+                    batches = db.execute("SELECT batch_id FROM task_batches WHERE task_id=?", (tid,)).fetchall()
+                    for batch in batches:
+                        bid = batch["batch_id"] if isinstance(batch, dict) else batch[0]
+                        db.execute("DELETE FROM artifacts WHERE document_id IN (SELECT id FROM documents WHERE batch_id=?)", (bid,))
+                        db.execute("DELETE FROM documents WHERE batch_id=?", (bid,))
+                        db.execute("DELETE FROM task_batches WHERE batch_id=?", (bid,))
+                        db.execute("DELETE FROM batches WHERE id=?", (bid,))
+                    db.execute("DELETE FROM task_files WHERE task_id=?", (tid,))
+                    db.execute("DELETE FROM tasks WHERE id=?", (tid,))
+                db.execute("DELETE FROM sessions WHERE user_id=?", (user["id"],))
+                db.execute("DELETE FROM users WHERE id=?", (user["id"],))
+            results["cleanup"] = "done"
     except Exception as exc:
         results["cleanup"] = f"failed: {type(exc).__name__}"
 print("VERIFY_JSON:" + json.dumps(results, ensure_ascii=False))
@@ -262,8 +269,13 @@ def main(argv: list[str] | None = None) -> int:
 
     if not args.skip_tunnel:
         print("== tunnel check ==")
-        for key, value in tunnel_check(host, user, password).items():
+        tunnel_result = tunnel_check(host, user, password)
+        for key, value in tunnel_result.items():
             print(f"  {key}: {value}")
+        # FL-D946③ 门禁收紧：隧道 JSON 断言（engine.id）不过即失败，不只是打印提示。
+        if tunnel_result.get("tunnel") != "ok":
+            print("  隧道守门未过（engine.id 断言）：返回码 1")
+            return 1
 
     if not args.skip_functional:
         print("== server-side functional check ==")

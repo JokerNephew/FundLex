@@ -55,12 +55,14 @@ for p in ${PREFIXES}; do
 done
 WHERE="${WHERE} ) AND u.username <> 'admin'"
 
+# gg 系带 run_id 挂点的全部子表（均无 FK，必须显式级联——双盲质检实证盲区）
+GG_RUN_TABLES="gg_blocks gg_requirements gg_steps gg_jobs gg_impacts gg_local \
+gg_families gg_guide_items gg_findings gg_coverage gg_applicability gg_residual \
+gg_evidence gg_human_versions gg_human_changes gg_engine_runs gg_engine_results \
+gg_model_calls gg_artifacts gg_candidate_versions"
+
 MYSQL=(mysql -h "${HOST}" -P "${PORT}" -u "${USER}" "${DB}")
 export MYSQL_PWD="${PASS}"
-
-has_table() {
-  "${MYSQL[@]}" -N -e "SHOW TABLES LIKE '$1'" 2>/dev/null | grep -qx "$1"
-}
 
 echo "== 将处理的目标账号 =="
 "${MYSQL[@]}" -t -e "SELECT id, username, created_at FROM users u WHERE ${WHERE};"
@@ -70,12 +72,21 @@ if [ "${APPLY}" -eq 0 ]; then
   exit 0
 fi
 
-# 差集断言所需快照：删除前的目标账号 id 清单（删 user 之后按前缀已查不到）
+# 差集断言所需快照：删除前的目标账号 id 与 gg run id 清单（删完按前缀已查不到；
+# MySQL GROUP_CONCAT 空集返回字符串 NULL，须双判）
 TARGET_IDS="$("${MYSQL[@]}" -N -e "SELECT GROUP_CONCAT(CONCAT('''', id, '''') SEPARATOR ',') FROM users u WHERE ${WHERE};")"
-if [ -z "${TARGET_IDS}" ]; then
+if [ -z "${TARGET_IDS}" ] || [ "${TARGET_IDS}" = "NULL" ]; then
   echo "cleanup done：无常清理目标，差集断言=0。"
   exit 0
 fi
+RUN_IDS="$("${MYSQL[@]}" -N -e "SELECT GROUP_CONCAT(CONCAT('''', r.id, '''') SEPARATOR ',') FROM gg_runs r JOIN users u ON r.owner=u.id WHERE ${WHERE};")"
+
+# 聚合 gg 系级联语句（run_id 挂点表逐表清，无 FK 盲区由快照差集断言兜住）
+GG_SQL=""
+for t in ${GG_RUN_TABLES}; do
+  GG_SQL="${GG_SQL}DELETE x FROM ${t} x JOIN gg_runs r ON x.run_id=r.id
+  JOIN users u ON r.owner=u.id WHERE ${WHERE};"$'\n'
+done
 
 "${MYSQL[@]}" <<SQL
 START TRANSACTION;
@@ -100,15 +111,8 @@ DELETE p FROM compare_pairs p
   JOIN compare_tasks t ON p.task_id=t.id
   JOIN users u ON t.owner=u.id WHERE ${WHERE};
 DELETE t FROM compare_tasks t JOIN users u ON t.owner=u.id WHERE ${WHERE};
--- gg 系（run→owner）
-DELETE x FROM gg_model_calls x JOIN gg_runs r ON x.run_id=r.id
-  JOIN users u ON r.owner=u.id WHERE ${WHERE};
-DELETE x FROM gg_steps x JOIN gg_runs r ON x.run_id=r.id
-  JOIN users u ON r.owner=u.id WHERE ${WHERE};
-DELETE x FROM gg_artifacts x JOIN gg_runs r ON x.run_id=r.id
-  JOIN users u ON r.owner=u.id WHERE ${WHERE};
-DELETE x FROM gg_jobs x JOIN gg_runs r ON x.run_id=r.id
-  JOIN users u ON r.owner=u.id WHERE ${WHERE};
+-- gg 系（run→owner；无 FK 块级联，由上列表聚成）
+${GG_SQL}
 -- gg 候选面（无 run 挂点时按 owner 直接清）
 DELETE c FROM gg_candidate_guides c JOIN users u ON c.owner=u.id WHERE ${WHERE};
 DELETE r FROM gg_runs r JOIN users u ON r.owner=u.id WHERE ${WHERE};
@@ -161,8 +165,16 @@ SELECT SUM(n) FROM (
   UNION ALL SELECT COUNT(*) FROM guide_jobs x WHERE x.owner IN (${TARGET_IDS})
   UNION ALL SELECT COUNT(*) FROM users u WHERE u.id IN (${TARGET_IDS})
 ) AS residual_set;")
-if [ "${RESIDUAL:-1}" != "0" ]; then
-  echo "CLEAR FAILED: 白名单用户残留关联行=${RESIDUAL}（FL-D941 差集断言）" >&2
+# gg 子表按 run 快照复查（无 FK——父表已删但残留行仍能被 run 快照抓到）
+GG_RESIDUAL=0
+if [ -n "${RUN_IDS}" ] && [ "${RUN_IDS}" != "NULL" ]; then
+  for t in ${GG_RUN_TABLES}; do
+    n=$("${MYSQL[@]}" -N -e "SELECT COUNT(*) FROM ${t} WHERE run_id IN (${RUN_IDS});")
+    GG_RESIDUAL=$((GG_RESIDUAL + ${n:-0}))
+  done
+fi
+if [ "${RESIDUAL:-1}" != "0" ] || [ "${GG_RESIDUAL}" != "0" ]; then
+  echo "CLEAR FAILED: 白名单用户残留关联行=${RESIDUAL}，gg 子表残留=${GG_RESIDUAL}（FL-D941 差集断言）" >&2
   exit 3
 fi
-echo "cleanup done：测试账号及关联数据已清除，差集断言=0。"
+echo "cleanup done：测试账号及关联数据已清除，差集断言=0（含 gg 子表域）。"
