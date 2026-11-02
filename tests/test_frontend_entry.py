@@ -39,14 +39,15 @@ def test_v1_entry_and_bookmarks(tmp_path, monkeypatch):
     assert client.get("/src/main.tsx").status_code == 404
 
 
-def test_explicit_v2_entry_remains_available(tmp_path, monkeypatch):
+def test_legacy_v2_flag_no_longer_switches(tmp_path, monkeypatch):
+    """FL-D1010：React(V2) 前端已物理删除，遗留 v2 环境变量不得有任何效果。"""
     monkeypatch.setenv("FUNDLEX_FRONTEND_VERSION", "v2")
     monkeypatch.setenv("FUNDLEX_AUTH_MODE", "dev")
     client = TestClient(create_app(tmp_path))
-    for path in ("/", "/compare", "/tasks/new"):
-        response = client.get(path)
-        assert response.status_code == 200
-        assert 'id="root"' in response.text
+    response = client.get("/")
+    assert response.status_code == 200
+    assert 'id="root"' not in response.text
+    assert 'id="view-overview"' in response.text
 
 
 def test_v1_entry_preserves_test_proxy_prefix(tmp_path, monkeypatch):

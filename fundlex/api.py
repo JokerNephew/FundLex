@@ -1713,16 +1713,12 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
     register_workspace_routes(application, store, _user)
 
     frontend = Path(__file__).resolve().parent.parent / "frontend"
-    dist = frontend / "dist"
-    # V1 is the default workbench again. Keep the Vite source/build available
-    # for explicit V2 regression runs without letting a build switch the UI.
-    frontend_v2 = os.environ.get("FUNDLEX_FRONTEND_VERSION", "v1") == "v2"
+    # FL-D1010: React(V2) 前端已按用户裁决物理删除（生产从未启用过），V1 静态页
+    # 是唯一前端面。FUNDLEX_FRONTEND_VERSION 环境变量不再产生任何效果。
     if frontend_base:
         application.add_middleware(FrontendBasePathMiddleware, base_path=frontend_base)
     if frontend.is_dir():
         application.mount("/static", StaticFiles(directory=frontend), name="static")
-        if (dist / "assets").is_dir():
-            application.mount("/assets", StaticFiles(directory=dist / "assets"), name="vite-assets")
 
         def _asset_version(*names: str) -> str:
             """内容哈希做缓存标识：任一静态资源变化即生成新 URL。"""
@@ -1738,21 +1734,16 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
 
         @application.get("/", include_in_schema=False)
         def home():
-            entry = ((dist / "index.html" if (dist / "index.html").is_file() else frontend / "index.html")
-                     if frontend_v2 else frontend / "compare.html")
-            html = entry.read_text(encoding="utf-8")
+            html = (frontend / "compare.html").read_text(encoding="utf-8")
             _versioned_assets = ("app.css", "app.js", "compare.css", "compare.js",
                                  "workspace.js", "guide_generation.css", "guide_generation.js")
-            version = _asset_version("dist/index.html", *_versioned_assets)
+            version = _asset_version(*_versioned_assets)
             for name in _versioned_assets:
                 html = html.replace(f'/static/{name}"', f'/static/{name}?v={version}"')
             if frontend_base:
                 html = html.replace('="/static/', f'="{frontend_base}/static/')
-                html = html.replace('="/assets/', f'="{frontend_base}/assets/')
                 html = html.replace("url(/static/", f"url({frontend_base}/static/")
                 html = html.replace('</head>', f'<meta name="fundlex-base-path" content="{frontend_base}"></head>')
-            html = html.replace('src="/src/main.tsx"', f'src="/src/main.tsx?v={version}"')
-            html = html.replace('href="/assets/', f'href="/assets/')
             return HTMLResponse(
                 html,
                 headers={"Cache-Control": "no-store, must-revalidate"},
@@ -1779,9 +1770,7 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
 
         @application.get("/compare", include_in_schema=False)
         def compare_home():
-            if not frontend_v2:
-                return RedirectResponse(f"{frontend_base}/#compare", status_code=307)
-            return home()
+            return RedirectResponse(f"{frontend_base}/#compare", status_code=307)
 
         @application.get("/guide-generation", include_in_schema=False)
         def guide_generation_home():
@@ -1798,25 +1787,19 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
 
         @application.get("/{full_path:path}", include_in_schema=False)
         def frontend_fallback(full_path: str):
-            # Browser refreshes on React routes must resolve to the Vite entry.
-            # API and static mounts are registered before this catch-all.
+            # V1 单壳应用：子路由一律 307 到壳内 hash 视图（React 路由已随 FL-D1010 移除）。
             if full_path == "api" or full_path.startswith("api/"):
                 raise HTTPException(404, "not found")
-            # A source asset is a Vite-dev-server concern; returning HTML for
-            # /src/main.tsx makes a missing production build look successful
-            # while the browser fails later with a misleading module error.
             if Path(full_path).suffix:
                 raise HTTPException(404, "frontend asset is not built")
-            if not frontend_v2:
-                if full_path.startswith("tasks/") and full_path != "tasks/new":
-                    task_id = full_path[len("tasks/"):]
-                    if task_id and "/" not in task_id:
-                        return RedirectResponse(
-                            f"{frontend_base}/?task={quote(task_id)}#task", status_code=307)
-                view = {"tasks": "overview", "tasks/new": "import", "guides": "guide",
-                        "settings": "settings", "users": "users"}.get(full_path, "overview")
-                return RedirectResponse(f"{frontend_base}/#{view}", status_code=307)
-            return home()
+            if full_path.startswith("tasks/") and full_path != "tasks/new":
+                task_id = full_path[len("tasks/"):]
+                if task_id and "/" not in task_id:
+                    return RedirectResponse(
+                        f"{frontend_base}/?task={quote(task_id)}#task", status_code=307)
+            view = {"tasks": "overview", "tasks/new": "import", "guides": "guide",
+                    "settings": "settings", "users": "users"}.get(full_path, "overview")
+            return RedirectResponse(f"{frontend_base}/#{view}", status_code=307)
 
         @application.middleware("http")
         async def static_cache_control(request, call_next):
