@@ -19,7 +19,7 @@
 - 处置建议：派号后由前端域线按「全枚举映射审计」一次补修；属用户第六轮「技术内容怼给用户」族活样本。
 - 状态：已登记候补派号（INT 不自封编号），实现侧 V2 已提报、监督独立确认成立。
 
-## INT-004 G-1 raw TypeError toast 外泄（候补派号登记，随 ACCEPT-FE-E-SIX §4 附带登记）
+## INT-004 FL-D1013 = G-1 raw TypeError toast 外泄（总指挥 11-02 派号督办；原候补登记随 ACCEPT-FE-E-SIX §4 附带）
 - 问题与影响：app.js:701 `cap.upload_limits.max_file_bytes` 无 upload_limits 存在性守卫——cap 响应残缺即抛 TypeError 且**未捕获异常原文以英文 toast 怼用户**（违反「技术内容不外泄」族与截图自检口径）；触发依赖型缺陷（生产正常 cap 不触发但不健壮）。证据：overseer-proof 之实现线 01-guides-page.png 右下角 toast 可见 `Cannot read properties of undefined (reading 'max_file_bytes')`。
 - 判定机关建议（监督 §4 原话）：①App 层能力数据守卫兜底；②未捕获异常 toast 统一人话兜底层（技术原文进 console 不出 UI）。
 - 状态：已登记候补派号（INT 不自封）；性质=D894 族延展件，与本六案断言无关、不阻断验收。
