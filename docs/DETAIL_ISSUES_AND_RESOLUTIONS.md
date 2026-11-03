@@ -9599,3 +9599,20 @@ H＝E×…
 
 ## FL-D1079 指引卡「操作内容」列向右撑宽（2026-11-03，已修复·随 FL-D1080 同波）
 - 卡表 table-layout:fixed+单元格强制换行，内容向下换行不再向右拓。
+
+
+## FL-D1080 写侧授权杀手 K1/K2（D5 诊断核心反转，实锤在档）
+
+- 诊断会话 ses_e5f6fdf06… 离线复核（0 真模型调用），报告 results/regress1/D5_DIAGNOSIS.md。
+- 反转结论：mf（广发美国房地产QDII）0 写回主因**不是定位漏**，而是写侧两道授权闸把已定位提案误杀：
+  - **K1**：WriteScope.allowed 的 location→scope_id first-wins 碰撞——同章多卡时后卡提案 100% 误判 UNAUTHORIZED_LOCATION（≤10 行修复，不扩授权）；regress1 全局 skip 11-16 的主贡献者，非 mf 独有。
+  - **K2**：节级 T 标题永不能与 section_path endswith 匹配——正文通道半死；qd 的 3 处写入 100% 靠 summary 白名单通道，mf 恰好是唯一无摘要 zone 的合同所以全零。
+  - 结构性附病：mf 章名不在 26 词白名单且无 heading 样式→被切成 125 个 T 节，授权断链 110 处；`_fallback_scope` 空标题恒真把卡绑到封面段（未爆发）；C0009 九字短锚易误中（建议短锚强制长引句同段共现）。
+- 次要量：locate 侧真锚失配仅 5-6 项（A类旧措辞例：「次月首日起10个工作日内从基金财产中一次性支付」vs「2个工作日内按指定账户路径支付」r=0.55）；B类释义两栏表格整章不可见 1 项；D类真不适用 13 项（应改记「真不适用」分母口径，不算召回缺口）。
+- 处置：K1+K2 立为引擎修复工单（队列排审查层之后，同文件防冲突）；预期 mf 0→8-12 写回且正常合同授权语义不放大。锚容差结论定案：**只扩召回侧宽度、确认侧阈值不降**；释义表格通道与弱锚再确认副通道列后续波。
+
+## FL-D1081 产线模型切至 glm-5.3（用户亲令，已执行）
+
+- 用户令「把项目的模型改成glm-5.3」→ 验证链：①环境伪影排除（首次失败=REQUEST_OPTIONS_JSON 被 bash source 吞引号，非模型问题，与既往 fix_and_run 病灶同族）；②网关冒烟 glm-5.3 ×2 OK（schema 合规、finish=stop、接受 thinking disabled+reasoning_effort low）；③备份 env→.bak-20261103-glm53，LLM_MODEL kimi-k3→glm-5.3，五服务重启全活；④真实路径验证任务「GLM53切换验证-道琼斯」(44003547) 已提交（receipt accepted/queued/builtin-cards-v2）。
+- 回滚凭据：env 备份还原+重启即回 kimi-k3。
+- 待办：验证任务 succeed 后抽检 redline（glm 改写质量第一眼）；账本观察 glm 的 latency/token 形态；FL-D1071 三模型对比改记为「glm-5.3 产线在位，kimi-k3/deepseek-v4.1-flash 对照组」口径更新。另生产队列在途 8 份在重启中烧 attempt（FL-D1077 同族事件，记录在案）。
