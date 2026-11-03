@@ -9850,3 +9850,8 @@ H＝E×…
 - 范围与安保证：①home-copy 2.6G=昨日「本地老 agent 家底快照」（db+worktree 备份，活 state 与生产无关）;②500+ 个 10-16~10-30 的调试/评测/smoke 残骸目录 + 24h+ 散落散件（log/json/sqlite/差件 docx）;③白名单留存：qa-base（canonical）、qa/（巡线/审计账本）、agentd、pc/ccsw/pw（工具）、最近 24h 件、fdb 排障备份目录、ripgrep、env 件。
 - 成果：/tmp/opencode 6.9G→1.3G（-5.6G）；盘 86%→71%(12G 可用）；产线无接触（cdb45a4 静件指纹+五件后端回补均持存，cap 200）。
   - 2026-11-03 FL-D1107 延伸落地：磁盘水位联动装定于 /tmp/fundlex-watchdog.sh——≥80% 随巡线告警、≥85% 自动安全白名单自清（journal 真空/pycache/pytest>1d/tmp 散件>1d）并记台账；老双实例已停、新单实例在役（158128）；行为白名单与 FL-D1109 大扫除口径同源，永远不动生产件/24h 内件/agent 现役工位。
+
+## FL-D1110 五度后端覆盖事故+秒回补（2026-11-03 ~23:5x，已回补·已验证）
+- 用户报「另一对话又把线上弄错」——核：本轮前端无损（指纹全在），后端五件再被某波覆盖（action_text/bsd/gtd收修订/兼容接口/html_view 修订人）。文件时点显示 20:34-20:42 落点，为又一写换底波。
+- 处置：html_view 整件回灌 qa-base 版（产=qa-base-我件零差）；gtd 只回「收修订」（canonical_sha 守未放行闸）；guide_store bsd/api action_text/labels 四锚回补；重启全活、bsd/作者/语法实证过、登录页本轮无扰。
+- 注：当日第五次同类事件。纠偏令已下两轮不改规矩不改——第三轮须升级为发布权限制（主线建议）。
