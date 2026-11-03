@@ -9737,3 +9737,8 @@ H＝E×…
 - 发现实锤：3006cc3/774b6fe 为**补丁束文本态**而非合入代码——ESG 同病原地复发铁证(rc-esg 仍 WRITER_SOURCE_MISMATCH)；我方 git apply 两补丁入集成树（D1076-OK/K1K2-OK/check通过，测试51绿），登记「补丁入树≠补丁生效」教训进 PACKAGING 清单待补。
 - accept2 半档：rc-a50 written6(D1 厂家判定待rep细判)/rc-dj2 written7(15→14 UNAUTH 证文本态)；rc-yl(D4)在途。
 - 集成树本体复检(accept3:v-esg/v-dj)跑批中：ESG 必活+DJ 冤杀归零方可 publish。
+
+## FL-D1099 集成线放行包（2026-11-03 用户令「可以交付的都部署上线」·发布中）
+- 包内容（集成线 HEAD 报账，逐项发布说明点名）：45f1d8a 提案层/审查层、c2784a6 admin 全家桶后端、a5a578a 生成域冰封闸（FUNDLEX_GUIDE_GENERATION_ENABLED 默认 off→生成域 API 默认 404，冰封预期）、af4560e line5 前端（admin 四区 UI+generation 入口物理删+cap 就绪重放）、774b6fe ESG 净化+K1K2 补丁（集成树 51 测试绿）；新 env 旋钮 FUNDLEX_DOC_CONVERT_TIMEOUT_S/FUNDLEX_GUIDE_GENERATION_ENABLED 默认均不动作。
+- 不含项（如实登记）：.doc 异步转换 F1/F2 未消→线上 .doc 继续走旧同步转换路径（行为不变）。
+- 前置闸：ESG 集成树本体复检（ESG必活/DJ15 冤杀归零）+rc-yl D4 实证；绿后即 publish；主线事后产线冒烟核验（动线 zero-touch）。
