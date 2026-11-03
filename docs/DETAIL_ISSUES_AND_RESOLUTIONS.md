@@ -9536,3 +9536,22 @@ H＝E×…
 - ②块宽不可拖：补两个 compare-column-splitter（修订栏把手+源文档把手），FundLexColumnSplitter 同款契约（localStorage 记宽）；实证拖 300→450 / 320→443。
 - ③关「显示源文档」后合并稿不铺满：#gd-diff-word-layout 自写规则特异度压过 .is-sources-hidden 基础规则，补 #id 版 sources-hidden 单栏规则；实证关掉后合并稿 1002px 铺满、把手消失。
 - ④顶块三轮压至 126px（视图切换并进摘要行+下拉 260）。
+
+
+## FL-D1076 ESG .docx 净化后哈希与管线校验错位（新构建回归，修法已定）
+
+- 根因（代码级坐实）：ESG 带惰性 attachedTemplate 外链 → `direct_edit_writer` 按 FL-D1044 剥链→sanitized_sha 回传 write_result.source_sha256；`direct_pipeline.py:263` 用**原始** source_sha256 对比 → 净化类合同必然 DIRECT_WRITER_SOURCE_MISMATCH。同字节在旧构建成功两次（job 时间戳 28020s/16140s 前），今波新构建 19min 前必败=回归。只对带惰性模板的合同触发（富信/道琼斯等不过）。
+- 修法（派 line2，审查层之后接棒）：管线入口先 sanitize，非空 journal 则全链以 sanitized 字节+sha 为唯一指纹；空 journal 字节直通。报告留净化 journal。验收=ESG 重放 succeed+干净合同签名∅。
+
+## FL-D1074 状态更新：.doc 异步转换（用户裁决替代原修法）
+
+- 根因补证：fundlex 身份直跑 soffice 实测 2m30s 挂起（dconf/冷运行环境），opencode 热环境 4.1s 成功——服务身份首跑环境就是病灶，`DEFAULT_TIMEOUT_S=120` 必然被打穿。
+- 用户裁决：转换撤出上传请求——上传即收字节即跳任务页，转换移 Worker（预热+超时 300s+重试一次+结果缓存不重复转换），三态（转换中/失败可重试）上任务页（line4 施工令已派）。
+- 我的两个探针任务（E2E波后-安颐doc/恒阳doc）挂 uploading 0/1，line4 一并救。
+
+## FL-D1077 重启烧 attempt 致 WORKER_ATTEMPTS_EXHAUSTED（观测定案，待修）
+
+- 产品测试 4 份（品质优选/恒裕/恒鑫/恒昌）att=3 全耗尽、无错误信息；时间≈14:43 恰在今日两次 Worker 重启（13:06 AttributeError 抢修 + 14:50 本波发布）之间——在途被打断一次烧一次 attempt。
+- 问题：被打断的 attempt 不应计额度；且 retry 端点上限于 attempt<3，这 4 份按钮救不了。
+- 待办：①调度侧区分「中断 attempt」与「真实失败 attempt」；②管理员把这 4 份回队列重置（Ack 待用户/接班）；③随号 FL-D1074 同批处理。
+  - 2026-11-03 FL-D1076 补记（用户布置令）：摘要统计（共 N 处差异…）挪至「指引版本对比」标题同行右侧；「Word 视图/双栏对照」与「显示源文档」挪入修订栏头、与「N 处修订」同一区域且三控件同行。实证：标题行Y=32/摘要Y=40同带、栏头控件Y=196坐标回位、三页联动仍通。
