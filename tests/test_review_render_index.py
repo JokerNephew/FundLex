@@ -17,7 +17,10 @@ def test_render_review_builds_dom_index():
     assert "const itemMap=new Map();" in source
     assert "review.index={nodeMap,itemMap};" in source
     built = source.index("review.index={nodeMap,itemMap};")
-    assert "syncReview();" in source[built:built + 120]
+    # FL-D1101：D1046 章节导航块插进索引与首同步之间后，120 字节窗口的陈旧断言失效；
+    # 语义不变（先建索引、后首同步），改为位置序断言。
+    first_sync = source.index("syncReview();", built)
+    assert first_sync > built
 
 
 def test_sync_review_uses_index_entries():
