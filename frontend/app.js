@@ -1072,7 +1072,7 @@ if(e.target.id==='gd-diff-filter'){const d=state.guideDiff;if(d){d.filter=e.targ
     const nav=reviewNavInfo(review);
     const revAuthors=[...new Set(review.revisions.map(r=>String(r.author||'').trim()).filter(Boolean))];
     state.reviewAuthorFilter='';
-    const authorFilterHtml=revAuthors.length>1?`<label class="review-author-filter">修改人 <select id="review-author-filter" class="control-select" aria-label="按修改人筛选"><option value="">全部修改人</option>${revAuthors.map(a=>`<option value="${esc(a)}">${esc(a)}</option>`).join('')}</select></label>`:'';
+    const authorFilterHtml=revAuthors.length>=1?`<label class="review-author-filter">修改人 <select id="review-author-filter" class="control-select" aria-label="按修改人筛选"><option value="">全部修改人</option>${revAuthors.map(a=>`<option value="${esc(a)}">${esc(a)}</option>`).join('')}</select></label>`:'';
     const items=review.revisions.map(r=>{
       const verdict=chosen[r.del_id] || 'accept';
       const before=r.before && r.before.trim() ? quoteBox('原文',r.before,'quote-before') : '';
