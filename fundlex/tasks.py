@@ -905,7 +905,9 @@ class TaskStore:
                         receipt["error_code"] = error
                         receipts.append(receipt)
                         continue
-                    elif item["name"] != f["name"] or item["size"] != f["size"]:
+                    elif not error and (item["name"] != f["name"] or item["size"] != f["size"]):
+                        # FL-D1089：已有校验归因（如 UPLOAD_SIZE_LIMIT）不得被清单比对覆盖——
+                        # 上传读流截断尺寸必与清单不一致，会误报为「文件与清单不匹配」。
                         error = "MANIFEST_FILE_MISMATCH"
                     if error:
                         if f is not None:
