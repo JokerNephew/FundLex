@@ -9763,3 +9763,4 @@ H＝E×…
 - 在产核验：review_veto 代码在产、sanitize 净化补丁在产、K1K2 body_locations 在产、生成域 API=404（冰封闸语义）、admin 全端点 401/403 守卫、glm 账本流动（3min 51 调用）、前端零变更（=510f17c）。
 - **admin 端点首火**：FL-D1077 六份 att=3 耗尽件（品质优选/恒裕/恒鑫/恒昌/道琼斯/景和）经 POST /api/admin/documents/{id}/retry 全部 202 回队，admin_audit_log 落账 6 条。
 - 留二波：admin 前端+前端清洁包（三缝已修，等 line5 真后端对齐验收）。.doc 异步转换（F1/F2）仍未入包。
+  - 2026-11-03 20:4x FL-D1099 上产+主线冒烟核验闭环：终端指纹 engine fd114c84/service 3043dde8/commit f38a275；首发遭 schema 初始化双 MySQL 方言 DDL 故障（AUTOINCREMENT/key 保留字）产库复现修后重发成功（过程已入他们实录）；主线核验：冰封 404/admin 401/主链 200/零 traceback 全对上；附注 FL-D1100=feishu/health 探测器 404 疑条件挂载，二波联调时核实，不判坏。二波=admin 前端+清洁包（等 line5 联调）。
