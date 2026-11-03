@@ -9753,3 +9753,4 @@ H＝E×…
 ## 2026-11-03 放行前对丝（前后端接线核验）抓三缝
 - accept3 全绿:v-esg succeed(净化 journal 链 65aa84f2→bd91a14a,written12) + v-dj written17/UNAUTH 14→0/exceptions0(K1K2 实证过关,p293 双卡同段=两卡两片,写器重开核验在,记册留抽查)。
 - 但 admin 前后端对丝三缝:①/api/admin/system-model 后端未交(line4 补:存取+解析序+冒烟);②system-status vs system/status 路径差(后端加别名);③/api/admin/guides 列表名差(后端补别名)。裁定:前端不动、后端补齐。**publish 持悬到三缝修复+v-yl2(D4)验证齐。**
+  - 2026-11-03 20:3x FL-D1099 构成最终版修订：①三缝缺陷已修（line4 5f64e4c，109+12 绿+冒烟回滚）；②前端改本波零变更——admin UI+清洁包押二波（line5 真后端联调验收后放）。本波锁定=45f1d8a+09f1fdd(D4加固)+K1K2+FL-D1076补丁+c2784a6+a5a578a+5f64e4c；终跑绿即 publish。
