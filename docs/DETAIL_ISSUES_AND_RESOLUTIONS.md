@@ -9376,3 +9376,8 @@ H＝E×…
 - 用户原话：「合同修改支持doc，但是合同比对还是不支持doc」。
 - 实证纠谬（直通报）：修改链=LibreOffice 6.3 已在服务器（临时 repo 引入，REL 月度收编）+离线可转+**入口仍拒收（产品化在途）且按失败诚实**。比对侧=同层 soffice helper 复用前置转换；入口：upload_validation LEGACY_DOC_MAGIC 分流→转换失败按 code 诚实呈（不冒充）、成功按原比对链。
 - 状态：直通修改侧 helper 冻结后，CX/前端侧接线；比对侧工单待 helper 冻结即发。
+
+## FL-D1058 波⑦指纹翻转误杀排队任务（2026-11-03，处置中·高优）
+- 实证：发布⑦引擎指纹 73152d66→a2fcd0fd（直通合法核销），worker 依 ENGINE_SCHEMA_MISMATCH 打死排队任务：实测 documents 报错 ENGINE_SCHEMA_MISMATCH 26 + PROCESSING_FAILED 31（用户可见失败）；gg_jobs 另有 failed 1。
+- 教训一（我的 GO 门）：早前「tasks 无 running/leased」门槛只查了在跑，漏了已 claim 排队的——此后发布前置=running+leased+queued+claims 四态全过才准。
+- 处置：直通最小热修（card 任务跨补丁指纹放行）+复活扫（retry 受难任务+恢复 complete 轨迹）；主线验收=count=0+重跑完成。
