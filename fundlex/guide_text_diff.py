@@ -81,6 +81,9 @@ def guide_text_diff(store, owner: str, version_id: str, against_id: str) -> dict
         raise ValueError("GUIDE_DIFF_AGAINST_REQUIRED")
     base, left_bytes = _load_source(store, owner, against_id.strip())
     target, right_bytes = _load_source(store, owner, version_id)
+    # FL-D1098：双侧 canonical 指纹出舱——前端档「同源档案约定一致」拦截假配对。
+    import hashlib as _hl
+    from_sha, to_sha = _hl.sha256(left_bytes).hexdigest(), _hl.sha256(right_bytes).hexdigest()
     # 与合同比对入口同轨：先接受既有修订痕迹（勘误版带 tracked changes），再比对。
     try:
         from .compare.revisions import prepare_compare_input
@@ -103,8 +106,8 @@ def guide_text_diff(store, owner: str, version_id: str, against_id: str) -> dict
             "summary": {"diffs": summary.total, "modify": summary.modify,
                         "insert": summary.insert, "delete": summary.delete,
                         "coverage": result.coverage.to_dict()},
-            "from_version": _version_label(base),
-            "to_version": _version_label(target),
+            "from_version": _version_label(base) | {"canonical_sha256": from_sha},
+            "to_version": _version_label(target) | {"canonical_sha256": to_sha},
             "diffs": [_diff_row(item, blocks) for item in result.diffs],
             "left_html": render_compare_document(result.left, result.diffs, side="left"),
             "right_html": render_compare_document(result.right, result.diffs, side="right"),

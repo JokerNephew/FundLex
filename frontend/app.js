@@ -22,7 +22,7 @@
     MODEL_NETWORK_ERROR:'模型服务连接暂时失败', MODEL_RETRY_EXHAUSTED:'模型服务重试后仍未成功', MODEL_CIRCUIT_OPEN:'模型服务连续异常，任务已暂停保护', MODEL_GLOBAL_CALL_BUDGET_EXCEEDED:'任务处理遇到模型调用限制，请稍后重试；若持续出现请联系支持', MODEL_CALL_BUDGET_EXCEEDED:'任务处理遇到模型调用限制，请稍后重试；若持续出现请联系支持', MODEL_COST_BUDGET_EXCEEDED:'任务处理遇到模型调用限制，请稍后重试；若持续出现请联系支持', MODEL_LEDGER_UNAVAILABLE:'任务处理遇到模型调用限制，请稍后重试；若持续出现请联系支持', MODEL_NOT_CONFIGURED:'处理服务尚未配置', WORKER_ATTEMPTS_EXHAUSTED:'处理重试次数已达上限', TEMPORARY_STORAGE_FAILURE:'文件存储暂时异常',
     INVALID_DOCX:'文件不是有效的可编辑 DOCX', DOCX_INVALID:'文件不是有效的可编辑 DOCX', UPLOAD_TOO_LARGE:'文件超过接收大小限制', UNSUPPORTED_FORMAT:'文件格式不受支持，仅接收 DOCX', DOCUMENT_VALIDATION_FAILED:'DOCX 内容校验未通过', UPLOAD_REJECTED:'文件接收校验未通过', UNSUPPORTED_FILE_FORMAT:'仅接收可编辑 DOCX 文件', LEGACY_DOC_UNSUPPORTED:'检测到 Word 97-2003 格式（.doc），请用 Word/WPS 另存为 .docx 后重新上传', LEGACY_DOC_CONVERT_UNAVAILABLE:'服务器暂不支持 .doc 自动转换，请另存为 .docx 后重新上传', LEGACY_DOC_CONVERT_FAILED:'.doc 自动转换失败，请另存为 .docx 后重新上传', LEGACY_DOC_CONVERT_TIMEOUT:'.doc 自动转换超时，请另存为 .docx 后重新上传', LEGACY_DOC_CONVERT_TOO_LARGE:'.doc 文件过大无法自动转换，请另存为 .docx 后重新上传', UPLOAD_SIZE_LIMIT:'文件超过接收大小限制', DUPLICATE_DOCX_MEMBER:'DOCX 内部存在重复文件条目，无法安全接收', DOCX_PART_SIZE_LIMIT:'DOCX 内部内容超过大小限制', DOCX_COMPRESSION_RATIO_LIMIT:'DOCX 压缩结构超出安全接收限制', DOCX_EXPANDED_SIZE_LIMIT:'DOCX 解压内容超过安全接收限制', UPLOAD_REQUEST_SIZE_LIMIT:'本次文件接收超出限制，请重新补传', MANIFEST_ENTRY_NOT_FOUND:'文件未包含在原任务清单中', MANIFEST_FILE_MISMATCH:'本地文件与原任务清单不匹配，请重新选择', UPLOAD_IDENTITY_CONFLICT:'文件身份发生冲突，请确认源文件后重试', LAST_ADMIN_REQUIRED:'不能停用最后一个可用管理员，请先创建或启用其他管理员',
     DOCX_VALIDATION_FAILED:'DOCX 文件内容或结构校验未通过', INVALID_DOCX_PACKAGE:'文件不是有效的可编辑 DOCX', ENCRYPTED_DOCX:'文件已加密，无法安全处理', DOCX_SIZE_LIMIT_EXCEEDED:'文件超过接收大小限制', DOCX_UNSUPPORTED:'DOCX 结构不受支持', DOCX_SECURITY_LIMIT:'DOCX 解压校验超出安全限制',
-    GUIDE_NOT_READY:'当前指引不可用或尚未解析完成，请先在「我的指引」启用可用指引', GUIDE_NOT_ENABLEABLE:'该指引尚未解析完成，暂不能启用', GUIDE_NOT_PARSEABLE:'当前状态不能重新解析', GUIDE_PARSE_FAILED:'指引解析未完成，可查看问题后重新解析', GUIDE_DOCUMENT_INVALID:'指引文档未通过解析校验', GUIDE_RULE_INVALID:'规则编号无效，请刷新后重试', GUIDE_RULES_ALL_DISABLED:'至少保留一条启用规则', MODEL_SETTINGS_LOCKED:'模型配置由部署文件管理，请在服务器环境修改', MODEL_API_KEY_ENV_REQUIRED:'请填写 API Key 环境变量名', MODEL_REVIEW_KEY_REQUIRED:'复核模型使用不同地址时必须提供独立密钥变量', ENGINE_OR_RULESET_REQUIRED:'提交缺少引擎或规则信息，请刷新后重试', ENGINE_CONFLICT:'引擎与规则信息冲突，请刷新后重试', ENGINE_UNSUPPORTED:'当前环境不支持所选引擎', BUILTIN_SOURCE_UNAVAILABLE:'内置指引不提供原件下载',GUIDE_TEXT_DIFF_UNREADABLE:'两版指引原文暂时无法比对（版本解析异常），请换两个版本再试；反复出现请联系管理员'
+    GUIDE_NOT_READY:'当前指引不可用或尚未解析完成，请先在「我的指引」启用可用指引', GUIDE_NOT_ENABLEABLE:'该指引尚未解析完成，暂不能启用', GUIDE_NOT_PARSEABLE:'当前状态不能重新解析', GUIDE_PARSE_FAILED:'指引解析未完成，可查看问题后重新解析', GUIDE_DOCUMENT_INVALID:'指引文档未通过解析校验', GUIDE_RULE_INVALID:'规则编号无效，请刷新后重试', GUIDE_RULES_ALL_DISABLED:'至少保留一条启用规则', MODEL_SETTINGS_LOCKED:'模型配置由部署文件管理，请在服务器环境修改', MODEL_API_KEY_ENV_REQUIRED:'请填写 API Key 环境变量名', MODEL_REVIEW_KEY_REQUIRED:'复核模型使用不同地址时必须提供独立密钥变量', ENGINE_OR_RULESET_REQUIRED:'提交缺少引擎或规则信息，请刷新后重试', ENGINE_CONFLICT:'引擎与规则信息冲突，请刷新后重试', ENGINE_UNSUPPORTED:'当前环境不支持所选引擎', BUILTIN_SOURCE_UNAVAILABLE:'内置指引不提供原件下载',BUILTIN_SOURCE_DOCX_MISSING:'内置默认指引的原文档案在服务端缺失，请稍后重试；若多次出现请联系管理员。',GUIDE_TEXT_DIFF_UNREADABLE:'两版指引原文暂时无法比对（版本解析异常），请换两个版本再试；反复出现请联系管理员'
   };
   const reason = code => reasons[code] || (code ? '处理未安全完成，请稍后重试或联系管理员' : '');
   const badge = (value, override) => `<span class="badge b-${['eligible','succeeded','completed','complete','accepted','satisfied','satisfied_no_change','evaluation_modified','evaluation_unmodified','parsed','released','validated'].includes(value)?'green':['failed','completed_with_exceptions','rejected','incomplete','parse_failed'].includes(value)?'red':['running','queued','leased','uploading','parsing'].includes(value)?'blue':['paused','excluded_by_fund_type','retry_wait'].includes(value)?'amber':'gray'}">${esc(override || labels[value] || '未确认')}</span>`;
@@ -1460,7 +1460,11 @@ if(e.target.id==='gd-diff-filter'){const d=state.guideDiff;if(d){d.filter=e.targ
   // ── 指引版本对比（规则差异 + 原文比对；全确定性，不调模型）──────────────────
   // ── 指引版本对比（弹窗式，照抄合同比对查看器；只读、无「采用 A/B」；仅原文比对）──
   function guideDiffLabel(item){return `${item.filename} · ${esc(guideTime(item.created_at))}${item.current?'（当前）':''}${item.built_in?'（内置）':''}`;}
-  function gdUploaded(){return [...(state.guides||[])].filter(item=>!item.built_in).sort((a,b)=>(b.created_at||0)-(a.created_at||0));}
+  // FL-D1087（用户令「内置要进下拉」）：自定义在前、内置殿后；内置以服务端 canonical 参与比对。
+  function gdUploaded(){const items=[...(state.guides||[])];
+    const customs=items.filter(item=>!item.built_in).sort((a,b)=>(b.created_at||0)-(a.created_at||0));
+    const builtins=items.filter(item=>item.built_in).sort((a,b)=>(b.created_at||0)-(a.created_at||0));
+    return [...customs,...builtins];}
   function refreshGuideDiffCard(){const from=$('gd-diff-from'),to=$('gd-diff-to'),start=$('gd-diff-start');if(!from||!to)return;const d=state.guideDiff||=({from:'',to:'',view:'word',filter:'',td:null,items:[],cursor:-1});
     d.prog=true;setTimeout(()=>{if(state.guideDiff===d)d.prog=false;},700);
     const uploaded=gdUploaded();
@@ -1487,7 +1491,7 @@ if(e.target.id==='gd-diff-filter'){const d=state.guideDiff;if(d){d.filter=e.targ
     refreshGuideDiffCard();
     d.td=null;d.items=[];d.cursor=-1;d.filter='';const filterSel=$('gd-diff-filter');if(filterSel)filterSel.value='';
     $('gd-diff-body').hidden=true;$('gd-diff-empty').hidden=false;
-    $('gd-diff-empty').textContent=gdUploaded().length<2?'需要两份已上传的指引才能原文比对；内置指引没有原文文件，不参与配对。请先上传另一个指引版本。':'选好两个版本后点「开始对比」，结果会显示在这里；对比完全在服务器本地计算，不调用模型。';
+    $('gd-diff-empty').textContent=gdUploaded().length<2?'当前只有一份可比版本的指引；再上传一份指引，就能直接与之比对。':'选好两个版本后点「开始对比」，结果会显示在这里；对比完全在服务器本地计算，不调用模型。';
     $('gd-diff-summary').textContent='选好两个版本后点「开始对比」';
     $('gd-diff-backdrop').hidden=false;viewer.hidden=false;
     document.querySelector('.app').inert=true;$('gd-diff-close').focus();}
@@ -1537,7 +1541,8 @@ if(e.target.id==='gd-diff-filter'){const d=state.guideDiff;if(d){d.filter=e.targ
     try{const payload=await json(`/api/guides/${encodeURIComponent(d.to)}/text-diff?against=${encodeURIComponent(d.from)}`);if(!current(t))return;
       const td=payload.text_diff,s=td.summary;d.td=td;d.items=td.diffs||[];
       const fromItem=guideByName(d.from),toItem=guideByName(d.to);
-      $('gd-diff-summary').textContent=td.identical?'两个版本的原文完全一致':`共 ${s.diffs} 处差异 · 修改 ${s.modify} · 新增 ${s.insert} · 删除 ${s.delete}`;
+      const sameCanon=td.from_version&&td.to_version&&td.from_version.canonical_sha256&&td.from_version.canonical_sha256===td.to_version.canonical_sha256;
+      $('gd-diff-summary').textContent=sameCanon?'两个版本引用的是同一份档案，比对必然一致（内置各代共享冻结档案时属预期）':(td.identical?'两个版本的原文完全一致':`共 ${s.diffs} 处差异 · 修改 ${s.modify} · 新增 ${s.insert} · 删除 ${s.delete}`);
       $('gd-diff-merged-name').textContent=`${fromItem?fromItem.filename:''} → ${toItem?toItem.filename:''}`;
       $('gd-diff-left-name').textContent=fromItem?fromItem.filename:'';$('gd-diff-right-name').textContent=toItem?toItem.filename:'';
       $('gd-diff-empty').hidden=true;$('gd-diff-body').hidden=false;
