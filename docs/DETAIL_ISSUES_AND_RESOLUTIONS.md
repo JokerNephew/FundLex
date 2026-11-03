@@ -9616,3 +9616,8 @@ H＝E×…
 - 用户令「把项目的模型改成glm-5.3」→ 验证链：①环境伪影排除（首次失败=REQUEST_OPTIONS_JSON 被 bash source 吞引号，非模型问题，与既往 fix_and_run 病灶同族）；②网关冒烟 glm-5.3 ×2 OK（schema 合规、finish=stop、接受 thinking disabled+reasoning_effort low）；③备份 env→.bak-20261103-glm53，LLM_MODEL kimi-k3→glm-5.3，五服务重启全活；④真实路径验证任务「GLM53切换验证-道琼斯」(44003547) 已提交（receipt accepted/queued/builtin-cards-v2）。
 - 回滚凭据：env 备份还原+重启即回 kimi-k3。
 - 待办：验证任务 succeed 后抽检 redline（glm 改写质量第一眼）；账本观察 glm 的 latency/token 形态；FL-D1071 三模型对比改记为「glm-5.3 产线在位，kimi-k3/deepseek-v4.1-flash 对照组」口径更新。另生产队列在途 8 份在重启中烧 attempt（FL-D1077 同族事件，记录在案）。
+
+## FL-D1081 修改人下拉单作者隐藏/空（2026-11-03 ~17:3x，已修复·实证）
+- 现象（用户实测）：审查栏「修改人」下拉没有东西。
+- 实锤：真实 redline 产件全链投影，20/20 修订 author="FundLex"（作者体系在数据层完好）；下拉守卫写成 ≥2 作者才显示——产线绝大多数任务只有引擎单一作者 → 看不到作者条目，单作者场景无筛选面。
+- 处置：守卫改 >=1（有作者即出下拉，含单作者）；选项/徽章/筛选逻辑无改。生产+qa-base 同波。
