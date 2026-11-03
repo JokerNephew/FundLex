@@ -366,7 +366,7 @@
     $(`model-${prefix}-suggestions`).innerHTML=(provider?.models||[]).map(m=>`<option value="${esc(m)}">`).join('');
     const retiredHint=$(`model-${prefix}-deprecated`);const retired=provider?.deprecated_models||[];
     retiredHint.hidden=!retired.length;
-    retiredHint.innerHTML='':'';
+    retiredHint.innerHTML='';
     $(`model-${prefix}-personal`).querySelectorAll('input,select,button').forEach(n=>{n.disabled=!personal;});
     $(`model-${prefix}-model`).required=personal;
     $(`model-${prefix}-base_url`).required=personal&&provider?.id==='custom';

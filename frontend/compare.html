@@ -776,6 +776,27 @@
 </p>
 </div>
 </div>
+      <!-- FL-D10xx 页内版本对比专区：与合同比对页同形（选版→开始对比→本地结果），细看只读 -->
+      <div class="card card-pad u-mt-4" id="guide-diff-card">
+<div class="section-title">
+<h2>版本对比</h2>
+<small>选两个版本点「开始对比」，看规则改了哪几条、原文哪里动了；对比完全在服务器本地计算，不调用模型</small>
+</div>
+<div class="guide-diff-selects guide-diff-selects--page">
+<label>基准版本（旧）
+<select id="guide-diff-from" class="control-select guide-diff-select" aria-label="基准版本（旧）"></select>
+</label>
+<label>对比版本（新）
+<select id="guide-diff-to" class="control-select guide-diff-select" aria-label="对比版本（新）"></select>
+</label>
+<button class="btn btn-primary" type="button" id="guide-diff-start" data-action="guide-diff-start">开始对比</button>
+</div>
+<div class="guide-diff-tabs" role="tablist" aria-label="对比内容">
+<button type="button" role="tab" id="guide-diff-tab-rules" data-guide-diff-tab="rules" aria-selected="true">规则差异</button>
+<button type="button" role="tab" id="guide-diff-tab-text" data-guide-diff-tab="text" aria-selected="false">原文比对</button>
+</div>
+<div id="guide-diff-body" aria-live="polite"><p class="subnote">选好两个版本后点「开始对比」，结果直接显示在这里。</p></div>
+</div>
       <div class="card card-pad u-mt-4">
 <div class="section-title">
 <h2>上传自定义指引</h2>
@@ -1018,50 +1039,6 @@
 <button class="btn btn-sm" id="close-detail" aria-label="返回任务" hidden>返回任务</button>
 </div>
 <div class="detail-body" id="detail-body">
-</div>
-</div>
-</div>
-<!-- FL-D1063：版本对比弹窗（查看器式，只读；数据=规则差异 / text-diff canonical） -->
-<div class="detail-overlay" id="guide-diff-overlay" hidden>
-<div class="detail-panel detail-panel--wide" role="dialog" aria-modal="true" aria-labelledby="guide-diff-title">
-<div class="detail-head">
-<div>
-<small>指引版本对比 · 只读 · 服务器本地计算，不调用模型</small>
-<h2 id="guide-diff-title">版本对比</h2>
-</div>
-<button class="btn btn-sm" id="guide-diff-close" aria-label="关闭版本对比">✕</button>
-</div>
-<div class="detail-body" id="guide-diff-card">
-<div class="guide-diff-selects">
-<label>基准版本（旧）
-<select id="guide-diff-from" class="control-select" aria-label="基准版本（旧）"></select>
-</label>
-<label>对比版本（新）
-<select id="guide-diff-to" class="control-select" aria-label="对比版本（新）"></select>
-</label>
-</div>
-<div class="guide-diff-toolbar">
-<div class="guide-diff-tabs" role="tablist" aria-label="对比内容" style="display:none">
-<button type="button" role="tab" id="guide-diff-tab-rules" data-guide-diff-tab="rules" aria-selected="true">规则差异</button>
-<button type="button" role="tab" id="guide-diff-tab-text" data-guide-diff-tab="text" aria-selected="false">原文比对</button>
-</div>
-
-</div>
-<div id="guide-diff-body" aria-live="polite"></div>
-</div>
-</div>
-</div>
-<div class="detail-overlay" id="guide-overlay" hidden>
-<div class="detail-panel" role="dialog" aria-modal="true" aria-labelledby="guide-overlay-title">
-<div class="detail-head">
-<div>
-<small>指引详情 · 规则概览与解析问题</small>
-<h2 id="guide-overlay-title">
-</h2>
-</div>
-<button class="btn btn-sm" id="guide-overlay-close" aria-label="关闭指引详情">✕</button>
-</div>
-<div class="detail-body" id="guide-overlay-body">
 </div>
 </div>
 </div>
