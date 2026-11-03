@@ -9754,3 +9754,12 @@ H＝E×…
 - accept3 全绿:v-esg succeed(净化 journal 链 65aa84f2→bd91a14a,written12) + v-dj written17/UNAUTH 14→0/exceptions0(K1K2 实证过关,p293 双卡同段=两卡两片,写器重开核验在,记册留抽查)。
 - 但 admin 前后端对丝三缝:①/api/admin/system-model 后端未交(line4 补:存取+解析序+冒烟);②system-status vs system/status 路径差(后端加别名);③/api/admin/guides 列表名差(后端补别名)。裁定:前端不动、后端补齐。**publish 持悬到三缝修复+v-yl2(D4)验证齐。**
   - 2026-11-03 20:3x FL-D1099 构成最终版修订：①三缝缺陷已修（line4 5f64e4c，109+12 绿+冒烟回滚）；②前端改本波零变更——admin UI+清洁包押二波（line5 真后端联调验收后放）。本波锁定=45f1d8a+09f1fdd(D4加固)+K1K2+FL-D1076补丁+c2784a6+a5a578a+5f64e4c；终跑绿即 publish。
+
+
+## 2026-11-03 放行波上产完成（二波发布，含事故实录）
+
+- 终态指纹：engine fd114c84…、service 3043dde8…，commit f38a275（含 MySQL DDL 两修）。
+- **发布事故实录**：首发失败于「串行 schema 初始化」+ 恢复 hash mismatch 告警；产线核验=旧健康构建无损（服务活/日志零错/常量齐）；根因两处 MySQL 专属 DDL：①admin_audit_log `INTEGER PRIMARY KEY AUTOINCREMENT`(sqlite 独有) ②system_settings 列名 `key`(MySQL 保留字)——line4 测试全 sqlite 所以漏出，已对产库手动复现（1064 语法错误实锤），修法=TEXT 主键+uuid、列名 skey，产库 ALL-INIT-OK 后重发成功。**类属入库**：今后 DDL 交付必须过 MySQL 方言闸（增列进 PACKAGING 清单修订项）。
+- 在产核验：review_veto 代码在产、sanitize 净化补丁在产、K1K2 body_locations 在产、生成域 API=404（冰封闸语义）、admin 全端点 401/403 守卫、glm 账本流动（3min 51 调用）、前端零变更（=510f17c）。
+- **admin 端点首火**：FL-D1077 六份 att=3 耗尽件（品质优选/恒裕/恒鑫/恒昌/道琼斯/景和）经 POST /api/admin/documents/{id}/retry 全部 202 回队，admin_audit_log 落账 6 条。
+- 留二波：admin 前端+前端清洁包（三缝已修，等 line5 真后端对齐验收）。.doc 异步转换（F1/F2）仍未入包。
