@@ -9364,3 +9364,6 @@ H＝E×…
 - 三审放行（2026-11-03 05:0x）：守门用例主线亲复 1/1+3/3 连绿（serial 1.2~1.6s vs parallel 0.55~0.65s，实测比值与申报相符），邻套 23/23；f3c19e6 ACK=GO。publish 通道=与 FL-D1048 同窗包；收益口径按实测不放卫星。
 - 条款整改（2026-11-03 05:2x）：直通 PACKAGING_DEPENDENCY_CHECKLIST.md@d8f2894 落地——封装前 compare/前端等域 git log 对照必做+发布说明「依赖核查」小节四列留痕；以执行输出为验。0604576 欠项自此唯一在账，无第三病源。
 - 关闭（2026-11-03 07:5x）：FL-D1044 要件①完成——病灶查明=REL 用错账号（fundlex_ops 无 guide_config DELETE 权，八撞 1142）；主线经指挥部权限以 fundlex app 账号（ALL 已核 show grants）按原 package.sql 单事务执行 remaining=0、证据落 /tmp/opencode/qa/rel-fd1044/evidence-FD1044-MAINLINE-COMPLETION-*.log。全案三要件齐关。遗留制度建议：REL 运维账号授权面盘点为低频常规项（列 REL 月度）。
+
+## FL-D1055 章节栏宽度可拖动（2026-11-03 用户原话急令，CX 30min 档）
+- 原话：「章节的宽度要可以拖动，赶紧改完上线」。复用项目内 review-splitter 交互语言（drag/双击/键盘/ARIA），宽窄持久化，窄屏抽屉禁拖。
