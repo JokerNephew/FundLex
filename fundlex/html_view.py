@@ -81,6 +81,9 @@ class HtmlProjection:
         self._bookmark_seq = 0
         # revision id -> {"text": ..., "paragraphs": [ids]}
         self.revisions: dict[str, dict[str, Any]] = {}
+        # FL-D1082：每条修订记录首次在文档中出现的序号，整改清单按文档顺序排序
+        self._rev_order: dict[str, int] = {}
+        self._rev_seq: int = 0
         self.page_count = 0
         self.has_toc = False
 
@@ -133,6 +136,9 @@ class HtmlProjection:
 
     def _record(self, revision_id: str, text: str, kind: str, *, author: str = "") -> None:
         entry = self.revisions.setdefault(revision_id, {"ins": [], "del": [], "author": ""})
+        if revision_id not in self._rev_order:
+            self._rev_order[revision_id] = self._rev_seq
+            self._rev_seq += 1
         entry[kind].append(text)
         # FL-D1080：修订作者取自 w:ins/w:del 的 w:author（首见优先，保留真实签名）。
         if author and not entry.get("author"):
@@ -487,6 +493,14 @@ class HtmlProjection:
                     info2 = manifest[candidate]
                     break
             emit(rid, rid + 1 if len(pair_ids) > 1 else None, info2, pair_ids)
+        # FL-D1082（用户令）：清单按修订在文档中的先后顺序排，重排后连续编号（稳定排序）。
+        def _order_of(row: dict[str, Any]) -> int:
+            ids = row.get("revision_ids") or [i for i in (row.get("del_id"), row.get("ins_id")) if i is not None]
+            seq = [self._rev_order[str(i)] for i in ids if str(i) in self._rev_order]
+            return min(seq) if seq else (1 << 30)
+        result.sort(key=_order_of)
+        for pos, row in enumerate(result, start=1):
+            row["index"] = pos
         return result
 
 
