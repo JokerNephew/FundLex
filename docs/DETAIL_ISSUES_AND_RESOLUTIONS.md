@@ -9748,3 +9748,8 @@ H＝E×…
 - accept2/rc-yl(glm+审查层): p1177「法律法规要求增加的基金费用的收取」整项 delete 放行,exceptions=0——与 regress1 kimi 波 D4 同款。两可能:①regress1 D4 定性错(该删)；②审查层对「整段超卡范围」类 veto 存在模型方差漏网。已发 line2 仲裁，放行裁决挂此项。
 - accept2 他项: rc-a50 written6 未见重复 insert 表象(D1 复核待细则), rc-dj2 written7(K1K2 文本态下 UNAUTH 仍 14,证未生效), rc-esg 文本态复发(已引出补丁应用+accept3 复检)。
 - 注明: yl skipped 中 UNAUTHORIZED 同病(补丁未生效果然延续)。"
+
+
+## 2026-11-03 放行前对丝（前后端接线核验）抓三缝
+- accept3 全绿:v-esg succeed(净化 journal 链 65aa84f2→bd91a14a,written12) + v-dj written17/UNAUTH 14→0/exceptions0(K1K2 实证过关,p293 双卡同段=两卡两片,写器重开核验在,记册留抽查)。
+- 但 admin 前后端对丝三缝:①/api/admin/system-model 后端未交(line4 补:存取+解析序+冒烟);②system-status vs system/status 路径差(后端加别名);③/api/admin/guides 列表名差(后端补别名)。裁定:前端不动、后端补齐。**publish 持悬到三缝修复+v-yl2(D4)验证齐。**
