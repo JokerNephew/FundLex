@@ -9800,3 +9800,8 @@ H＝E×…
 - 实证：浏览器门 `test_review_splitter_rebind_disposes_without_leak` 在 510f17c 老封版/cdb45a4/HEAD 三点同挂（非本波产物）；堆栈实锤：SLMS vendor 在构造时为每个实例挂 window resize 监听，动态重建的 select（重灌/替换 innerHTML）旧实例不销毁 → +1 监听·实例；人体会话长时内存保留隐患，量级=长 session 每波重建一条。
 - 处置建议（单独波，不夹本波）：selectkit 增「同元素/同窗格单例」登记+失连销毁（Feed 时检测 host 已换 DOM 或 MutationObserver 回收），或全站退 SS（已有两处 data-fl-selectvend=off 前科样例）。
 - 测试处理：保持红、不造假——本波回归如实申报「86 过 1 挂（本件）」。
+
+## FL-D1105 集成波覆盖丢件回补：修订人链+文档序（2026-11-03 ~22:0x，已修复·已验证）
+- 用户复报「改动清单没有修订人信息」：集成波 f38a275 整目录覆盖生产，带走主线已上产的 FL-D1080/1082 后端件（前端 cdb45a4 有徽章/下拉,后端无 author 出舱→双双隐匿）。
+- 处置：html_view.py 五点锚回补（_record 采 author/emit 行出 author/_rev_order 首见序/结果排序重编号/ins+del 双签名），重启 api；真实 redline 实证 20 行全带 FundLex 签名+首序 1；登录页零错。
+- 案情更广警惕（不越界擅动）：集成波覆盖还可能带走 FL-D1081 同波其他后端件——已列入发布波合并清单注记，本波放行前由发布线全量对缝。
