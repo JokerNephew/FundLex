@@ -1156,3 +1156,11 @@ body .ss-content .ss-list .ss-optgroup .ss-optgroup-label{color:var(--muted);fon
 .gd-rail-viewctl{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 
 .guide-ops-type{display:block;font-weight:650;color:var(--ink);margin-bottom:3px}
+/* FL-D1079：指引卡表内容向下换行不向右撑（用户令） */
+[data-testid="guide-cards-table"] .table{table-layout:fixed;width:100%;min-width:0!important}
+[data-testid="guide-cards-table"] td{white-space:normal;word-break:break-word;overflow-wrap:anywhere;vertical-align:top}
+
+.rev-author{color:#8f3517;background:#fff1e8;border:1px solid #f0cdb8;border-radius:999px;padding:1px 8px;font-size:11px;font-weight:650;white-space:nowrap}
+.review-author-filter{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);margin-left:10px}
+.review-author-filter .control-select{min-width:120px;max-width:200px;padding:3px 8px;font-size:12px}
+.review-author-filter{white-space:nowrap}

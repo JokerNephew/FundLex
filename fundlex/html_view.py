@@ -131,9 +131,12 @@ class HtmlProjection:
 
     # ----- revision bookkeeping -------------------------------------------
 
-    def _record(self, revision_id: str, text: str, kind: str) -> None:
-        entry = self.revisions.setdefault(revision_id, {"ins": [], "del": []})
+    def _record(self, revision_id: str, text: str, kind: str, *, author: str = "") -> None:
+        entry = self.revisions.setdefault(revision_id, {"ins": [], "del": [], "author": ""})
         entry[kind].append(text)
+        # FL-D1080：修订作者取自 w:ins/w:del 的 w:author（首见优先，保留真实签名）。
+        if author and not entry.get("author"):
+            entry["author"] = author
 
     # ----- run / inline rendering -----------------------------------------
 
@@ -181,7 +184,7 @@ class HtmlProjection:
                 inner = "".join(self._render_run(run, deleted=False)
                                 for run in node if run.tag == Q("r"))
                 if rid:
-                    self._record(rid, _text_content(node), "ins")
+                    self._record(rid, _text_content(node), "ins", author=node.get(Q("author"), ""))
                 if inner.strip():
                     pieces.append(f'<ins class="rev rev-ins" data-rev="{_escape(rid)}"'
                                   f' title="插入（修订）">{inner}</ins>')
@@ -190,7 +193,7 @@ class HtmlProjection:
                 inner = "".join(self._render_run(run, deleted=True)
                                 for run in node if run.tag == Q("r"))
                 if rid:
-                    self._record(rid, _text_content(node), "del")
+                    self._record(rid, _text_content(node), "del", author=node.get(Q("author"), ""))
                 if inner.strip():
                     pieces.append(f'<del class="rev rev-del" data-rev="{_escape(rid)}"'
                                   f' title="删除（修订）">{inner}</del>')
@@ -442,6 +445,7 @@ class HtmlProjection:
                 "after": after,
                 "operation": operation,
                 "edit_id": info.get("edit_id", ""),
+                "author": (del_entry.get("author") or ins_entry.get("author") or ""),
                 "rule_id": info.get("rule_id", ""),
                 "section": info.get("section", ""),
                 "location": info.get("location", ""),
