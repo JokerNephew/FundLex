@@ -9810,3 +9810,8 @@ H＝E×…
 ## FL-D1080 收官实证（2026-11-03 深夜）：mf 0→9 复活
 - 生产构建本体实测：mf 写回 9（预测 8-12 中）、skipped 6 全 NO_EFFECT（非误杀）、UNAUTHORIZED=0、774s。残余 unlocated=25 属 locate 侧（弱锚副通道/释义表格通道,FL-D1080 follow-up 已派 line2）。
 - D5（一场漏改事故）完整因果链已关档：诊断反转(写侧杀非定位漏)→K1K2 修→集成补丁→产线实证。
+
+## FL-D1106 集成波覆盖丢件·后端五件全账回补（2026-11-03 ~22:2x，已执行·已验证）
+- 用户令「不要我指哪你找哪，好好看看哪一版才是最新的」——主线改为全账对缝（而非逐洞补丁），共查出集成波把主线当日已上产后端件冲掉 5 处：①api.py action_text（FL-D1078）；②user_model_connections 6 供应商「（兼容接口）」尾巴回流；③guide_store builtin_source_docx 体系（FL-D1051/52）；④guide_text_diff 勘误版收修订根修（15:0x 生产实证过的 422 救火件）；⑤html_view 修订人+文档序（FL-D1105 先回补）。
+- 处置：全部按锚回补（api/guide_store/guide_text_diff/user_model_connections 四文件+.bak-fd1106 备份），ast 全过+重启；canonical_sha256（属未放行波）刻意不碰守闸。
+- 实证：真实勘误版档案对（ea/aa 用户真实副本）重算 8 处差异（零 422）；builtin_source_docx 在档；服务绿；前端当前出产态=cdb45a4（主线当日最后上产态,与五件后端严丝合缝）。
