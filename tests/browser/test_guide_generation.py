@@ -105,6 +105,7 @@ def browser():
         instance.close()
 
 
+@pytest.mark.skip(reason="FL-D1094（24红簇治理）：生成面已旗舰下线（frontend/app.js:32 SHOW_FUNDLEX_GUIDE_GENERATION=false，canonical 510f17c）；用例保留待重开，旗舰回归时去此 skip 即复跑")
 def test_password_browser_candidate_upload_edit_publish_and_download(browser, password_browser_app):
     app, base, username, password, corpus = password_browser_app
     context = browser.new_context(viewport={"width": 1440, "height": 1000})

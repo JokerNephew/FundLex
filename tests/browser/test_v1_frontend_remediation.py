@@ -390,12 +390,12 @@ def test_compare_word_style_reader_renders_merged_redline_and_display_modes(brow
         assert page.locator("#compare-word-merged-pane .compare-del").inner_text() == "旧条款"
         assert page.locator("#compare-revision-count-rail").inner_text() == "1"
         assert page.locator("#compare-merged-title").inner_text() == "Word 样式"
-        assert page.locator("#compare-coverage-chip").is_visible()
-        assert "2 项未覆盖" in page.locator("#compare-coverage-summary").inner_text()
-        page.locator("#compare-coverage-summary").click()
-        # FL-D980：覆盖警告对用户是可读中文（机读 token 不再直露）。
-        assert "页眉" in page.locator("#compare-coverage-list").inner_text()
-        assert page.locator("#compare-coverage-list").is_visible()
+        # FL-D1094（24红簇治理）：COMPARE_COVERAGE_CHECKS 现已压制（compare.js:24=false，
+        # FL-D1045/1091 口径）——覆盖警示 chip 一律隐藏，旧断言按其开启态已失效；
+        # 改为断言压制口径（隐藏+摘要为空+列表不展开）。
+        assert page.locator("#compare-coverage-chip").is_hidden()
+        assert page.locator("#compare-coverage-summary").inner_text() == ""
+        assert page.locator("#compare-coverage-list").is_hidden()
         # FL-D987 全屏回退：查看器打开必须为全屏对话框（用户「原来的全屏弹窗很好啊」）
         assert page.locator("#compare-viewer").get_attribute("role") == "dialog"
         assert page.evaluate("document.body.classList.contains('compare-fullscreen-open')") is True
@@ -406,7 +406,8 @@ def test_compare_word_style_reader_renders_merged_redline_and_display_modes(brow
         assert page.evaluate("document.body.classList.contains('compare-fullscreen-open')") is False
         page.locator('[data-compare-pair="0"]').click()
         page.locator("#compare-viewer").wait_for(state="visible")
-        rail = page.locator(".compare-word-revisions")
+        # FL-D1094：gd-diff 共用 .compare-word-revisions 类名后 strict-mode 双命中，按 ID 精确定位
+        rail = page.locator("#compare-diff-rail")
         rail_width = rail.bounding_box()["width"]
         splitter = page.locator("#compare-rail-splitter")
         assert splitter.is_visible()
@@ -433,10 +434,10 @@ def test_compare_word_style_reader_renders_merged_redline_and_display_modes(brow
         page.locator("#compare-viewer").wait_for(state="visible")
 
         page.locator("#compare-show-sources").uncheck()
-        assert page.locator(".compare-word-sources").evaluate("element => getComputedStyle(element).display") == "none"
+        assert page.locator("#compare-word-sources").evaluate("element => getComputedStyle(element).display") == "none"
         page.locator("#compare-show-sources").check()
-        assert page.locator(".compare-word-sources").evaluate("element => getComputedStyle(element).display") != "none"
-        sources = page.locator(".compare-word-sources")
+        assert page.locator("#compare-word-sources").evaluate("element => getComputedStyle(element).display") != "none"
+        sources = page.locator("#compare-word-sources")
         sources_width = sources.bounding_box()["width"]
         word_splitter = page.locator("#compare-word-splitter")
         assert word_splitter.is_visible()
@@ -732,6 +733,7 @@ def test_compare_diff_click_locates_virtualized_pure_insertion(browser, live_dev
     assert page_errors == []
 
 
+@pytest.mark.skip(reason="FL-D1094（24红簇治理）：生成面已旗舰下线（frontend/app.js:32 SHOW_FUNDLEX_GUIDE_GENERATION=false，canonical 510f17c）；用例保留待重开，旗舰回归时去此 skip 即复跑")
 def test_guide_run_switch_rejects_late_detail_and_download(browser, live_dev):
     _app, base = live_dev
     context = browser.new_context(viewport={"width": 1440, "height": 1000})
@@ -809,6 +811,7 @@ def test_guide_run_switch_rejects_late_detail_and_download(browser, live_dev):
         context.close()
 
 
+@pytest.mark.skip(reason="FL-D1094（24红簇治理）：生成面已旗舰下线（frontend/app.js:32 SHOW_FUNDLEX_GUIDE_GENERATION=false，canonical 510f17c）；用例保留待重开，旗舰回归时去此 skip 即复跑")
 def test_guide_initialisation_retry_keyboard_and_existing_deep_link(browser, live_dev):
     _app, base = live_dev
     context = browser.new_context(viewport={"width": 1440, "height": 1000})
@@ -859,6 +862,7 @@ def test_guide_initialisation_retry_keyboard_and_existing_deep_link(browser, liv
     assert page_errors == []
 
 
+@pytest.mark.skip(reason="FL-D1094（24红簇治理）：生成面已旗舰下线（frontend/app.js:32 SHOW_FUNDLEX_GUIDE_GENERATION=false，canonical 510f17c）；用例保留待重开，旗舰回归时去此 skip 即复跑")
 def test_guide_badges_use_warning_not_green_pass_and_download_names(browser, live_dev):
     _app, base = live_dev
     context = browser.new_context(viewport={"width": 1440, "height": 1000})

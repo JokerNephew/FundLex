@@ -372,7 +372,11 @@ def test_compare_default_task_name_and_docx_hint(browser, live_dev):
         open_dev(page, base, "#compare?mode=new")
         first = page.locator('[data-compare-left="0"]')
         first.wait_for(state="attached")
-        assert ".doc 请先另存为 .docx" in page.locator(".compare-file-card").first.inner_text()
+        # FL-D1094（24红簇治理）：产品文案已改为「.doc 上传后自动转换」（同卡并承诺带修订痕迹可直接上传），
+        # 旧「请先另存为 .docx」语义废弃——按现行文案断言两项语义点。
+        card_text = page.locator(".compare-file-card").first.inner_text()
+        assert ".doc 上传后自动转换" in card_text
+        assert "带修订痕迹的文件可直接上传" in card_text
         page.set_input_files('[data-compare-left="0"]', [{"name": "a.docx",
                                                           "mimeType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                                                           "buffer": b"PK\x03\x04fake"}])
@@ -419,6 +423,7 @@ def test_workspace_date_inputs_validate_real_dates(browser, live_dev):
         context.close()
 
 
+@pytest.mark.skip(reason="FL-D1094（24红簇治理）：生成面已旗舰下线（frontend/app.js:32 SHOW_FUNDLEX_GUIDE_GENERATION=false，canonical 510f17c）；用例保留待重开，旗舰回归时去此 skip 即复跑")
 def test_guide_list_fallback_caches_and_loads_more(browser, live_dev):
     """A9-F05：服务不分页结论缓存后不再重复双请求；超 50 条给出“加载更多”。"""
     _app, base = live_dev
@@ -455,6 +460,7 @@ def test_guide_list_fallback_caches_and_loads_more(browser, live_dev):
         context.close()
 
 
+@pytest.mark.skip(reason="FL-D1094（24红簇治理）：生成面已旗舰下线（frontend/app.js:32 SHOW_FUNDLEX_GUIDE_GENERATION=false，canonical 510f17c）；用例保留待重开，旗舰回归时去此 skip 即复跑")
 def test_guide_poll_backs_off_then_stops_with_notice(browser, live_dev):
     """A9-F08：轮询失败按 10s/30s 退避，连续 3 次后停止并显示提示而非静默停摆。"""
     _app, base = live_dev
