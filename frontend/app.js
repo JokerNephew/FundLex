@@ -346,7 +346,7 @@
       <div id="model-${prefix}-personal" class="form-stack" ${personal?'':'hidden'}>
       <label>供应商<select id="model-${prefix}-provider">${modelProviders.map(p=>`<option value="${esc(p.id)}" ${p.id===(role.provider||'openai')?'selected':''}>${esc(p.label)}</option>`).join('')}</select></label>
       <label id="model-${prefix}-address-label" ${role.provider==='custom'?'':'hidden'}>服务地址<input id="model-${prefix}-base_url" type="url" value="${esc(role.base_url||'')}" placeholder="https://你的服务商地址/v1"><span class="subnote">仅其他兼容服务需要填写，由供应商提供。</span></label>
-      <label>访问密钥（API Key）<input id="model-${prefix}-api_key" type="password" autocomplete="new-password" maxlength="4096" ${personal&&role.connection_id?'':'required'} placeholder="${personal&&role.api_key_set?'已保存；留空保留，填写可更换':'粘贴供应商提供的访问密钥'}"><span class="subnote">加密保存，不回显。</span></label>
+      <label>访问密钥（API Key）<input id="model-${prefix}-api_key" type="password" autocomplete="new-password" maxlength="4096" ${personal&&role.connection_id?'':'required'} placeholder="${personal&&role.api_key_set?'已保存；留空保留，填写可更换':'粘贴供应商提供的访问密钥'}"></label>
       <input id="model-${prefix}-connection_id" type="hidden" value="${esc(role.connection_id||'')}">
       <label>模型<input id="model-${prefix}-model" list="model-${prefix}-suggestions" value="${personal?esc(role.model||''):''}" placeholder="选择建议或填写供应商提供的模型名称"><datalist id="model-${prefix}-suggestions"></datalist></label>
       <p id="model-${prefix}-deprecated" class="subnote model-deprecated-hint" hidden></p>
@@ -366,7 +366,7 @@
     $(`model-${prefix}-suggestions`).innerHTML=(provider?.models||[]).map(m=>`<option value="${esc(m)}">`).join('');
     const retiredHint=$(`model-${prefix}-deprecated`);const retired=provider?.deprecated_models||[];
     retiredHint.hidden=!retired.length;
-    retiredHint.innerHTML=retired.length?`已停用或拟停用（灰置不可选）`:'';
+    retiredHint.innerHTML='':'';
     $(`model-${prefix}-personal`).querySelectorAll('input,select,button').forEach(n=>{n.disabled=!personal;});
     $(`model-${prefix}-model`).required=personal;
     $(`model-${prefix}-base_url`).required=personal&&provider?.id==='custom';

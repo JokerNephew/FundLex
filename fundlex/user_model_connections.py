@@ -49,13 +49,13 @@ PROVIDERS = {
                      {"id": "moonshot-v1-8k", "note": "2026-08-31 官方下线，建议切 kimi-k3.1-pro"},
                      {"id": "moonshot-v1-32k", "note": "2026-08-31 官方下线，建议切 kimi-k3.1-pro"},
                      {"id": "moonshot-v1-128k", "note": "2026-08-31 官方下线，建议切 kimi-k3 或 kimi-k3.1-pro"}]},
-    "siliconflow": {"label": "硅基流动（兼容接口）", "base_url": "https://api.siliconflow.cn/v1",
+    "siliconflow": {"label": "硅基流动", "base_url": "https://api.siliconflow.cn/v1",
                     "models": ["deepseek-ai/DeepSeek-V4.1-Flash",
                                "Qwen/Qwen3-235B-A22B-Instruct-2507"],
                     "deprecated_models": [
                         {"id": "deepseek-ai/DeepSeek-V3", "note": "平台 2026-10 升级公告由 V4.1 接任，旧名单灰置"},
                         {"id": "Qwen/Qwen3-8B", "note": "现行目录未核到（以云平台控制台为准），灰置仅供参考"}]},
-    "zhipu": {"label": "智谱 AI（兼容接口）", "base_url": "https://open.bigmodel.cn/api/paas/v4",
+    "zhipu": {"label": "智谱 AI", "base_url": "https://open.bigmodel.cn/api/paas/v4",
               "models": ["glm-5.3", "glm-5.3-flash", "glm-4.7"],
               "deprecated_models": [
                   {"id": "glm-4-flash", "note": "官方已改为快照 glm-4-flash-250414，建议按快照名用"},
