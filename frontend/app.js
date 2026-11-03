@@ -446,7 +446,13 @@
     }
     const button=e.target.closest('[data-model-test]');if(!button)return;
     const prefix=button.dataset.modelTest,t=ticket(`model-test-${prefix}`);
-    const status=$(`model-${prefix}-status`);status.dataset.tone='pending';status.textContent='正在连接供应商，通常几秒钟出结果…';button.disabled=true;
+    const status=$(`model-${prefix}-status`);
+    // 系统默认模型由服务端托管连接、无需也不准验（后端 MODEL_TEST_PERSONAL_ONLY 语义对前端封闭化）
+    if((modelRolePayload(prefix)||{}).source!=='personal'){
+      if(status){status.dataset.tone='ok';status.textContent='系统默认模型由服务端托管，无需验证；只有自定义密钥连接才需要点这个按钮。';}
+      return;
+    }
+    status.dataset.tone='pending';status.textContent='正在连接供应商，通常几秒钟出结果…';button.disabled=true;
     try{const result=await json('/api/settings/model/test',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(modelRolePayload(prefix))});if(current(t)&&state.view==='models'){if(result&&result.ok===false){state.modelVerified[prefix]=false;status.dataset.tone='error';status.textContent=`连接验证未通过：${String(result.message||'').trim()||'请检查密钥与模型名后重试。'}`;}else{state.modelVerified[prefix]=true;status.dataset.tone='ok';status.textContent=String((result&&result.message)||'').trim()||'连接验证通过，可以保存使用了。';}}}
     catch(error){if(current(t)){state.modelVerified[prefix]=false;status.dataset.tone='error';const detail=String(error&&error.raw||'').trim();status.textContent=`连接验证未通过：${detail||'请检查网络、密钥与模型名后重试。'}`;}}
     finally{if(button.isConnected)button.disabled=false;}
