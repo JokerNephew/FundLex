@@ -9795,3 +9795,8 @@ H＝E×…
 - 经过：集成波携旧前端把生产覆盖 → 另一线先回退到 510f17c（昨日封版，仍早于今午波）→ 用户拍「回退到主线上次上线态」。
 - 处置：备份 /tmp/opencode/frontend-pre-rollback-fd1102 后，/opt/frontend 五件（app.js/app.css/compare.html/compare.js/sectionnav.js）换回 cdb45a4 字节（今午主线最后上产态：指引弹窗/章节栏目录闸/卡表列宽/修改人全链等全在）；StaticFiles 热读零重启；浏览器实测登录页正常、console 零错；JS 三 node --check 过。
 - 边界：只动前端五静件，后端（f38a275 admin 全家桶引擎）一寸未碰；admin 前端波仍按他们的笔录押二波。
+
+## FL-D1104 SlimSelect 下拉实例 resize 监听累积（2026-11-03 回归定位，未修·治理列）
+- 实证：浏览器门 `test_review_splitter_rebind_disposes_without_leak` 在 510f17c 老封版/cdb45a4/HEAD 三点同挂（非本波产物）；堆栈实锤：SLMS vendor 在构造时为每个实例挂 window resize 监听，动态重建的 select（重灌/替换 innerHTML）旧实例不销毁 → +1 监听·实例；人体会话长时内存保留隐患，量级=长 session 每波重建一条。
+- 处置建议（单独波，不夹本波）：selectkit 增「同元素/同窗格单例」登记+失连销毁（Feed 时检测 host 已换 DOM 或 MutationObserver 回收），或全站退 SS（已有两处 data-fl-selectvend=off 前科样例）。
+- 测试处理：保持红、不造假——本波回归如实申报「86 过 1 挂（本件）」。
