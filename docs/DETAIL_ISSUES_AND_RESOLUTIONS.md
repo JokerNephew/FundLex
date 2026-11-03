@@ -9892,3 +9892,13 @@ H＝E×…
 ## FL-D1113 评测期质量铁律（2026-11-04 ~01:5x，用户亲令·现行基线）
 - 监控—优化闭环：评测/修优必须随报随修，但**质量口径是底线**——宁可少修不可降质：失败件通过率只能升不能降，历史优案例通过率只能平不能退，总失败率只降不升；任一指标劣于基线即 NO-GO，不上线即回退；修复门禁=同败件转绿+全量绿闸+回溯不降+可回退+用户签 GO；主线为唯一闸（工单发布线/我全照办）。
 - 适用期：语料评测周及其后全部优化波；特例一句：不许"以优化名义"降质，质量证据说话。
+
+
+## 2026-11-04 总指挥·评测期质量铁律
+- ①件级即报不等批末 ②修复门禁(败件绿+2802/56全绿+回溯失败只减不增,NO-GO则否) ③可回退+2h产线复绿 ④指挥官呈GO+用户签双关 ⑤总失败率≤基线/质量修优不混交。已令子会话带单件告警模板直报总指挥抄我，我原样转发不加滤镜。
+
+## FL-D1114 documentProtection 误拒真修订件（2026-11-04 ~04:2x，已修复·已验证）
+- 案情：评测两件"广发恒裕/稳信"被标 DOCUMENT_PROTECTED 拒收；实锤文件 settings.xml 带 `<w:documentProtection w:edit="trackedChanges" w:enforcement="0"/>`——Word曾开修订模式的历史痕迹（广发系修订件通病），并非真保护。
+- 修法：入门扫描改为只在 enforcement 生效（1/true/on/yes）时拒；OOXML 语义 enforcement 缺省=off。测试语改正反双证（readOnly+enforcement=1 必拒 / trackedChanges+enforcement=0 必过）。
+- 验证：真实两件在 inspect_docx(full=True, allow_existing_revisions=True) 下平反通过；enforced 合成件仍被 DOCUMENT_PROTECTED 拒；docx 域 13 绿/upload_guard/tracked 43 绿。
+- 上产：api 重启 active；已通知评测线两件重跑复活；失败口径登记=引擎误拒已修。
