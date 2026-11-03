@@ -9849,3 +9849,4 @@ H＝E×…
 ## FL-D1109 /tmp/opencode 大扫除（2026-11-03 ~23:3x，用户令·已执行·已复核）
 - 范围与安保证：①home-copy 2.6G=昨日「本地老 agent 家底快照」（db+worktree 备份，活 state 与生产无关）;②500+ 个 10-16~10-30 的调试/评测/smoke 残骸目录 + 24h+ 散落散件（log/json/sqlite/差件 docx）;③白名单留存：qa-base（canonical）、qa/（巡线/审计账本）、agentd、pc/ccsw/pw（工具）、最近 24h 件、fdb 排障备份目录、ripgrep、env 件。
 - 成果：/tmp/opencode 6.9G→1.3G（-5.6G）；盘 86%→71%(12G 可用）；产线无接触（cdb45a4 静件指纹+五件后端回补均持存，cap 200）。
+  - 2026-11-03 FL-D1107 延伸落地：磁盘水位联动装定于 /tmp/fundlex-watchdog.sh——≥80% 随巡线告警、≥85% 自动安全白名单自清（journal 真空/pycache/pytest>1d/tmp 散件>1d）并记台账；老双实例已停、新单实例在役（158128）；行为白名单与 FL-D1109 大扫除口径同源，永远不动生产件/24h 内件/agent 现役工位。
