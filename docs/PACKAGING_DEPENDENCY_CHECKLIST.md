@@ -19,3 +19,12 @@
 - 只走 REL + 接班 GO 三证：端到端证据 / 回滚+指纹 / 前端零覆盖。
 - `bash tools/deploy/publish_workspace.sh --source <reviewed worktree> --commit <sha>`（先 `--dry-run`），发布前 `tools/deploy/check_publish_drift.sh` 必须 OK。
 - 发布后核验：五服务 active+cwd verified、关键特性字节级 grep 在产、worker 日志清洁、队列消化、回滚凭据（revert 点+前端回基线+env 旋钮）写入集中问题文档。
+
+
+## 合并纠偏令（FL-D1105/1106，2026-11-03 起生效）
+
+1. **禁整目录覆盖**：一律逐文件三方合并（交付树×产线实测字节×交付树三分基底），产线独有内容无条件保留。
+2. **行前**：全量 sha 对缝表＋差异件逐件注明来源；无主差异=停手。
+3. **行后**：对基底末期与当日主线上产功能点清单存在性断言冒烟（函数级存在性）。
+4. **基底≠产线**：每次行前先实测产字节，不得以树基代产。
+5. 交付物行表随 commit，不解释差异不发件。
