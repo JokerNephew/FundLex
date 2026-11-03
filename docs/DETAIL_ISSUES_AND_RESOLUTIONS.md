@@ -9382,3 +9382,4 @@ H＝E×…
 - 实证：发布⑦引擎指纹 73152d66→a2fcd0fd（直通合法核销），worker 依 ENGINE_SCHEMA_MISMATCH 打死排队任务：实测 documents 报错 ENGINE_SCHEMA_MISMATCH 26 + PROCESSING_FAILED 31（用户可见失败）；gg_jobs 另有 failed 1。
 - 教训一（我的 GO 门）：早前「tasks 无 running/leased」门槛只查了在跑，漏了已 claim 排队的——此后发布前置=running+leased+queued+claims 四态全过才准。
 - 处置：直通最小热修（card 任务跨补丁指纹放行）+复活扫（retry 受难任务+恢复 complete 轨迹）；主线验收=count=0+重跑完成。
+- 闭环（2026-11-03 波⑧）：FL-D1057 随直通波⑧闭合——.doc 上传自动转换双入口归一（任务+比对同件 doc_convert helper，失败诚实码 LEGACY_DOC_CONVERT_*，14/14 转换+真实链实测）。
