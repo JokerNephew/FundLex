@@ -159,7 +159,16 @@
   function collect(root, options = {}) {
     // FL-D1077：章+节都出（节深度缩进），目录区三路共用闸剔除。
     const levels = (Array.isArray(options.levels) && options.levels.length ? options.levels : [1, 2]).map(Number);
-    const keepLevelFilter = (items) => items.filter(item => levels.includes(Number(item.level ?? 1)));
+    // FL-D1078：上下文归级——文书用「第X部分/章」为章时，「一、二、」实为节级（降级 2，与章分阶缩进）；
+    // 无部分/章的文书保持旧语义（一、二、=章级）。
+    const PART_HEAD_RE = /^第[一二三四五六七八九十百千万0-9〇零]+(部分|篇|编|章)/;
+    const ENUM_HEAD_RE = /^[一二三四五六七八九十]{1,4}、/;
+    const reLevelByContext = (items) => {
+      if (!items.some(item => PART_HEAD_RE.test(item.text || ''))) return items;
+      return items.map(item => ENUM_HEAD_RE.test(item.text || '') && Number(item.level) === 1
+        ? { ...item, level: 2 } : item);
+    };
+    const keepLevelFilter = (items) => reLevelByContext(items).filter(item => levels.includes(Number(item.level ?? 1)));
 
     // 虚拟文档（虚拟化窗格）优先以全量 blocks 为数据源——DOM 可见部分仅是子集
     if (root && root._virtualDoc) {
