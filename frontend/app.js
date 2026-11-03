@@ -429,7 +429,7 @@
     const st=$(`model-${prefix}-status`);st.dataset.tone='';st.textContent='配置已更改，尚未验证。';
   });
   document.addEventListener('change',e=>{
-    if(e.target.id==='gd-diff-from'||e.target.id==='gd-diff-to'){const d=state.guideDiff;if(!d||d.prog)return;if(e.target.id==='gd-diff-from')d.from=e.target.value;else d.to=e.target.value;return;}if(e.target.id==='gd-diff-filter'){const d=state.guideDiff;if(d){d.filter=e.target.value||'';d.cursor=-1;gdRenderRail(d);}return;}
+    if(e.target.id==='gd-diff-from'||e.target.id==='gd-diff-to'){const d=state.guideDiff;if(!d||d.prog)return;if(e.target.id==='gd-diff-from')d.from=e.target.value;else d.to=e.target.value;return;}if(e.target.id==='gd-diff-filter'){const d=state.guideDiff;if(d){d.filter=e.target.value||'';d.cursor=-1;gdRenderRail(d);}return;}if(e.target.id==='gd-diff-show-sources'){const d=state.guideDiff;if(d){d.showSources=e.target.checked;if(d.td&&d.view!=='classic')gdRenderPanes(d);}return;}
     const card=e.target.closest('.model-edit-form');if(!card)return;
     const prefix=card.closest('[data-model-role]')?.dataset.modelRole;if(!prefix)return;
     if(['provider','base_url'].includes(e.target.id.replace(`model-${prefix}-`,''))){$(`model-${prefix}-connection_id`).value='';$(`model-${prefix}-api_key`).value='';}
@@ -1495,14 +1495,18 @@
     $('gd-diff-count-rail').textContent=String((d.items||[]).length);
     $('gd-diff-counter').textContent=`${d.cursor>=0?d.cursor+1:0} / ${items.length}`;}
   function gdRenderPanes(d){const td=d.td;if(!td)return;const word=d.view!=='classic';
-    $('gd-diff-sec-merged').hidden=!word;$('gd-diff-sec-left').hidden=word;$('gd-diff-sec-right').hidden=word;
-    $('gd-diff-word-layout').classList.toggle('gd-classic',!word);
+    const layout=$('gd-diff-word-layout');
+    $('gd-diff-sec-merged').hidden=!word;
+    layout.classList.toggle('gd-classic',!word);
+    layout.classList.toggle('is-sources-hidden', word && d.showSources===false);
+    $('gd-diff-src-wrap').hidden=!word;
     // compare.css 的 data-view-mode=classic 会整体隐藏 .compare-word-view（真比对页用经典视图另件）——本弹窗双栏也走 word-view 容器，恒置 word。
     $('gd-diff-body').dataset.viewMode='word';
     document.querySelectorAll('[data-gd-view-mode]').forEach(btn=>btn.classList.toggle('is-active',(btn.dataset.gdViewMode==='word')===word));
     gdSetPane('gd-diff-merged-pane',td.merged_html);
-    if(!word){gdSetPane('gd-diff-left-pane',td.left_html);gdSetPane('gd-diff-right-pane',td.right_html);
-      bindGuideDiffScrollSync($('gd-diff-word-layout'));}}
+    // 源文档两块：Word 视图右侧上下堆叠（默认显示,『显示源文档』可勾掉）；双栏对照撑满左右两大栏。
+    if(!word||d.showSources!==false){gdSetPane('gd-diff-left-pane',td.left_html);gdSetPane('gd-diff-right-pane',td.right_html);}
+    if(!word)bindGuideDiffScrollSync($('gd-diff-word-layout'));}
   function gdActivePane(d){return $(d.view==='classic'?'gd-diff-left-pane':'gd-diff-merged-pane');}
   function gdJump(d,item,index){if(!item)return;const items=gdFilteredItems(d);d.cursor=(typeof index==='number'&&index>=0)?index:items.indexOf(item);
     const pane=gdActivePane(d);

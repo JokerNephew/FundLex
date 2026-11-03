@@ -1069,6 +1069,7 @@
 <button class="btn btn-sm is-active" id="gd-diff-view-word" type="button" data-gd-view-mode="word">Word 视图</button>
 <button class="btn btn-sm" id="gd-diff-view-classic" type="button" data-gd-view-mode="classic">双栏对照</button>
 </div>
+<label class="compare-word-toggle" id="gd-diff-src-wrap"><input type="checkbox" id="gd-diff-show-sources" checked> 显示源文档</label>
 </div>
 </div>
 <p class="compare-viewer-empty" id="gd-diff-empty" role="status">选好两个版本后点「开始对比」，结果会显示在这里；对比完全在服务器本地计算，不调用模型。</p>
@@ -1109,7 +1110,8 @@
 </div>
 <div class="compare-word-pane compare-merged-pane" id="gd-diff-merged-pane" aria-label="比较的文档，含插入与删除修订痕迹" tabindex="0"></div>
 </section>
-<section class="compare-word-document" id="gd-diff-sec-left" aria-labelledby="gd-diff-left-title" hidden>
+<div class="compare-word-sources" id="gd-diff-sources">
+<section class="compare-word-document" id="gd-diff-sec-left" aria-labelledby="gd-diff-left-title">
 <div class="compare-word-pane-head">
 <div>
 <span class="compare-word-pane-kicker">原文档</span>
@@ -1119,7 +1121,7 @@
 </div>
 <div class="compare-word-pane compare-pane" id="gd-diff-left-pane" aria-label="基准版本原文" tabindex="0"></div>
 </section>
-<section class="compare-word-document" id="gd-diff-sec-right" aria-labelledby="gd-diff-right-title" hidden>
+<section class="compare-word-document" id="gd-diff-sec-right" aria-labelledby="gd-diff-right-title">
 <div class="compare-word-pane-head">
 <div>
 <span class="compare-word-pane-kicker">修订的文档</span>
@@ -1129,6 +1131,7 @@
 </div>
 <div class="compare-word-pane compare-pane" id="gd-diff-right-pane" aria-label="对比版本原文" tabindex="0"></div>
 </section>
+</div>
 </div>
 </div>
 </div>
