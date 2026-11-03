@@ -30,6 +30,7 @@ class TextDiffUnavailable(Exception):
 def _version_label(version: dict[str, Any]) -> dict[str, Any]:
     return {"version_id": version["id"], "filename": version.get("filename") or "指引",
             "built_in": bool(version.get("built_in")),
+            "origin": "builtin" if version.get("built_in") else "uploaded",
             "created_at": version.get("created_at")}
 
 
@@ -37,8 +38,9 @@ def _load_source(store, owner: str, version_id: str) -> tuple[dict[str, Any], by
     # get_version 负责可见性：跨 owner 直接 KeyError（404，不泄露存在性）。
     version = guide_store.get_version(store, owner, version_id)
     if version.get("built_in"):
-        # 内置指引只有冻结的规则 JSON，没有用户上传的原文 DOCX。
-        raise TextDiffUnavailable("BUILTIN_SOURCE_UNAVAILABLE")
+        # FL-D1051：内置默认指引以服务端 canonical 原文档案参与比对；
+        # 档案缺失属部署缺陷，StoreError 由 API 层映射为清晰 5xx。
+        return version, guide_store.builtin_source_docx(version)
     path = guide_store.guide_source_path(store, version_id)  # KeyError -> 404
     if not path.is_file() or path.suffix.lower() != ".docx":
         raise TextDiffUnavailable("GUIDE_SOURCE_UNAVAILABLE")
@@ -79,6 +81,13 @@ def guide_text_diff(store, owner: str, version_id: str, against_id: str) -> dict
         raise ValueError("GUIDE_DIFF_AGAINST_REQUIRED")
     base, left_bytes = _load_source(store, owner, against_id.strip())
     target, right_bytes = _load_source(store, owner, version_id)
+    # 与合同比对入口同轨：先接受既有修订痕迹（勘误版带 tracked changes），再比对。
+    try:
+        from .compare.revisions import prepare_compare_input
+        left_bytes = prepare_compare_input(left_bytes).data
+        right_bytes = prepare_compare_input(right_bytes).data
+    except Exception:
+        raise ValueError("GUIDE_TEXT_DIFF_UNREADABLE") from None
     try:
         result = compare_docx(left_bytes, right_bytes,
                               left_filename=base.get("filename") or "基准版本",
