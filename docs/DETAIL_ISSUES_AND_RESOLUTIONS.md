@@ -9825,3 +9825,9 @@ H＝E×…
 - 令④基底≠产线恒不等式：每次行前先实测产字节（observables sha），不得以树基代产。
 - 自律：交付物行表随 commit；不解释差异不发件。
 - 状态：即刻生效，入 PACKAGING_DEPENDENCY_CHECKLIST 正文与发布流，主责任=集成总线（我），适用所有交付线。
+
+## FL-D1107 磁盘满级联事故（2026-11-03 ~22:5x，已根除·已验证）
+- 现场：/ 100%（280M）——表现为登录挂死（库写不进）→服务重启卡死→agent shell 全部返回空包→agent 误自诊为"文件系统只读"。真凶=磁盘满。
+- 处置：清 17 棵退役施工树（qa-engine×5/qa-feat-recall/fullsite/gg-audit/audit-engine2/recall-miss/wave2-labels2/frontend×3/overseer-2/compare-ux/corpus-b）+pip/playwright 缓存+journal 真空 → 5.5G 回（86%）；双服务重启全活：cap 200 0s、login 401 0s（健康即时）。
+- 教训（入册）：磁盘巡线阈值从 2G 抬到 3G 干预点；故障时 df -h 作为第一条命令（今晚先被 shell 空包误导了几轮）。
+- 持存验证：cdb45a4 前端 app.js 字节数 234790 持存；后端五件回补（action_text/bsd/qtd收修订/兼容接口/html_view）经事故验证均在产。
