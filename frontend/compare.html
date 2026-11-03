@@ -1042,16 +1042,13 @@
 <div class="compare-viewer-title">
 <div>
 <strong id="gd-diff-title">指引版本对比</strong>
+<span class="compare-summary-stat gd-diff-title-stat"><strong id="gd-diff-summary">选好两个版本后点「开始对比」</strong></span>
 </div>
 <div class="head-actions">
 <button class="btn btn-sm compare-viewer-close" id="gd-diff-close" type="button" aria-label="关闭版本对比">× 关闭</button>
 </div>
 </div>
 <div class="compare-summary-row">
-<div class="compare-summary-stat">
-<span>基准版本（旧）→ 对比版本（新）</span>
-<strong id="gd-diff-summary">选好两个版本后点「开始对比」</strong>
-</div>
 <div class="guide-diff-selects guide-diff-selects--page">
 <label>基准版本（旧）
 <select id="gd-diff-from" class="control-select guide-diff-select" aria-label="基准版本（旧）" data-fl-selectvend="off"></select>
@@ -1060,11 +1057,6 @@
 <select id="gd-diff-to" class="control-select guide-diff-select" aria-label="对比版本（新）" data-fl-selectvend="off"></select>
 </label>
 <button class="btn btn-primary" type="button" id="gd-diff-start">开始对比</button>
-<div class="compare-view-mode" role="group" aria-label="对比视图">
-<button class="btn btn-sm is-active" id="gd-diff-view-word" type="button" data-gd-view-mode="word">Word 视图</button>
-<button class="btn btn-sm" id="gd-diff-view-classic" type="button" data-gd-view-mode="classic">双栏对照</button>
-</div>
-<label class="compare-word-toggle" id="gd-diff-src-wrap"><input type="checkbox" id="gd-diff-show-sources" checked> 显示源文档</label>
 </div>
 </div>
 </div>
@@ -1075,6 +1067,13 @@
 <div>
 <span class="compare-word-pane-kicker">修订</span>
 <strong id="gd-diff-rail-title"><span id="gd-diff-count-rail">0</span> 处修订</strong>
+</div>
+<div class="gd-rail-viewctl">
+<div class="compare-view-mode" role="group" aria-label="对比视图">
+<button class="btn btn-sm is-active" id="gd-diff-view-word" type="button" data-gd-view-mode="word">Word 视图</button>
+<button class="btn btn-sm" id="gd-diff-view-classic" type="button" data-gd-view-mode="classic">双栏对照</button>
+</div>
+<label class="compare-word-toggle" id="gd-diff-src-wrap"><input type="checkbox" id="gd-diff-show-sources" checked> 显示源文档</label>
 </div>
 <div class="compare-diff-nav">
 <button class="btn btn-sm" id="gd-diff-prev" type="button" title="上一处修订">↑ 上一处</button>
