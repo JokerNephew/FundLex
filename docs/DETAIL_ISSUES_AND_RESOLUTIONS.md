@@ -9630,5 +9630,6 @@ H＝E×…
 - 真根（复现 harness 实锤）：SlimSelect 对动态注入的修改人下拉托管，SS 主件生成但标准件（ss-single-selected）缺损 → 视觉=空下拉；选项 DOM 实际完好。
 - 处置：该 select 打 data-fl-selectvend="off" 退 SS 托管（与 gd-diff 双下拉同款前科同款修法）。
 
-## FL-D1083 指引卡表列宽（2026-11-03 派单·FE-E 10min 档）
+## FL-D1083 指引卡表列宽（2026-11-03 已收口·已验证）
 - 用户令：卡号列窄、操作内容列宽；CSS 波（table-layout:fixed 底已定），验收后收口。
+  - FL-D1083 收口：FE-E c41201e CSS 增量（其树还重复主线 FL-D1078 底块，只取 nth-child 三行）——主线实测列宽 [80,95,95,95,312] 与其截图一致，qa-base c41201e 增量入册。
