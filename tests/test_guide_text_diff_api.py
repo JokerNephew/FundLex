@@ -86,13 +86,18 @@ def test_text_diff_guards(client):
     assert client.get("/api/guides/nope/text-diff", params={"against": base["id"]},
                       headers=ALICE).status_code == 404
     assert client.get(url, params={"against": base["id"]}, headers=BOB).status_code == 404
-    # 内置指引没有用户原文 DOCX：任一侧为内置 → 404 人读错误码。
+    # FL-D1051：内置默认指引以服务端 canonical 原文参与比对（两侧方向均可），
+    # 且版本标注 origin=builtin；上传侧仍 origin=uploaded。
     builtin = guide_store.BUILTIN_GUIDE_ID
     for version_id, against in ((builtin, target["id"]), (target["id"], builtin)):
         response = client.get(f"/api/guides/{version_id}/text-diff",
                               params={"against": against}, headers=ALICE)
-        assert response.status_code == 404
-        assert response.json()["detail"] == "BUILTIN_SOURCE_UNAVAILABLE"
+        assert response.status_code == 200
+        diff = response.json()["text_diff"]
+        assert diff["from_version"]["origin"] == ("builtin" if against == builtin else "uploaded")
+        assert diff["to_version"]["origin"] == ("builtin" if version_id == builtin else "uploaded")
+        assert diff["summary"]["diffs"] >= 0
+        assert "FundLex 内置默认指引" in diff["left_html"] + diff["right_html"]
 
 
 def test_text_diff_unreadable_source_is_422_not_500(client):
@@ -104,3 +109,45 @@ def test_text_diff_unreadable_source_is_422_not_500(client):
                           params={"against": version["id"]}, headers=ALICE)
     assert response.status_code == 422
     assert response.json()["detail"] == "GUIDE_TEXT_DIFF_UNREADABLE"
+
+
+def _seed_cards_v2_builtin(client) -> None:
+    """FL-D1052：插一条生产同形的卡片版内置（id=builtin-cards-v2）。"""
+    import json, time
+    from pathlib import Path
+    store = client.app.state.store
+    guide_store.ensure_builtin_guide(store)  # 建库表后再插卡片版内置
+    cards_path = Path(__file__).resolve().parents[1] / "guides" / "builtin_cards_v2.json"
+    doc = json.loads(cards_path.read_text(encoding="utf-8"))
+    now = time.time()
+    with store._connect() as db:
+        db.execute("""INSERT OR REPLACE INTO guide_versions
+            (id,owner,built_in,filename,source_sha256,document_sha256,parser_version,schema_version,
+             prompt_versions,rules_json,rules_sha256,status,issues_json,qualification_status,
+             created_at,updated_at,released_at)
+            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            ("builtin-cards-v2", "", 1, "builtin_cards_v2.json", "",
+             "cards-sha", "cards", "card_v1", "{}",
+             json.dumps(doc, ensure_ascii=False), "cards-sha", "released", "{}", "converted_builtin",
+             now, now, now))
+
+
+def test_guide_detail_card_schema_exposes_cards_overview_with_action_text(client):
+    """FL-D1078：卡版指引详情挂 cards_overview（含操作正文 action_text），供卡表直上人读。"""
+    _seed_cards_v2_builtin(client)
+    response = client.get("/api/guides/builtin-cards-v2", headers=ALICE)
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload.get("guide_schema") == "guide_card_v1"
+    cards = payload.get("cards_overview")
+    assert isinstance(cards, list) and cards, "cards_overview must be populated for card-schema docs"
+    first = cards[0]
+    assert first["card_id"] and first["title"]
+    assert first["action_type"] == "insert_after"
+    assert "投资者通过直销机构" in first["action_text"]
+    assert first["source_paragraphs"]
+
+    # 组版指引（普通旧格式）返回空卡表，不串内容。
+    target = uploaded_version(client, "指引A.docx", ["甲"])
+    plain = client.get(f"/api/guides/{target['id']}", headers=ALICE).json()
+    assert plain.get("cards_overview") == []

@@ -28,6 +28,20 @@ from .store import Conflict, RunStore, StoreError
 
 BUILTIN_GUIDE_ID = "builtin-v1"
 BUILTIN_GUIDE_PATH = Path(__file__).resolve().parent.parent / "guides" / "builtin_guide_v1.json"
+# FL-D1051：内置默认指引的服务端 canonical 原文 DOCX（冻结档案，勿每次临拼；
+# 重生走 tools/guides/build_builtin_source_docx.py 并复核提交）。
+BUILTIN_GUIDE_SOURCE_DOCX_PATH = (
+    Path(__file__).resolve().parent.parent / "guides" / "builtin_guide_v1_source.docx")
+BUILTIN_CARDS_V2_SOURCE_DOCX_PATH = (
+    Path(__file__).resolve().parent.parent / "guides" / "builtin_cards_v2_source.docx")
+# 内置版本 → canonical 原文档案。内置族扩容时按 id 注册；未注册的内置视为
+# 「本部署没有 canonical 档案」（StoreError→500，不静默串档）。
+# 每次调用现组（monkeypatch PATH 变量或档案挪位都能生效）。
+def _builtin_source_docx_files() -> dict[str, Path]:
+    return {
+        BUILTIN_GUIDE_ID: BUILTIN_GUIDE_SOURCE_DOCX_PATH,
+        "builtin-cards-v2": BUILTIN_CARDS_V2_SOURCE_DOCX_PATH,
+    }
 GUIDE_SOURCE_DIR = "guides"
 ENABLEABLE_STATUSES = frozenset({"released", "parsed"})
 # Certification lifecycle: a parsed version only becomes enableable when its
@@ -307,6 +321,27 @@ def load_builtin_document() -> dict[str, Any]:
     if not isinstance(data, dict):
         raise StoreError("built-in guide document is invalid")
     return data
+
+def builtin_source_docx(version: dict[str, Any] | None = None) -> bytes:
+    """FL-D1051：内置默认指引的 canonical 原文 DOCX（guide text-diff 专用档案侧）。
+
+    按版本 id 选档案（生产存在多个内置：``builtin-v1`` 与卡片版 ``builtin-cards-v2``；
+    FL-D1052）。缺档/未注册的内置属部署缺陷而非用户数据问题：抛 ``StoreError``，
+    由 API 层映射为清晰的 5xx（不静默 404、不拿错档案串档）。
+    ``version`` 省略时回退到初始内置档案（兼容旧调用）。
+    """
+    version_id = str((version or {}).get("id") or BUILTIN_GUIDE_ID)
+    candidates = []
+    exact = _builtin_source_docx_files().get(version_id)
+    if exact is not None:
+        candidates.append(exact)
+    if version_id.startswith("builtin-cards-"):
+        candidates.append(BUILTIN_CARDS_V2_SOURCE_DOCX_PATH)
+    for path in candidates:
+        if path.is_file():
+            return path.read_bytes()
+    raise StoreError("BUILTIN_SOURCE_DOCX_MISSING")
+
 
 
 def ensure_builtin_guide(store: RunStore) -> str:

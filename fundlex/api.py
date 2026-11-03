@@ -506,6 +506,32 @@ def _guide_public(version: dict, *, current: bool) -> dict:
             "current": bool(current), "created_at": version["created_at"], "updated_at": version["updated_at"]}
 
 
+def _card_overview(document: dict | None) -> list[dict]:
+    """FL-D1078：卡版指引（guide_card_v1）的弹窗卡表概览。
+
+    与 rules_overview 同型的轻量行；`action_text` 是卡的操作正文
+    （content_requirement），供前端「操作内容」列直接上人读文本，
+    不再把「操作类型+来源段落号」机器话顶出去。
+    """
+    overview = []
+    if not isinstance(document, dict) or not isinstance(document.get("cards"), list):
+        return overview
+    for card in document["cards"]:
+        if not isinstance(card, dict):
+            continue
+        applicability = card.get("applicability") if isinstance(card.get("applicability"), dict) else {}
+        target = card.get("target") if isinstance(card.get("target"), dict) else {}
+        action = card.get("action") if isinstance(card.get("action"), dict) else {}
+        source = card.get("source") if isinstance(card.get("source"), dict) else {}
+        overview.append({"card_id": card.get("card_id"), "title": card.get("title"),
+                         "applicability": applicability.get("text", ""),
+                         "target_sections": target.get("contract_sections") or [],
+                         "action_type": action.get("type"),
+                         "action_text": (action.get("content_requirement") or "").strip(),
+                         "source_paragraphs": source.get("paragraphs") or []})
+    return overview
+
+
 def _rules_overview(store: RunStore, version_id: str) -> list[dict]:
     """Per-rule operation counts from the parsed document; empty when not parsed."""
     try:
@@ -1135,6 +1161,14 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
         issues = version.get("issues")
         item["issues_detail"] = issues if isinstance(issues, dict) else {}
         item["rules_overview"] = _rules_overview(store, version_id)
+        # FL-D1078：卡版指引详情挂卡表数据源（组版指引为空数组）
+        try:
+            document = guide_store.guide_document(store, version_id)
+        except (KeyError, StoreError):
+            document = None
+        item["cards_overview"] = _card_overview(document)
+        if isinstance(document, dict) and document.get("schema_version"):
+            item["guide_schema"] = str(document["schema_version"])
         prompts = version.get("prompt_versions")
         item["prompt_versions"] = prompts if isinstance(prompts, dict) else {}
         return item
