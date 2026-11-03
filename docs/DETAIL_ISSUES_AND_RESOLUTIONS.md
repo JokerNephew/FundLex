@@ -9506,3 +9506,26 @@ H＝E×…
 - 实证：主线索刃整段（FL-D1063 注释→login-overlay）连解析详情 DOM 一并去掉，生产 JS 启动即炸「addEventListener of null」全站加载瘫痪（playwright 实锤两 pageerror）。
 - 处置：以 FE-E 树原版复原 guide-overlay 块，浏览器校验 HAS-LOGIN=true、错误归零；qa-base 同步修复。
 - 责任：主线亲手操作事故（第二波连锅端）——教记：两 DOM 相贴时禁整段删，必按 id/target 精度摘除。
+
+
+## FL-D1075 修复方案定案（2026-11-03 用户裁决）
+
+- 决策链：我原案「机械断言+模型审查」→ 用户指出机械检查与 V2 指引耦合、新指引会哑炮/误杀（成立）→ 我改案「引擎只留通用语言机制机械门+模型审查」→ 用户终裁：**机械门也不要，模型审查一层全包**（赘余/类别错配/语义错全归它）。
+- 定案：改写后、写回前唯一一层提案级模型审查；通用三元（原句/新文/卡原文+合同事实），提示词零领域词；veto 不落盘、诊断可检索；审查失败重试一次后放行+标记（误杀比漏杀贵）。
+- 验收卷：道琼斯 5 好 2 坏人工判编 + 其余三份 17 处 + 恒裕/恒阳 pick12 签名差集 ∅。
+- 施工令已派引擎线（ses_e639c4ef0…）。状态：在修。
+
+
+### FL-D1075 补充（同日稍晚）：放弃语义定案+验收责任转移
+- 用户批准「审查否决→带理由自我修正(≤2次)→仍败则放弃该处+例外清单→整份状态按剩余写回数定（≥1完成含例外/0未完成）」。
+- 用户令：改完之后由我（总线）自行进行真实测试验收，不以施工线自测为准。验收动作已冻结：道琼斯档案 5 好放行 2 坏必杀、其余三份 17 处零误伤、恒裕/恒阳 pick12 签名差集 ∅、失败窗 0、例外清单可见性实测。
+
+## FL-D1074 指引版本对比返工定稿：页内专区废、改弹窗式照抄合同比对查看器（2026-11-03，已实施·已验证）
+- 用户两连令：①指引对比不要页内专区/旧小弹窗，直接照抄合同比对弹窗形态（无「采用 A/B」），前后端逻辑照抄微调；②「我的指引」标题旁版本对比钮删除，只留行内入口；③不要「规则差异」，只留原文比对。
+- 实施：删页内专区卡与标题钮；新弹窗 #gd-diff-viewer 复用 compare-viewer/backdrop/toolbar/word-toolbar/diff-rail/merged-pane 全套合同比对样式（role=dialog 带缝弹窗）；行内每指引加「版本对比」钮（内置禁用）；仅 text-diff 链路，rules-diff 函数族全删。生产+qa-base 同版（qa-base f5eeca3+9e230dd）。
+- 实证：真后端+Chromium 走查全绿（标题钮 0/行钮 3/摘要「共 2 处差异·修改 0·新增 1·删除 1」/栏点跳 1·2·3/双栏对照左右可见/筛选生效/关闭回位/采用 A-B=0/pageerror=0）；截图 /tmp/opencode/qa/gd-modal/m-01..05。
+
+## FL-D1075 SlimSelect 回声写脏原生 select 值（2026-11-03，已规避·已验证）
+- 现象：弹窗两下拉 open 后 from/to 同值、「开始对比」提示「请选两个不同的版本」。实证 change 轨迹：SS observeCall→selectkit afterChange 把开口值改回 SS 陈旧选中态（v2）。
+- 处置：弹窗两下拉打 data-fl-selectvend="off" 退出 SS 托管（原生 select）；refreshGuideDiffCard 加 700ms 程序态窗（d.prog），change 监听窗内忽略回声。
+- 同源坑记二：compare.css 的 `.compare-view-body[data-view-mode="classic"] .compare-word-view{display:none}` 对真比对页成立；本弹窗双栏复用 word-view 容器，body 恒置 data-view-mode="word" 防整体误隐。
