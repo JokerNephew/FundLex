@@ -29,7 +29,10 @@
       const stats=data.stats||{};
       $('workspace-active').textContent=stats.active??'—';$('workspace-attention').textContent=stats.attention??'—';$('workspace-completed').textContent=stats.recent_completed??'—';
       $('workspace-state').textContent='';
-      $('workspace-task-rows').innerHTML=(data.items||[]).map(item=>{
+      // FL-D1056（用户原话「指引生成的功能先在前端隐藏」）：工作台业务任务清单里 generation
+      // 行类型/身份都不出现，业务位口与关注点本身界不要打扰「我的指引」等其他生意.
+      const SHOW_GEN = window.__SHOW_FUNDLEX_GUIDE_GENERATION__ !== false;
+      $('workspace-task-rows').innerHTML=(data.items||[]).filter(item=>SHOW_GEN||item.kind!=='generation').map(item=>{
         const notes=Array.isArray(item.attention)?item.attention:[];
         // FL-D1052（用户 2026-11-03 原话：前端不要再报覆盖不完整，对比完了就显示完成）
         // 覆盖类及用户点名的六类内容备注一律压制，数据在库照留；其余类别照常显示。

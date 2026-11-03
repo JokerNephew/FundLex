@@ -48,10 +48,14 @@
 .compare-view-mode{display:inline-flex;gap:5px;padding:2px;border:1px solid #dfe3e7;border-radius:7px;background:#fff}
 .compare-view-mode .btn{padding:4px 8px;border:0;border-radius:5px;background:transparent;font-size:11px;box-shadow:none}
 .compare-view-mode .btn.is-active{background:var(--accent-soft);color:var(--accent-dark);font-weight:700}
-.compare-view-body{display:grid;grid-template-columns:minmax(220px,300px) minmax(0,1fr);grid-template-rows:minmax(0,1fr);height:min(76vh,850px);min-height:560px;background:#eceff2;border-top:1px solid #e3e7ea}
-.compare-view-body[data-view-mode="classic"]{grid-template-columns:minmax(0,1fr) clamp(200px,16vw,240px)}
-.compare-view-body[data-view-mode="classic"] .compare-diff-rail{order:2}
-.compare-view-body[data-view-mode="classic"] .compare-classic-view{order:1}
+.compare-view-body{display:grid;grid-template-rows:minmax(0,1fr);height:min(76vh,850px);min-height:560px;background:#eceff2;border-top:1px solid #e3e7ea}
+.compare-view-body .section-nav-wrap{grid-column:1;grid-row:1;min-width:0;min-height:0;overflow:hidden}
+.compare-view-body .compare-diff-rail{grid-column:2;grid-row:1}
+.compare-view-body #compare-rail-splitter{grid-column:3;grid-row:1}
+.compare-view-body .compare-word-view{grid-column:4;grid-row:1}
+.compare-view-body[data-view-mode="classic"] .compare-classic-view{grid-column:2;grid-row:1}
+.compare-view-body[data-view-mode="classic"] #compare-rail-splitter{grid-column:3;grid-row:1}
+.compare-view-body[data-view-mode="classic"] .compare-diff-rail{grid-column:4;grid-row:1}
 .compare-view-body .compare-diff-rail{height:100%;min-height:0;border-top:0;border-bottom:0;border-radius:0;border-left:0}
 .compare-view-body[data-view-mode="classic"] .compare-word-revisions{border-right:0;border-left:1px solid #dfe3e7}
 .compare-view-body[data-view-mode="classic"] .compare-word-view{display:none}
@@ -277,7 +281,10 @@
 body.compare-fullscreen-open{overflow:hidden!important}
 .compare-viewer-backdrop{position:fixed;inset:0;z-index:139;background:rgb(16 24 32 / .54)}
 .compare-viewer-backdrop[hidden]{display:none!important}
-.compare-viewer[role="dialog"]:not([hidden]){position:fixed;inset:0;z-index:140;display:flex;flex-direction:column;width:auto;max-width:none;height:auto;margin:0;border:0;border-radius:0;background:#f4f6f8;box-shadow:none;overflow:hidden}
+/* FL-D1014：带空隙弹窗（用户「像修订审查那样有一些空隙的弹窗」）
+   几何同审查 overlay（app.css .detail-overlay…:has(.review-layout) 现行款）：
+   四周统一留缝 20px/侧（上限 1600×1000）、圆角 14、深阴影、边框 1px，backdrop 压暗。 */
+.compare-viewer[role="dialog"]:not([hidden]){position:fixed;inset:auto;left:50%;top:50%;transform:translate(-50%,-50%);z-index:140;display:flex;flex-direction:column;width:min(1600px,calc(100vw - 40px));max-width:1600px;height:min(1000px,calc(100vh - 40px));max-height:1000px;margin:0;background:#f4f6f8;overflow:hidden}
 .compare-viewer[role="dialog"] .compare-viewer-toolbar{flex:0 0 auto;padding:16px 22px 12px;background:#fff}
 .compare-viewer[role="dialog"] .compare-word-toolbar{flex:0 0 auto}
 .compare-viewer[role="dialog"] .compare-view-body{flex:1 1 auto;height:auto;min-height:0}
@@ -285,6 +292,9 @@ body.compare-fullscreen-open{overflow:hidden!important}
 .compare-viewer-close{flex:0 0 auto;border-color:#d4dae0;color:#5b656e}
 .compare-viewer-close:hover{border-color:#b5471e;background:#fff7f2;color:#8f3517}
 @media(max-width:760px){
+  /* FL-D1014 移动端同款留缝 6px/侧（审查 overlay 移动同款）；
+     圆角/阴影由 #compare-viewer 的 fx-radius-modal/fx-shadow-modal 规则承担，不重载。 */
+  .compare-viewer[role="dialog"]:not([hidden]){width:calc(100vw - 12px);height:calc(100vh - 12px)}
   .compare-viewer[role="dialog"] .compare-viewer-toolbar{padding:12px 16px 10px}
   .compare-viewer[role="dialog"] .compare-view-body{display:block;flex:1 1 auto;min-height:0;overflow:auto}
   .compare-viewer[role="dialog"] .compare-word-view{height:68vh;min-height:430px}
@@ -735,11 +745,13 @@ body.compare-fullscreen-open{overflow:hidden!important}
   #compare-viewer .compare-summary-row{flex-basis:100%;margin-top:2px}
   #compare-viewer .compare-word-toolbar{padding:4px 12px}}
 /* Resizable comparison columns. The classic A/B gutter remains independent. */
+/* FL-D1046/FL-D1055：原规则 + 章节栏列（host 在 HTML 队首因 grid 自动分配才列位正确）；
+   FL-D1055 章节栏列宽升级为变量，预设 180px、可拖 200~420px。 */
 #compare-viewer .compare-view-body{
-  grid-template-columns:var(--compare-revisions-width,300px) 6px minmax(0,1fr);
+  grid-template-columns:var(--compare-sectionnav-width,180px) var(--compare-revisions-width,300px) 6px minmax(0,1fr);
 }
 #compare-viewer .compare-view-body[data-view-mode="classic"]{
-  grid-template-columns:minmax(0,1fr) 6px var(--compare-revisions-width,300px);
+  grid-template-columns:var(--compare-sectionnav-width,180px) minmax(0,1fr) 6px var(--compare-revisions-width,300px);
 }
 #compare-viewer .compare-view-body[data-view-mode="classic"] .compare-diff-rail{order:3}
 #compare-viewer .compare-view-body[data-view-mode="classic"] .compare-classic-view{order:1}

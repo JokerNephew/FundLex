@@ -12,16 +12,25 @@
   const text = id => ($(id) || {}).textContent || '';
   const fileName = file => String(file?.name || '').replace(/\\/g, '/').split('/').pop();
   const legacyDoc = file => /\.doc$/i.test(fileName(file));
-  const legacyDocMessage = files => `检测到 Word 97-2003 格式（.doc）文件：${files.map(fileName).join('、')}。请用 Word/WPS 打开后“另存为” .docx，再重新选择。`;
+  // FL-D1060（用户原话「后端支持了doc但是前端还没有适配」）：.doc 放行——服务器自动转换，仅提示不拦截。
+  const legacyDocMessage = files => `已选择 Word 97-2003 格式（.doc）文件：${files.map(fileName).join('、')}。上传后将自动转换，无需手工转格式。`;
   // FL-D856: every upload rejection code needs a readable cause and an honest
   // recovery path — a rejected slot cannot be replaced pre-seal (manifest binds
   // name+size), so the remedy is creating a fresh task.
   // 与服务端 FUNDLEX_MAX_UPLOAD_BYTES 默认值一致；超限仍以服务端校验为准（FL-D859）。
   const MAX_UPLOAD_BYTES = 25*1024*1024;
+  // FL-D1045（用户 2026-11-03 原话压制）：覆盖警示/「覆盖不完整」展示一律压制为随完成显示。
+  // 代码保留开关——恢复时置 true（后端 coverage 数据照常落库不误删，缺省仅展示层压制）。
+  const COMPARE_COVERAGE_CHECKS = false;
   const uploadErrorLabel = code => ({
     LEGACY_DOC_UNSUPPORTED:'请将 .doc 另存为 .docx 后重新选择',
+    // FL-D1060：.doc 自动转换失败链（如实人话，不冒称成功）。
+    LEGACY_DOC_CONVERT_UNAVAILABLE:'服务器暂不支持 .doc 自动转换，请另存为 .docx 后重新上传',
+    LEGACY_DOC_CONVERT_FAILED:'.doc 自动转换失败，请另存为 .docx 后重新上传',
+    LEGACY_DOC_CONVERT_TIMEOUT:'.doc 自动转换超时，请另存为 .docx 后重新上传',
+    LEGACY_DOC_CONVERT_TOO_LARGE:'.doc 文件过大无法自动转换，请另存为 .docx 后重新上传',
     COMPARE_ENCRYPTED_DOCX:'文件有密码保护，请解除密码后新建对比任务上传',
-    COMPARE_UNSUPPORTED_FORMAT:'仅支持 .docx 文件，请转换格式后新建对比任务上传',
+    COMPARE_UNSUPPORTED_FORMAT:'仅支持 .docx / .doc 文件，请转换格式后新建对比任务上传',
     COMPARE_INVALID_DOCX:'文件不是可用的 .docx 文档，请检查后新建对比任务上传',
     COMPARE_UPLOAD_REJECTED:'文件未通过上传校验（可能超过大小限制），请处理后新建对比任务上传',
     MANIFEST_ENTRY_NOT_FOUND:'上传文件与任务清单不匹配，请新建对比任务上传',
@@ -50,7 +59,7 @@
     const selected = [pair.left?.name || fileName(pair._left), pair.right?.name || fileName(pair._right)].filter(Boolean).join(' / ');
     const sideCard=(side,title,badge)=>{
       const name=pair[side]?.name||fileName(pair[`_${side}`]);
-      return `<div class="compare-file-card ${name?'has-file':''}" data-file-side="${side}"><div class="compare-file-card-title"><span class="compare-side-badge">${badge}</span><strong>${title}</strong></div><div class="compare-file-name" title="${esc(name)}">${esc(name||'尚未选择合同')}</div><div class="compare-file-card-action"><button type="button" class="btn btn-sm" data-compare-choose="${side}" aria-label="选择${title}">${name?'更换文件':'选择文件'}</button><span>仅支持 DOCX；.doc 请先另存为 .docx。带修订痕迹的文件可直接上传，按「接受全部修订」后的内容比对</span></div><input type="file" accept=".doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" data-compare-${side}="${index}" aria-label="${title}" hidden></div>`;
+      return `<div class="compare-file-card ${name?'has-file':''}" data-file-side="${side}"><div class="compare-file-card-title"><span class="compare-side-badge">${badge}</span><strong>${title}</strong></div><div class="compare-file-name" title="${esc(name)}">${esc(name||'尚未选择合同')}</div><div class="compare-file-card-action"><button type="button" class="btn btn-sm" data-compare-choose="${side}" aria-label="选择${title}">${name?'更换文件':'选择文件'}</button><span>支持 DOCX / .doc（.doc 上传后自动转换）。带修订痕迹的文件可直接上传，按「接受全部修订」后的内容比对</span></div><input type="file" accept=".doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" data-compare-${side}="${index}" aria-label="${title}" hidden></div>`;
     };
     return `<div class="compare-pair-input" data-pair-index="${index}"><div class="compare-pair-head"><strong>合同组 ${String(index+1).padStart(2,'0')}</strong><button type="button" class="btn-link" data-compare-remove="${index}" ${index?'':'disabled'}>移除本组</button></div><div class="compare-side-inputs">${sideCard('left','合同A','A')}${sideCard('right','合同B','B')}</div><p class="sr-only compare-file-label" data-compare-label="${index}">${esc(selected||'尚未选择文件')}</p></div>`;
   }
@@ -59,18 +68,18 @@
   function selectedFiles() { return (state.inputs || []).map(x => ({ left: x._left || x.left, right: x._right || x.right })).filter(x => x.left || x.right); }
   function resetFolders() { state.folderLeft=[]; state.folderRight=[]; for(const id of ['compare-left-folder','compare-right-folder'])if($(id))$(id).value=''; }
   function showCreate(show=true) { $('compare-create').hidden = !show; if (show) { clearTimeout(state.poll); state.requestToken++; $('compare-detail').hidden=true; setViewerOpen(false); state.view=null; state.mergedMarks=state.leftMarks=state.rightMarks=null; state.uploadDraft=null; state.inputs=[{}]; resetFolders(); $('compare-upload-message').textContent=''; $('compare-retry').hidden=true; $('compare-lines')?.replaceChildren(); for(const pane of [$('compare-word-merged-pane'),$('compare-word-left-pane'),$('compare-word-right-pane'),$('compare-left-pane'),$('compare-right-pane')]){clearVirtual(pane);if(pane)pane.innerHTML='';} renderInputs(); } }
-  function statusLabel(v) { return ({...(window.FUNDLEX_STATUS_LABELS||{}),pending:'待上传',succeeded:'已处理',incomplete:'覆盖不完整',failed:'失败',sealed:'已提交',completed:'已处理'}[v] || '—'); }
+  function statusLabel(v) { return ({...(window.FUNDLEX_STATUS_LABELS||{}),pending:'待上传',succeeded:'已处理',incomplete:COMPARE_COVERAGE_CHECKS?'覆盖不完整':'已处理',failed:'失败',sealed:'已提交',completed:'已处理'}[v] || '—'); }
   function taskMetrics(task) {
     const pairs=task.pairs||[], counts=task.counts||{};
     const count=status=>pairs.length?pairs.filter(p=>p.status===status).length:(counts[status]||0);
     const failed=count('failed'), incomplete=count('incomplete');
     const pending=pairs.length?pairs.filter(p=>!['succeeded','incomplete','failed'].includes(p.status)).length:(counts.pending||0);
     const results=pairs.filter(p=>['succeeded','incomplete'].includes(p.status)&&Number.isInteger(p.summary?.total));
-    const notes=[pending?`${pending} 组待处理`:'',failed?`${failed} 组失败`:'',incomplete?`${incomplete} 组覆盖不完整`:''].filter(Boolean);
+    const notes=[pending?`${pending} 组待处理`:'',failed?`${failed} 组失败`:'',(COMPARE_COVERAGE_CHECKS&&incomplete)?`${incomplete} 组覆盖不完整`:''].filter(Boolean);
     const total=results.reduce((sum,p)=>sum+p.summary.total,0);
     const differences=results.length?`${total} 处差异`:'暂无差异结果';
-    const status=task.status==='completed'?(failed||incomplete?`已处理 · ${notes.join(' · ')}`:'已处理'):statusLabel(task.status);
-    return {status,differences};
+    const status=task.status==='completed'?(failed||(COMPARE_COVERAGE_CHECKS&&incomplete)?`已处理 · ${notes.join(' · ')}`:'已处理'):statusLabel(task.status);
+    return {status,differences,failed,incomplete:COMPARE_COVERAGE_CHECKS?incomplete:0};
   }
   function renderTasks() {
     const box=$('compare-task-list'); if (!box) return;
@@ -78,7 +87,7 @@
     const matches=state.tasks.filter(t=>(!q||String(t.name).toLowerCase().includes(q))&&(!status||t.status===status)),max=Math.max(1,Math.ceil(matches.length/20)),page=Math.min(max,Math.max(1,Number(route.page)||1));
     $('compare-list-pagination').innerHTML=`<span>共 ${matches.length} 个任务 · 第 ${page} / ${max} 页</span><button class="btn btn-sm" type="button" data-compare-list-page="${page-1}" ${page<=1?'disabled':''}>上一页</button><button class="btn btn-sm" type="button" data-compare-list-page="${page+1}" ${page>=max?'disabled':''}>下一页</button>`;
     if(!matches.length){box.innerHTML='<div class="empty"><strong>当前条件下没有比对任务</strong><p>新建一组或多组合同开始比较，或调整筛选条件。</p></div>';return;}
-    box.innerHTML=`<div class="table-wrap"><table class="table"><thead><tr><th>任务</th><th>合同组</th><th>状态</th><th>差异</th><th></th></tr></thead><tbody>${matches.slice((page-1)*20,page*20).map(t=>{const m=taskMetrics(t);return `<tr><td>${esc(t.name)}</td><td>${t.total||0}</td><td>${esc(m.status)}</td><td>${esc(m.differences)}</td><td><button type="button" class="btn btn-sm" data-compare-task="${esc(t.id)}">查看</button></td></tr>`;}).join('')}</tbody></table></div>`;
+    box.innerHTML=`<div class="table-wrap"><table class="table"><thead><tr><th>任务</th><th>合同组</th><th>状态</th><th>差异</th><th></th></tr></thead><tbody>${matches.slice((page-1)*20,page*20).map(t=>{const m=taskMetrics(t);return `<tr><td><strong class="workspace-task-name">${esc(t.name)}</strong></td><td>${t.total||0}</td><td><span class="badge ${t.status==='failed'?'b-red':(m.failed||m.incomplete)?'b-amber':'b-green'}">${esc(m.status)}</span></td><td>${esc(m.differences)}</td><td><button type="button" class="btn-link" data-compare-task="${esc(t.id)}">查看</button></td></tr>`;}).join('')}</tbody></table></div>`;
   }
   async function loadTasks() { const token=++state.listToken,identity=state.identityToken; try { const p=await json('/api/compare/tasks'); if(token!==state.listToken||identity!==state.identityToken)return; state.tasks=p.items||[]; renderTasks(); } catch (e) { if(token===state.listToken&&identity===state.identityToken)$('compare-task-list').innerHTML=`<p class="field-error">读取对比任务失败：${esc(e.message)}</p>`; } }
   function renderTask(task) {
@@ -107,7 +116,7 @@
     return `处理失败：${failureStageLabel(failure.stage)}环节出错${failure.retryable?'，可重试':'，请新建对比任务后重试；若仍失败请联系支持'}`;
   }
   function renderPairs() {
-    $('compare-pair-list').innerHTML=`<div class="compare-pair-statuses">${state.pairs.map((p,i)=>`<button type="button" role="tab" aria-selected="${p.id===state.selectedPairId?'true':'false'}" class="compare-pair-status ${p.id===state.selectedPairId?'is-selected':''} ${['succeeded','incomplete'].includes(p.status)?'is-done':''} ${p.status==='incomplete'?'is-incomplete':''} ${p.status==='failed'||p.viewError?'is-failed':''}" data-compare-pair="${i}"><span class="compare-pair-number">${String(i+1).padStart(2,'0')}</span><span class="compare-pair-main"><strong>${esc(p.label||`第 ${i+1} 组`)}</strong><small>合同A：${esc(p.left?.name||'未命名')} / 合同B：${esc(p.right?.name||'未命名')}</small></span><span class="compare-pair-state">${esc(statusLabel(p.status))}${p.summary?` · ${p.summary.total} 处`:''}</span>${p.error_code||p.viewError?`<span class="compare-pair-error" role="status">${esc(pairErrorLabel(p))}</span>`:''}</button>`).join('')}</div>`;
+    $('compare-pair-list').innerHTML=`<div class="compare-pair-statuses">${state.pairs.map((p,i)=>`<button type="button" role="tab" aria-selected="${p.id===state.selectedPairId?'true':'false'}" class="compare-pair-status ${p.id===state.selectedPairId?'is-selected':''} ${['succeeded','incomplete'].includes(p.status)?'is-done':''} ${(COMPARE_COVERAGE_CHECKS&&p.status==='incomplete')?'is-incomplete':''} ${p.status==='failed'||p.viewError?'is-failed':''}" data-compare-pair="${i}"><span class="compare-pair-number">${String(i+1).padStart(2,'0')}</span><span class="compare-pair-main"><strong>${esc(p.label||`第 ${i+1} 组`)}</strong><small>合同A：${esc(p.left?.name||'未命名')} / 合同B：${esc(p.right?.name||'未命名')}</small></span><span class="compare-pair-state">${esc(statusLabel(p.status))}${p.summary?` · ${p.summary.total} 处`:''}</span>${p.error_code||p.viewError?`<span class="compare-pair-error" role="status">${esc(pairErrorLabel(p))}</span>`:''}</button>`).join('')}</div>`;
   }
   function markFiles(form, files, pair) { const ids=[]; for (const side of ['left','right']) { form.append('files',files[side],pair[side].name); ids.push(pair[side].client_id); } form.append('client_ids', JSON.stringify(ids)); }
   async function continueUploads() {
@@ -130,7 +139,10 @@
   async function createTask() {
     const files=selectedFiles(), message=$('compare-upload-message');
     const legacy=files.flatMap(x=>[x.left,x.right]).filter(f=>f&&legacyDoc(f));
-    if(legacy.length){message.textContent=legacyDocMessage(legacy);return;}
+    // FL-D1060：.doc 放行——服务器自动转换。提示走独立 #compare-doc-hint
+    // 持久位（选文件时即显），不被上传进度文案覆盖；不拦截，继续上传。
+    const hintEl=$('compare-doc-hint');
+    if(hintEl){hintEl.textContent=legacy.length?legacyDocMessage(legacy):'';hintEl.hidden=!legacy.length;}
     // FL-D859: 超大文件在客户端先拦截——服务端拒绝后同清单不可替换，只能新建任务。
     const oversize=files.flatMap(x=>[x.left,x.right]).filter(f=>f&&f.size>MAX_UPLOAD_BYTES);
     if(oversize.length){message.textContent=`单个文件最大 25MB，超出：${oversize.map(fileName).join('、')}。请压缩或拆分后重新选择。`;return;}
@@ -675,7 +687,62 @@
     if (next === 'classic' && state.view && !state.classicRendered) renderClassicView();
     if (next === 'word' && state.view && !state.wordSourcesRendered && !$('compare-word-layout')?.classList.contains('is-sources-hidden')) renderWordSources();
     if (next === 'classic') applySplitRatio(state.splitRatio, false);
-    requestAnimationFrame(() => { refreshVirtualLayouts(); drawLines(); if (state.view) focusDiff(state.diffIndex); });
+    requestAnimationFrame(() => { refreshVirtualLayouts(); drawLines(); if (state.view) focusDiff(state.diffIndex); renderSectionNav(); });
+  }
+  // FL-D1046：双视图章节导航——与修订审查视图共用 FundLexSectionNav。
+  // 样式优先（.doc-heading）+「第X条」正则兜底；点击进入：目标 pane 平滑定位；
+  // classic 双栏模式由 syncPaneScroll 把另一侧带到同一章节。
+  function renderSectionNav() {
+    if (!window.FundLexSectionNav) return;
+    const host = $('compare-section-nav');
+    if (!host) return;
+    if (!state.view) { host.replaceChildren(); return; }
+    const classic = state.viewMode === 'classic';
+    const rootEl = $(classic ? 'compare-left-pane' : 'compare-word-merged-pane');
+    if (!rootEl) return;
+    if (!host._sectionNav) {
+      host._sectionNav = window.FundLexSectionNav.mount({
+        host,
+        root: rootEl,
+        title: '章节',
+        pane: () => $(state.viewMode === 'classic' ? 'compare-left-pane' : 'compare-word-merged-pane'),
+        // FL-D1059（用户原话）：章节栏可折叠隐藏。
+        collapse: {
+          key: 'fundlex-compare-sectionnav-collapsed',
+          gridContainer: $('compare-view-body'),
+          stateClass: 'is-sectionnav-collapsed',
+        },
+        onSelect: (section, jump) => {
+          // 虚拟文档路径总是换方案：直接用虚拟块 ID 跳，别基于 DOM rect（用着三 als 空间拼接会进假象错位线）。
+          const paneEl = $(state.viewMode === 'classic' ? 'compare-left-pane' : 'compare-word-merged-pane');
+          const vd = paneEl && paneEl._virtualDoc;
+          if (section.virtualBlockId && vd && typeof vd.scrollToBlock === 'function') {
+            vd.scrollToBlock(section.virtualBlockId);
+          } else {
+            jump(section, () => paneEl);
+          }
+          // classic 双栏：smooth 滚动产生原生 scroll 事件 → 既有 syncPaneScroll 链路即会带
+          // 动右栏；不手动调 syncPaneScroll(src)——会拉源栏回去（实测滚位被清零）。
+          if (state.viewMode === 'classic') { clearTimeout(state._navSettle); state._navSettle = setTimeout(() => alignPanels(), 750); }
+        },
+      });
+      // FL-D1055：章节栏宽可拖（独立 localStorage 键）；拖完对齐双栏。
+      if (!host._navSplitter) {
+        host._navSplitter = window.FundLexSectionNav.attachSplitter(
+          host, $('compare-view-body'), () => host,
+          { id: 'compare-section-nav-splitter', key: 'fundlex-compare-sectionnav-width',
+            variable: '--compare-sectionnav-width', min: 200, max: 420, fallback: 200,
+            ariaLabel: '调整章节导航宽度',
+            onEnd: () => requestAnimationFrame(() => { refreshVirtualLayouts(); drawLines(); alignPanels(); }) });
+      }
+    }
+    const items = window.FundLexSectionNav.collect(rootEl, {
+      selector: '[data-block-id], .doc-heading',
+      tocMin: 1,                      // 对比视图即使只有一个真甄别位也有价值
+      levels: [1],                    // 用户 2026-11-03 加令：只出一级（第X部分+一二三四）无二级/三级
+    });
+    host._sectionNav.render(items);
+    host._sectionNav.refresh();
   }
   function setClassicSide(side, persist=true) {
     const next = side === 'right' ? 'right' : 'left';
@@ -1126,10 +1193,12 @@
     const cov=payload.coverage||{}; const incomplete=cov.status!=='complete'; const warnings=cov.warnings||[];
     const chip=$('compare-coverage-chip'), chipSummary=$('compare-coverage-summary'), chipList=$('compare-coverage-list');
     if(chip&&chipSummary&&chipList){
-      chip.hidden=!incomplete; chip.open=false;
-      chipSummary.textContent=incomplete?`覆盖不完整 · ${warnings.length} 项未覆盖`:'';
+      // FL-D1045：同指令下警示块不渲染；default 好落仍为合体直呈。
+      const showWarning = incomplete && COMPARE_COVERAGE_CHECKS;
+      chip.hidden=!showWarning; chip.open=false;
+      chipSummary.textContent=showWarning?`覆盖不完整 · ${warnings.length} 项未覆盖`:'';
       chipList.replaceChildren();
-      if(incomplete){
+      if(showWarning){
         const intro=document.createElement('p'); intro.textContent='以下内容未纳入比较，请人工复核，不要据此确认全文无差异。'; chipList.append(intro);
         if(warnings.length){const ul=document.createElement('ul'); warnings.forEach(warning=>{const li=document.createElement('li');li.textContent=coverageWarningLabel(warning);ul.append(li);});chipList.append(ul);}
       }
@@ -1144,6 +1213,7 @@
     drawLines();
     if(state.viewMode==='classic')renderClassicView();
     if(d.length)focusDiff(0);
+    renderSectionNav();
     const layout=$('compare-word-layout');
     if(state.viewMode==='word'&&layout&&!layout.classList.contains('is-sources-hidden')){
       const schedule=window.requestIdleCallback?window.requestIdleCallback(()=>{if(state.view===payload)renderWordSources();},{timeout:600}):setTimeout(()=>{if(state.view===payload)renderWordSources();},60);
@@ -1231,7 +1301,15 @@
     document.addEventListener('click',event=>{const chip=$('compare-coverage-chip');if(chip&&chip.open&&!event.target.closest('#compare-coverage-chip'))chip.open=false;});
     $('compare-prev-diff')?.addEventListener('click',()=>focusDiff(state.diffIndex-1)); $('compare-next-diff')?.addEventListener('click',()=>focusDiff(state.diffIndex+1)); $('compare-selection-left-all')?.addEventListener('click',()=>setAllSelections('left')); $('compare-selection-right-all')?.addEventListener('click',()=>setAllSelections('right')); $('compare-selection-pending')?.addEventListener('click',()=>{const index=visibleDiffs().findIndex(item=>selectionDecision(item.id)==='pending');if(index>=0)focusDiff(index);}); $('compare-selection-save')?.addEventListener('click',()=>saveSelectionDraft()); $('compare-selection-generate')?.addEventListener('click',generateSelection); $('compare-active-only')?.addEventListener('change',drawLines); $('compare-diff-filter')?.addEventListener('change',()=>{state.diffIndex=0;renderDiffList();focusDiff(0);}); $('compare-diff-list')?.addEventListener('scroll',onDiffListScroll,{passive:true}); $('compare-retry')?.addEventListener('click',continueUploads); document.querySelectorAll('[data-word-pane]').forEach(btn=>btn.addEventListener('click',()=>setMobilePane(btn.dataset.wordPane))); $('compare-show-sources')?.addEventListener('change',e=>setSourcesVisible(e.target.checked)); $('compare-markup-mode')?.addEventListener('change',e=>setMarkupMode(e.target.value)); document.querySelectorAll('[data-compare-sources-close]').forEach(btn=>btn.addEventListener('click',()=>setSourcesVisible(false)));
       document.addEventListener('click',e=>{ const back=e.target.closest('[data-compare-back-list]');if(back){api.navigate?.('compare',{mode:'list'});return;}const task=e.target.closest('[data-compare-task]');if(task){openTask(task.dataset.compareTask);return;}const pair=e.target.closest('[data-compare-pair]');if(pair){openPair(Number(pair.dataset.comparePair));return;}const download=e.target.closest('[data-selection-download]');if(download){downloadSelection(download.dataset.selectionDownload,download.dataset.selectionFilename);return;}const diff=e.target.closest('[data-compare-diff]');if(diff&&!e.target.closest('input')){focusDiff(visibleDiffs().findIndex(x=>x.id===diff.dataset.compareDiff));return;}const mark=e.target.closest('#compare-word-merged-pane [data-diff-id],#compare-word-left-pane [data-diff-id],#compare-word-right-pane [data-diff-id],#compare-left-pane [data-diff-id],#compare-right-pane [data-diff-id]');if(mark){focusDiff(visibleDiffs().findIndex(x=>x.id===mark.dataset.diffId));return;}const remove=e.target.closest('[data-compare-remove]');if(remove){const index=Number(remove.dataset.compareRemove),row=remove.closest('.compare-pair-input');state.inputs.splice(index,1);row?.remove();if(!state.inputs.length){state.inputs=[{}];renderInputs();}else syncInputIndexes();return;} });
-           $('compare-close-viewer')?.addEventListener('click',closeViewer);
+           // FL-D1059（用户原话）：修订栏可折叠隐藏——双视图独立 localStorage 键。
+      {
+        const railBtn = $('compare-rail-collapse'), bodyGrid = $('compare-view-body');
+        if (railBtn && bodyGrid && window.FundLexSectionNav) {
+          window.FundLexSectionNav.attachCollapse(
+            railBtn, bodyGrid, 'is-rail-collapsed', 'fundlex-compare-rail-collapsed');
+        }
+      }
+      $('compare-close-viewer')?.addEventListener('click',closeViewer);
       $('compare-viewer-backdrop')?.addEventListener('click',closeViewer);
       $('compare-prev-pair')?.addEventListener('click',()=>{if(state.pairIndex>0)openPair(state.pairIndex-1);});
       $('compare-next-pair')?.addEventListener('click',()=>{if(state.pairIndex>=0&&state.pairIndex<(state.pairs?.length||0)-1)openPair(state.pairIndex+1);});
@@ -1242,7 +1320,10 @@ document.addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&e.tar
         // 原实现只更新 sr-only 摘要，用户无法确认选择成功。
         const card=e.target.closest('.compare-file-card');
         if(card){const name=file?fileName(file):'';card.classList.toggle('has-file',!!name);const nameEl=card.querySelector('.compare-file-name');if(nameEl){nameEl.textContent=name||'尚未选择合同';nameEl.title=name;}const btn=card.querySelector('[data-compare-choose]');if(btn)btn.textContent=name?'更换文件':'选择文件';}
-        return;}if(e.target.id==='compare-left-folder'||e.target.id==='compare-right-folder'){const side=e.target.id.includes('left')?'left':'right';state[`folder${side[0].toUpperCase()+side.slice(1)}`]=[...e.target.files].filter(f=>fileName(f).toLowerCase().endsWith('.docx')).sort((a,b)=>relativePath(a).localeCompare(relativePath(b)));const other=side==='left'?state.folderRight:state.folderLeft;if(!other?.length)return;const left=state.folderLeft||[],right=state.folderRight||[],map=new Map(right.map(f=>[relativePath(f),f])),used=new Set(),entries=left.map(f=>{const r=map.get(relativePath(f));if(r)used.add(r);return {_left:f,_right:r||null};});for(const f of right)if(!used.has(f))entries.push({_left:null,_right:f});state.inputs=entries;renderInputs();$('compare-upload-message').textContent=`已按相对路径配对 ${entries.filter(x=>x._left&&x._right).length} 组；${entries.filter(x=>!x._left||!x._right).length} 个文件未配对，可手工补齐。`;}});
+        // FL-D1060：选择即持久提示——.doc 上传后自动转换（不被进度文案覆盖）。
+        const hintEl=$('compare-doc-hint');
+        if(hintEl){const picked=state.inputs.flatMap(x=>[x._left,x._right]).filter(f=>f&&legacyDoc(f));hintEl.textContent=picked.length?legacyDocMessage(picked):'';hintEl.hidden=!picked.length;}
+        return;}if(e.target.id==='compare-left-folder'||e.target.id==='compare-right-folder'){const side=e.target.id.includes('left')?'left':'right';state[`folder${side[0].toUpperCase()+side.slice(1)}`]=[...e.target.files].filter(f=>/\.docx?$/i.test(fileName(f))).sort((a,b)=>relativePath(a).localeCompare(relativePath(b)));const other=side==='left'?state.folderRight:state.folderLeft;if(!other?.length)return;const left=state.folderLeft||[],right=state.folderRight||[],map=new Map(right.map(f=>[relativePath(f),f])),used=new Set(),entries=left.map(f=>{const r=map.get(relativePath(f));if(r)used.add(r);return {_left:f,_right:r||null};});for(const f of right)if(!used.has(f))entries.push({_left:null,_right:f});state.inputs=entries;renderInputs();$('compare-upload-message').textContent=`已按相对路径配对 ${entries.filter(x=>x._left&&x._right).length} 组；${entries.filter(x=>!x._left||!x._right).length} 个文件未配对，可手工补齐。`;}});
      bindCompareSplitter();
     bindPanelSplitters();
       for(const pane of allPanels()){

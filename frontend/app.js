@@ -20,12 +20,18 @@
     V2_SLOT_UNRESOLVED:'类别收费分组证据不足，规则文案无法按实际类别生成，保持原文', V2_SCOPE_TEXT_MISMATCH:'整句或整段与规则指引旧文不一致，为避免丢字保持原文', V2_DELIVERY_REQUIRES_RELEASED_PACKAGE:'修改规则尚未发布，暂不写入合同', V2_RELEASE_CONTEXT_UNVERIFIED:'引擎或模型配置与上线资料不一致，已停止写入，请重新发布', V2_RELEASE_NOT_SEPARATE:'修改规则尚未发布，暂不启用自动修改', V2_RELEASE_EVIDENCE_MISSING:'修改规则上线资料不完整，暂不启用自动修改', V2_RELEASE_METRIC_BELOW_THRESHOLD:'修改规则尚未达到上线标准，暂不启用自动修改',
     V2_FACT_ROLE_MISMATCH:'改写依据无法对应到合同原文，按安全规则保持原文', V2_FACT_INCOMPLETE:'改写依据不完整，保持原文', V2_FACT_ROLE_INVALID:'改写依据来源无效，保持原文', V2_VERIFY_NOT_SATISFIED:'独立复核认为改写未完全满足要求，保持原文', V2_VERIFY_QUOTE_MISMATCH:'独立复核引用无法核对，保持原文', V2_CONTENT_CHECK_FAILED:'改写内容未通过规则校验，保持原文', V2_REPLACEMENT_INVALID:'改写内容格式不符合要求，保持原文', V2_REPLACEMENT_UNCHANGED:'改写内容与原文相同，无需修改', V2_SOURCE_QUOTE_MISMATCH:'模型定位与系统记录不一致，保持原文', V2_JOIN_UNSAFE:'改写内容与原文衔接未通过校验，保持原文', V2_ACTION_PARTIAL_REVERTED:'同一动作存在未完成目标，整组保持原文', V2_BODY_SUMMARY_CONFLICT:'正文与摘要改写不一致，整组保持原文', V2_LOCATE_SCOPE_TOO_WIDE:'候选条款范围过宽，按安全规则保持原文', CROSS_PARAGRAPH_TARGET_UNSUPPORTED:'目标内容跨段落，暂不支持安全修改', SHORT_HOLDING_NON_TARGET_HOST:'该句属于费用归属条款，由另一项规则处理',
     MODEL_NETWORK_ERROR:'模型服务连接暂时失败', MODEL_RETRY_EXHAUSTED:'模型服务重试后仍未成功', MODEL_CIRCUIT_OPEN:'模型服务连续异常，任务已暂停保护', MODEL_GLOBAL_CALL_BUDGET_EXCEEDED:'任务处理遇到模型调用限制，请稍后重试；若持续出现请联系支持', MODEL_CALL_BUDGET_EXCEEDED:'任务处理遇到模型调用限制，请稍后重试；若持续出现请联系支持', MODEL_COST_BUDGET_EXCEEDED:'任务处理遇到模型调用限制，请稍后重试；若持续出现请联系支持', MODEL_LEDGER_UNAVAILABLE:'任务处理遇到模型调用限制，请稍后重试；若持续出现请联系支持', MODEL_NOT_CONFIGURED:'处理服务尚未配置', WORKER_ATTEMPTS_EXHAUSTED:'处理重试次数已达上限', TEMPORARY_STORAGE_FAILURE:'文件存储暂时异常',
-    INVALID_DOCX:'文件不是有效的可编辑 DOCX', DOCX_INVALID:'文件不是有效的可编辑 DOCX', UPLOAD_TOO_LARGE:'文件超过接收大小限制', UNSUPPORTED_FORMAT:'文件格式不受支持，仅接收 DOCX', DOCUMENT_VALIDATION_FAILED:'DOCX 内容校验未通过', UPLOAD_REJECTED:'文件接收校验未通过', UNSUPPORTED_FILE_FORMAT:'仅接收可编辑 DOCX 文件', LEGACY_DOC_UNSUPPORTED:'检测到 Word 97-2003 格式（.doc），请用 Word/WPS 另存为 .docx 后重新上传', UPLOAD_SIZE_LIMIT:'文件超过接收大小限制', DUPLICATE_DOCX_MEMBER:'DOCX 内部存在重复文件条目，无法安全接收', DOCX_PART_SIZE_LIMIT:'DOCX 内部内容超过大小限制', DOCX_COMPRESSION_RATIO_LIMIT:'DOCX 压缩结构超出安全接收限制', DOCX_EXPANDED_SIZE_LIMIT:'DOCX 解压内容超过安全接收限制', UPLOAD_REQUEST_SIZE_LIMIT:'本次文件接收超出限制，请重新补传', MANIFEST_ENTRY_NOT_FOUND:'文件未包含在原任务清单中', MANIFEST_FILE_MISMATCH:'本地文件与原任务清单不匹配，请重新选择', UPLOAD_IDENTITY_CONFLICT:'文件身份发生冲突，请确认源文件后重试', LAST_ADMIN_REQUIRED:'不能停用最后一个可用管理员，请先创建或启用其他管理员',
+    INVALID_DOCX:'文件不是有效的可编辑 DOCX', DOCX_INVALID:'文件不是有效的可编辑 DOCX', UPLOAD_TOO_LARGE:'文件超过接收大小限制', UNSUPPORTED_FORMAT:'文件格式不受支持，仅接收 DOCX', DOCUMENT_VALIDATION_FAILED:'DOCX 内容校验未通过', UPLOAD_REJECTED:'文件接收校验未通过', UNSUPPORTED_FILE_FORMAT:'仅接收可编辑 DOCX 文件', LEGACY_DOC_UNSUPPORTED:'检测到 Word 97-2003 格式（.doc），请用 Word/WPS 另存为 .docx 后重新上传', LEGACY_DOC_CONVERT_UNAVAILABLE:'服务器暂不支持 .doc 自动转换，请另存为 .docx 后重新上传', LEGACY_DOC_CONVERT_FAILED:'.doc 自动转换失败，请另存为 .docx 后重新上传', LEGACY_DOC_CONVERT_TIMEOUT:'.doc 自动转换超时，请另存为 .docx 后重新上传', LEGACY_DOC_CONVERT_TOO_LARGE:'.doc 文件过大无法自动转换，请另存为 .docx 后重新上传', UPLOAD_SIZE_LIMIT:'文件超过接收大小限制', DUPLICATE_DOCX_MEMBER:'DOCX 内部存在重复文件条目，无法安全接收', DOCX_PART_SIZE_LIMIT:'DOCX 内部内容超过大小限制', DOCX_COMPRESSION_RATIO_LIMIT:'DOCX 压缩结构超出安全接收限制', DOCX_EXPANDED_SIZE_LIMIT:'DOCX 解压内容超过安全接收限制', UPLOAD_REQUEST_SIZE_LIMIT:'本次文件接收超出限制，请重新补传', MANIFEST_ENTRY_NOT_FOUND:'文件未包含在原任务清单中', MANIFEST_FILE_MISMATCH:'本地文件与原任务清单不匹配，请重新选择', UPLOAD_IDENTITY_CONFLICT:'文件身份发生冲突，请确认源文件后重试', LAST_ADMIN_REQUIRED:'不能停用最后一个可用管理员，请先创建或启用其他管理员',
     DOCX_VALIDATION_FAILED:'DOCX 文件内容或结构校验未通过', INVALID_DOCX_PACKAGE:'文件不是有效的可编辑 DOCX', ENCRYPTED_DOCX:'文件已加密，无法安全处理', DOCX_SIZE_LIMIT_EXCEEDED:'文件超过接收大小限制', DOCX_UNSUPPORTED:'DOCX 结构不受支持', DOCX_SECURITY_LIMIT:'DOCX 解压校验超出安全限制',
     GUIDE_NOT_READY:'当前指引不可用或尚未解析完成，请先在「我的指引」启用可用指引', GUIDE_NOT_ENABLEABLE:'该指引尚未解析完成，暂不能启用', GUIDE_NOT_PARSEABLE:'当前状态不能重新解析', GUIDE_PARSE_FAILED:'指引解析未完成，可查看问题后重新解析', GUIDE_DOCUMENT_INVALID:'指引文档未通过解析校验', GUIDE_RULE_INVALID:'规则编号无效，请刷新后重试', GUIDE_RULES_ALL_DISABLED:'至少保留一条启用规则', MODEL_SETTINGS_LOCKED:'模型配置由部署文件管理，请在服务器环境修改', MODEL_API_KEY_ENV_REQUIRED:'请填写 API Key 环境变量名', MODEL_REVIEW_KEY_REQUIRED:'复核模型使用不同地址时必须提供独立密钥变量', ENGINE_OR_RULESET_REQUIRED:'提交缺少引擎或规则信息，请刷新后重试', ENGINE_CONFLICT:'引擎与规则信息冲突，请刷新后重试', ENGINE_UNSUPPORTED:'当前环境不支持所选引擎', BUILTIN_SOURCE_UNAVAILABLE:'内置指引不提供原件下载'
   };
   const reason = code => reasons[code] || (code ? '处理未安全完成，请稍后重试或联系管理员' : '');
   const badge = (value, override) => `<span class="badge b-${['eligible','succeeded','completed','complete','accepted','satisfied','satisfied_no_change','evaluation_modified','evaluation_unmodified','parsed','released','validated'].includes(value)?'green':['failed','completed_with_exceptions','rejected','incomplete','parse_failed'].includes(value)?'red':['running','queued','leased','uploading','parsing'].includes(value)?'blue':['paused','excluded_by_fund_type','retry_wait'].includes(value)?'amber':'gray'}">${esc(override || labels[value] || '未确认')}</span>`;
+  // FL-D1056（用户原话「指引生成的功能先在前端隐藏，不要暴露出来了」）：只藏不删——
+  // 侧池/启动器/直达路由全部视一览，但 API/helper/页面文件保留。
+  // 恢复路径：把本常量换回 true 即一键恢复全部指引生成入口。
+  const SHOW_FUNDLEX_GUIDE_GENERATION = false;
+  window.__SHOW_FUNDLEX_GUIDE_GENERATION__ = SHOW_FUNDLEX_GUIDE_GENERATION;
+
   const state = {view:'overview',epoch:0,controllers:new Set(),tokens:{},tasks:[],selected:null,task:null,cap:null,tasksLoaded:false,guideDismissed:(()=>{try{return localStorage.getItem(`fundlex-guide-dismissed:${localStorage.getItem('fundlex-dev-user')||'user'}`)==='1';}catch{return false;}})(),imports:[],recover:null,uploading:false,uploadToken:null,createKey:null,taskPage:1,importPage:1,docPage:1,taskSize:20,importSize:20,docSize:20,taskDocs:[],detail:null,focusReturn:null,guides:null,guidesFailed:false,guideBusy:null,guideUploading:false,guideTimer:null,guideDetail:null,auth:{mode:'dev',loginRequired:false,registrationOpen:false,token:'',user:null},review:null,reviewDocs:null,reviewDocsTask:null,reviewDocsKey:'',reviewDecisions:new Map(),uploadProgress:null,replaceTarget:null,toastSeq:0,importSession:0,refreshBusy:false,overviewStats:null,taskGuides:null,modelData:null,modelEdit:null,modelVerified:{},modelCopyFrom:null};
   const notifications=[];let taskStatuses=new Map(),notificationBusy=false,feishuOAuthTimer=null,feishuOAuthEpoch=0,feishuExpiresAt=0,feishuBound=false;
   function renderNotifications(){const unread=notifications.filter(n=>!n.read).length;$('notification-count').textContent=unread||'';$('notification-count').hidden=!unread;$('notification-toggle').setAttribute('aria-label',unread?`消息，${unread} 条未读`:'消息');$('notification-list').innerHTML=notifications.length?notifications.map(n=>`<li><p>${esc(n.message)}</p>${n.taskId?`<button class="btn-link" data-task="${esc(n.taskId)}">查看任务</button>`:''}<time>${esc(new Date(n.time).toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'}))}</time></li>`).join(''):'<li>暂无重要消息</li>';}
@@ -99,7 +105,16 @@
       xhr.send(form);
     });
   }
-  function errorNotice(error,prefix=''){if(error.name!=='AbortError')toast(prefix+error.message,true);}
+  function humanErrorText(error,fallback='处理未完成，请稍后重试；反复出现请联系管理员。'){
+    const message=String(error&&error.message||'').trim();
+    if(!message)return fallback;
+    if(error&&(error.code!=null||error.raw))return message;  // 已过 api() 人话层或含后端明文详情的消息，放行
+    if(/^(TypeError|SyntaxError|ReferenceError|RangeError)$/i.test(error.name||''))return fallback;
+    if(/^(TypeError|SyntaxError|Failed to fetch|NetworkError|Load failed|fetch failed)\b/i.test(message))return fallback;
+    if(/Unexpected token|is not a function|is not defined|Cannot read properties|undefined is not|null is not/i.test(message))return fallback;
+    return message;
+  }
+  function errorNotice(error,prefix=''){if(error.name!=='AbortError')toast(prefix+humanErrorText(error),true);}
   function param(values) { const p=new URLSearchParams();for(const [k,v] of Object.entries(values))if(v!==''&&v!=null)p.set(k,v);return p.toString(); }
   function pathTask(id=state.selected) { return `/api/tasks/${encodeURIComponent(id)}`; }
   function pathDoc(doc) { return `/api/batches/${encodeURIComponent(doc.batch_id)}/documents/${encodeURIComponent(doc.document_id)}`; }
@@ -107,6 +122,9 @@
   // Keep live controls and unchanged rows mounted while polling updates data.
   function patchHTML(element,html){
     if(!element)return;
+    // FL-D1015：Slim Select 把自身 data 当权威——必须在 SS 观察器交付之前（同一宏任务内）
+    // 喂新数据，否则 SS 会先把原生 select 夹回旧数据（实测夹空）；queueMicrotask 先于观察器。
+    queueMicrotask(()=>window.FundLexSelectKit?.feed(element));
     const template=document.createElement('template');template.innerHTML=html;
     if(element.innerHTML===template.innerHTML)return;
     const compatible=(a,b)=>a&&a.nodeType===b.nodeType&&(a.nodeType!==1||a.tagName===b.tagName);
@@ -206,8 +224,21 @@
   function routeFromHash(){const raw=location.hash.slice(1),cut=raw.indexOf('?'),view=(cut<0?raw:raw.slice(0,cut))||'workspace';return {view,...Object.fromEntries(new URLSearchParams(cut<0?'':raw.slice(cut+1)))};}
   function routeHash(route){const {view,...values}=route;const query=param(values);return `#${view}${query?'?'+query:''}`;}
   function dispatchRoute(){document.dispatchEvent(new CustomEvent('fundlex:route',{detail:{...state.route}}));}
+  // FL-D1056：指引生成只藏不删——入口锚点隐藏（侧池/启动器下单等隐；API/page 全栈照常）。
+  function hideGuideGenerationEntrypoints(){
+    if(SHOW_FUNDLEX_GUIDE_GENERATION)return;
+    document.querySelectorAll('[data-nav="generation"]').forEach(el=>{el.setAttribute('hidden','');el.setAttribute('aria-hidden','true');});
+    const launcher=document.querySelector('[data-workspace-new="generation"]')?.closest('.workspace-launcher');
+    if(launcher)launcher.setAttribute('hidden','');
+  }
+  if(!SHOW_FUNDLEX_GUIDE_GENERATION){
+    hideGuideGenerationEntrypoints();
+    document.addEventListener('fundlex:route',hideGuideGenerationEntrypoints);
+  }
   function go(view,options={}) {
     if(view.includes('?')){const query=view.slice(view.indexOf('?')+1);view=view.split('?')[0];options={...Object.fromEntries(new URLSearchParams(query)),...options};}
+    // FL-D1056：指引生成只藏不删——直达 #/generation 一律回落工作台，咱不生怒不揭功能页。
+    if(!SHOW_FUNDLEX_GUIDE_GENERATION&&view==='generation'){view='workspace';options={};}
     if(!view.endsWith('models')){state.modelEdit=null;state.modelCopyFrom=null;}
     if(view==='revision')view='overview';
     if(!Object.hasOwn(VIEW_TITLES,view)){if(view&&view!=='workspace')toast('链接无效或已过期，已回到工作台。','info');view='workspace';}
@@ -301,13 +332,14 @@
   }
   function modelRoleSummary(prefix){
     const role=(state.modelData||{})[prefix]||{},personal=role.source==='personal';
-    return `<dl class="model-role-summary"><dt>使用方式</dt><dd>${personal?'自定义':'系统默认'}</dd><dt>供应商</dt><dd>${personal?esc(modelProviderLabel(role.provider)):'由管理员统一配置'}</dd><dt>模型</dt><dd>${personal?esc(role.model||'—'):'由管理员统一配置'}</dd>${personal?`<dt>访问密钥</dt><dd>${role.api_key_set?'已保存':'未设置'}</dd><dt>验证状态</dt><dd>${state.modelVerified[prefix]?badge('succeeded','已验证'):'尚未验证'}</dd>`:''}</dl>`;
+    if(!personal)return `<dl class="model-role-summary"><dt>使用方式</dt><dd>系统默认</dd><dt>说明</dt><dd>由管理员统一配置，可直接使用。</dd></dl>`;
+    return `<dl class="model-role-summary"><dt>供应商</dt><dd>${esc(modelProviderLabel(role.provider))}</dd><dt>模型</dt><dd>${esc(role.model||'—')}</dd><dt>访问密钥</dt><dd>${role.api_key_set?'已保存（加密，不回显）':'未设置'}</dd><dt>验证状态</dt><dd>${state.modelVerified[prefix]?badge('succeeded','已验证'):'尚未验证'}</dd></dl>`;
   }
   function modelRoleCard(prefix){
     const role=(state.modelData||{})[prefix]||{},personal=role.source==='personal',editing=state.modelEdit===prefix;
-    const head=`<div class="model-role-head"><h3>${modelRoleName(prefix)}</h3>${modelRoleBadge(prefix)}</div><p class="subnote">${prefix==='primary'?'起草合同的修改内容。':'逐项复查修改是否正确；可以用不同供应商的模型。'}</p>`;
-    if(!editing)return `<div class="model-role-card" data-model-role="${prefix}">${head}${modelRoleSummary(prefix)}<div class="model-card-actions">${personal?`<button class="btn btn-sm btn-quiet" type="button" data-action="model-settings-reset" data-model-reset="${prefix}">恢复系统默认</button>`:''}<button class="btn btn-sm btn-primary" type="button" data-model-edit="${prefix}">修改配置</button></div></div>`;
-    return `<div class="model-role-card is-editing" data-model-role="${prefix}">${head}
+    const head=`<div class="model-status-row"><span class="model-role-icon" aria-hidden="true"><svg><use href="#${prefix==='primary'?'i-file':'i-search'}"/></svg></span><div class="model-role-title"><h3>${modelRoleName(prefix)}</h3><p>${prefix==='primary'?'负责起草合同的修改内容。':'负责逐项复查修改是否正确，可用不同供应商的模型。'}</p></div><span class="model-role-badge">${modelRoleBadge(prefix)}</span></div>`;
+    if(!editing)return `<div class="card model-role-card" data-model-role="${prefix}">${head}${modelRoleSummary(prefix)}<div class="model-card-actions">${personal?`<button class="btn btn-sm btn-quiet" type="button" data-action="model-settings-reset" data-model-reset="${prefix}">恢复系统默认</button>`:''}<button class="btn btn-sm btn-primary" type="button" data-model-edit="${prefix}">修改配置</button></div></div>`;
+    return `<div class="card model-role-card is-editing" data-model-role="${prefix}">${head}
       <form id="model-settings-form" class="model-edit-form">
       <div class="model-edit-field"><span class="model-field-label">使用方式</span><div class="model-segmented" role="radiogroup" aria-label="使用方式"><input id="model-${prefix}-source" type="hidden" value="${personal?'personal':'system'}"><button type="button" role="radio" aria-checked="${personal?'false':'true'}" data-model-source-opt="system">使用系统默认</button><button type="button" role="radio" aria-checked="${personal?'true':'false'}" data-model-source-opt="personal">使用自己的模型</button></div></div>
       <p id="model-${prefix}-default" class="subnote" ${personal?'hidden':''}>系统模型由管理员统一配置。</p>
@@ -319,9 +351,9 @@
       <label>模型<input id="model-${prefix}-model" list="model-${prefix}-suggestions" value="${personal?esc(role.model||''):''}" placeholder="选择建议或填写供应商提供的模型名称"><datalist id="model-${prefix}-suggestions"></datalist></label>
       <p id="model-${prefix}-deprecated" class="subnote model-deprecated-hint" hidden></p>
       </div>
-      <p class="meta-line">验证连接不会发送合同内容。</p>
+      <p class="meta-line">「验证连接」只发起一次冒烟请求，不会发送合同内容。</p>
       <div class="model-card-actions"><button class="btn btn-sm" type="button" data-model-test="${prefix}">验证连接</button><button class="btn btn-sm btn-primary" type="button" data-action="model-settings-save" data-model-save="${prefix}">保存</button><button class="btn btn-sm btn-quiet" type="button" data-model-edit-cancel>取消</button></div>
-      <p id="model-${prefix}-status" class="subnote" role="status"></p></form></div>`;
+      <p id="model-${prefix}-status" class="model-status-msg" role="status" aria-live="polite"></p></form></div>`;
   }
   function refreshModelRole(prefix){
     const sourceInput=$(`model-${prefix}-source`);
@@ -355,17 +387,18 @@
   function renderModelSettings(data){
     const body=$('model-settings-body');if(!body)return;
     state.modelData=data;modelProviders=data.providers||[];
+    $('model-copy-btn').disabled=false;
     if(state.modelEdit&&!['primary','review'].includes(state.modelEdit))state.modelEdit=null;
-    $('model-settings-source').textContent=data.source==='personal'?'我的模型配置':'系统默认';
+    {const source=$('model-settings-source');if(source)source.textContent=data.source==='personal'?'已启用自定义模型':'正在使用系统默认模型';}
     body.classList.remove('subnote');
-    body.innerHTML=`<p class="subnote model-page-note">分别用于修改合同与复核结果，仅影响你此后新建的任务。</p>${data.legacy_preferences?`<p class="subnote model-alert">检测到旧保存设置，保存后切换到新配置。</p>`:''}${data.config_error?`<p class="error" role="alert">读取模型密钥时出错，请稍后重试。</p>`:''}<div class="model-roles-grid">${modelRoleCard('primary')}${modelRoleCard('review')}</div><div class="card card-pad model-copy-card"><p class="subnote">先把修改模型配好，再按需复制给复核模型。</p><button class="btn" type="button" data-action="model-copy-primary">把修改模型的配置复制给复核模型</button></div>`;
+    body.innerHTML=`<p class="subnote model-page-note">两个模型分别负责修改合同与复核结果，配置只影响你之后新建的任务。</p>${data.legacy_preferences?`<div class="model-alert" role="status"><strong>检测到旧版保存设置</strong><span>重新保存一次即可切换到新配置；新配置支持修改模型与复核模型分开设置。</span></div>`:''}${data.config_error?`<div class="model-alert is-error" role="alert"><strong>读取模型密钥时出错</strong><span>暂时无法读取已保存的密钥，请稍后重试；反复出现请联系管理员。</span></div>`:''}<div class="model-roles">${modelRoleCard('primary')}${modelRoleCard('review')}</div>`;
     if(state.modelEdit){refreshModelRole(state.modelEdit);if(state.modelCopyFrom){const from=(state.modelData||{})[state.modelCopyFrom]||{};const target=state.modelEdit;$(`model-${target}-source`).value=from.source==='personal'?'personal':'system';if(from.source==='personal'){const provider=modelProviders.find(p=>p.id===from.provider)?from.provider:'openai';$(`model-${target}-provider`).value=provider;$(`model-${target}-base_url`).value=from.base_url||'';$(`model-${target}-model`).value=from.model||'';$(`model-${target}-connection_id`).value=from.connection_id||'';$(`model-${target}-api_key`).value='';}refreshModelRole(target);$(`model-${target}-status`).textContent='已复制修改模型的配置，请保存；复核仍单独进行。';state.modelCopyFrom=null;}}
   }
   async function loadModelSettings(quiet=false){
     if(!state.cap||state.view!=='models')return;
     const t=ticket('model-settings');
     try{const data=await json('/api/settings/model');if(!current(t)||state.view!=='models')return;renderModelSettings(data);}
-    catch(e){if(!current(t)||state.view!=='models')return;const body=$('model-settings-body');if(body){body.classList.add('subnote');body.textContent='配置暂不可用，请稍后刷新重试。';}if(!quiet&&e.code!=='404')errorNotice(e);}
+    catch(e){if(!current(t)||state.view!=='models')return;const body=$('model-settings-body');if(body){body.classList.add('subnote');body.innerHTML=`<div class="model-alert is-error" role="alert"><strong>模型配置读取失败</strong><span>暂时无法读取配置，请稍后重试；反复出现请联系管理员。</span></div><button class="btn btn-sm" type="button" data-action="model-retry">重新读取</button>`;}$('model-settings-source').textContent='读取失败';$('model-copy-btn').disabled=true;if(!quiet&&e.code!=='404')errorNotice(e);}
   }
   async function saveModelSettings(prefix){
     const form=$('model-settings-form');if(!form)return;
@@ -384,16 +417,16 @@
   });
   document.addEventListener('click',e=>{
     const sourceOpt=e.target.closest('[data-model-source-opt]');
-    if(sourceOpt){const card=sourceOpt.closest('[data-model-role]');if(card){const prefix=card.dataset.modelRole;$(`model-${prefix}-source`).value=sourceOpt.dataset.modelSourceOpt;state.modelVerified[prefix]=false;const statusNode=$(`model-${prefix}-status`);if(statusNode)statusNode.textContent='配置已更改，尚未验证。';refreshModelRole(prefix);}return;}
+    if(sourceOpt){const card=sourceOpt.closest('[data-model-role]');if(card){const prefix=card.dataset.modelRole;$(`model-${prefix}-source`).value=sourceOpt.dataset.modelSourceOpt;state.modelVerified[prefix]=false;const statusNode=$(`model-${prefix}-status`);if(statusNode){statusNode.dataset.tone='';statusNode.textContent='配置已更改，尚未验证。';}refreshModelRole(prefix);}return;}
     const editBtn=e.target.closest('[data-model-edit]');
-    if(editBtn){state.modelEdit=editBtn.dataset.modelEdit;renderModelSettings(state.modelData||{});$(`model-${state.modelEdit}-source`)?.focus();return;}
+    if(editBtn){state.modelEdit=editBtn.dataset.modelEdit;renderModelSettings(state.modelData||{});$(`model-${state.modelEdit}-source`)?.closest('.model-segmented')?.querySelector('[aria-checked="true"]')?.focus();return;}
     if(e.target.closest('[data-model-edit-cancel]')){state.modelEdit=null;renderModelSettings(state.modelData||{});}
   });
   document.addEventListener('input',e=>{
     const card=e.target.closest('.model-edit-form');if(!card)return;
     const prefix=card.closest('[data-model-role]')?.dataset.modelRole;if(!prefix)return;
     state.modelVerified[prefix]=false;
-    $(`model-${prefix}-status`).textContent='配置已更改，尚未验证。';
+    const st=$(`model-${prefix}-status`);st.dataset.tone='';st.textContent='配置已更改，尚未验证。';
   });
   document.addEventListener('change',e=>{
     if(e.target.id==='guide-diff-from'||e.target.id==='guide-diff-to'){const d=state.guideDiff||=({from:'',to:'',tab:'rules',view:'merged'});if(e.target.id==='guide-diff-from')d.from=e.target.value;else d.to=e.target.value;if(d.from&&d.to&&d.from!==d.to)renderGuideDiff();return;}
@@ -401,20 +434,21 @@
     const prefix=card.closest('[data-model-role]')?.dataset.modelRole;if(!prefix)return;
     if(['provider','base_url'].includes(e.target.id.replace(`model-${prefix}-`,''))){$(`model-${prefix}-connection_id`).value='';$(`model-${prefix}-api_key`).value='';}
     state.modelVerified[prefix]=false;
-    $(`model-${prefix}-status`).textContent='配置已更改，尚未验证。';
+    const st=$(`model-${prefix}-status`);st.dataset.tone='';st.textContent='配置已更改，尚未验证。';
     refreshModelRole(prefix);
   });
   document.addEventListener('click',async e=>{
+    if(e.target.closest('[data-action="model-retry"]')){loadModelSettings(true);return;}
     if(e.target.closest('[data-action="model-copy-primary"]')){
-      if(!state.modelData)return;
+      if(!state.modelData){flash('配置尚未读取完成，请稍后重试。');return;}
       state.modelEdit='review';state.modelCopyFrom='primary';
-      renderModelSettings(state.modelData);$(`model-review-source`)?.focus();return;
+      renderModelSettings(state.modelData);$(`model-review-source`)?.closest('.model-segmented')?.querySelector('[aria-checked="true"]')?.focus();return;
     }
     const button=e.target.closest('[data-model-test]');if(!button)return;
     const prefix=button.dataset.modelTest,t=ticket(`model-test-${prefix}`);
-    const status=$(`model-${prefix}-status`);status.textContent='正在验证连接…';button.disabled=true;
-    try{const result=await json('/api/settings/model/test',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(modelRolePayload(prefix))});if(current(t)&&state.view==='models'){if(result&&result.ok===false){state.modelVerified[prefix]=false;status.textContent=`连接验证未通过：${result.message||'请检查密钥与模型名后重试'}`;}else{state.modelVerified[prefix]=true;status.textContent=(result&&result.message)||'连接验证通过。';}}}
-    catch(error){if(current(t)){state.modelVerified[prefix]=false;const detail=String(error&&error.raw||'').trim();status.textContent=detail?`连接验证未通过：${detail}`:'连接验证未通过：请检查密钥与模型名后重试。';}}
+    const status=$(`model-${prefix}-status`);status.dataset.tone='pending';status.textContent='正在连接供应商，通常几秒钟出结果…';button.disabled=true;
+    try{const result=await json('/api/settings/model/test',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(modelRolePayload(prefix))});if(current(t)&&state.view==='models'){if(result&&result.ok===false){state.modelVerified[prefix]=false;status.dataset.tone='error';status.textContent=`连接验证未通过：${String(result.message||'').trim()||'请检查密钥与模型名后重试。'}`;}else{state.modelVerified[prefix]=true;status.dataset.tone='ok';status.textContent=String((result&&result.message)||'').trim()||'连接验证通过，可以保存使用了。';}}}
+    catch(error){if(current(t)){state.modelVerified[prefix]=false;status.dataset.tone='error';const detail=String(error&&error.raw||'').trim();status.textContent=`连接验证未通过：${detail||'请检查网络、密钥与模型名后重试。'}`;}}
     finally{if(button.isConnected)button.disabled=false;}
   });
   document.addEventListener('fundlex:view',e=>{
@@ -430,6 +464,8 @@
     if(body)body.textContent='正在读取当前账号的模型配置…';
     const source=$('model-settings-source');
     if(source)source.textContent='读取中';
+    const copyBtn=$('model-copy-btn');
+    if(copyBtn)copyBtn.disabled=true;
   });
   async function startFeishuOAuth(){
     if(feishuBound)return;
@@ -459,7 +495,7 @@
         finally{checking=false;}
       };
       feishuOAuthTimer=setInterval(tick,1000);tick();
-    }catch(e){if(valid()&&e.name!=='AbortError'){message.textContent=e.message||'二维码生成失败，请稍后重试。';button.textContent='重新生成二维码';}}
+    }catch(e){if(valid()&&e.name!=='AbortError'){message.textContent=humanErrorText(e,'二维码生成失败，请稍后重试。');button.textContent='重新生成二维码';}}
     finally{if(valid())button.disabled=false;}
   }
   async function revokeFeishuBinding(){
@@ -589,7 +625,7 @@
   async function loadFeishuApp(quiet=false){
     if(!quiet){feishuApp.code='';feishuApp.codeExpiry=0;}
     try{const data=await feishuAppRequest('/api/integrations/feishu/app');if(state.view!=='feishu')return;feishuAppRender(data,quiet);}
-    catch(e){if(state.view!=='feishu')return;if(!quiet&&(state.auth.token||owner()))flash(e.message||'读取飞书企业连接失败，请稍后重试。');}
+    catch(e){if(state.view!=='feishu')return;if(!quiet&&(state.auth.token||owner()))flash(humanErrorText(e,'读取飞书企业连接失败，请稍后重试。'));}
   }
   function openFeishuAppWizard(){
     stopFeishuOAuth();
@@ -613,7 +649,7 @@
     const text=$(target==='recheck'?'feishu-app-recheck-error-text':'feishu-app-error-text');
     const link=$(target==='recheck'?'feishu-app-recheck-error-link':'feishu-app-error-link');
     const detail=error&&error.detail;
-    title.textContent=error.message||'验证未通过';
+    title.textContent=humanErrorText(error,'验证未通过');
     const raw=detail&&typeof detail==='object'?(detail.detail||''):(typeof detail==='string'?detail:'');
     const extra=/^[A-Z][A-Z0-9_.-]{1,96}$/.test(raw)?'':raw;
     text.textContent=extra||'请按提示修改后重试。';
@@ -687,7 +723,7 @@
       feishuAppRender(data);feishuAppRenderPanel(data);
       flash('已移除这个应用。');
       button.textContent='移除这个应用';button.dataset.confirm='0';
-    }catch(e){flash(e.message||'移除失败，请稍后重试。');}
+    }catch(e){flash(humanErrorText(e,'移除失败，请稍后重试。'));}
     finally{button.disabled=false;}
   }
   document.addEventListener('fundlex:view',e=>{if(e.detail!=='feishu'){stopFeishuOAuth();state.tokens['feishu-binding']=(state.tokens['feishu-binding']||0)+1;$('feishu-binding-refresh').disabled=false;closeFeishuAppWizard();}});
@@ -705,7 +741,8 @@
       }
       hideLogin();renderAuthUI();state.cap=cap;renderFooter();
       if(!state.importMode)state.importMode='revision';
-      $('upload-limit').textContent=`仅接收 DOCX（.doc 请先用 Word/WPS 另存为 .docx） · 单文件 ≤ ${size(cap.upload_limits.max_file_bytes)}`;
+      // FL-D1060（用户原话）：后端已支持 .doc 自动转换——文案与前端通路照开。
+      $('upload-limit').textContent=`支持 DOCX / .doc（.doc 上传后将自动转换） · 单文件 ≤ ${size(cap.upload_limits.max_file_bytes)}`;
       renderImport();if(state.view==='feishu'){loadFeishuBinding();loadFeishuApp();}if(state.view==='models')loadModelSettings();
       if(!wasReady&&state.view==='overview')restoreRevisionFilters();
       if(!wasReady)dispatchRoute();
@@ -752,10 +789,11 @@
       if(!quiet||!hadData)errorNotice(e);renderTask();
     }}finally{if(current(t))rows.removeAttribute('aria-busy');}
   }
-  async function selectTask(id,navigate=true) {if(!id)return;state.tasksFailed=false;const t=ticket('selection');state.selected=id;state.task=null;state.docPage=1;state.taskDocs=[];state.review=null;state.reviewDecisions=new Map();state.reviewDocs=null;state.reviewDocsTask=null;state.reviewDocsKey='';$('doc-pagination').replaceChildren();$('doc-reason-filter').innerHTML='<option value="">全部原因</option>';closeDetail();state.tokens.doc=(state.tokens.doc || 0)+1;$('doc-rows').innerHTML=emptyRow(7,'正在加载任务');renderTask();try{const task=await json(pathTask(id));if(!current(t)||state.selected!==id)return;state.task=task;renderBreadcrumb();renderTask();if(navigate)go('task');else if(state.view==='task')loadDocuments();}catch(e){if(current(t))errorNotice(e);}}
-   function docReason(d) {if(d.upload_status==='rejected')return reason(d.error_code)||'接收校验未通过，请检查源文件后补传';if(d.upload_status==='pending')return '尚未上传，请选择本地文件补传';if(d.eligibility==='excluded_by_fund_type')return '基金类型不在本流程范围，已整份排除';if(d.error_code)return reason(d.error_code);if(d.reason_codes?.length)return reason(d.reason_codes[0]);if(displayJobStatus(d)==='paused')return '任务已暂停，恢复任务后将继续处理';if(['running','leased'].includes(d.job_status))return '正在处理，尚无结论';if(d.job_status==='queued')return '排队等待处理';if(d.job_status==='retry_wait')return '暂时异常，等待自动重试';if(d.delivery_status==='diagnosed')return '只读诊断已完成，仅提供诊断报告，未交付修改后的合同';if(d.delivery_status==='evaluation_modified')return '合同修订（评测）已完成，可下载评测修改版核对';if(d.delivery_status==='evaluation_modified_with_exceptions')return '合同修订（评测）已经完成；有条款未自动修改，按例外清单人工核对后使用';if(d.delivery_status==='evaluation_unmodified')return '原合同已符合当前规则，无需修改';if(d.delivery_status==='complete_with_exceptions')return '合同已修订并校验通过；有条款未自动修改，按例外清单人工核对后使用';if(d.delivery_status==='incomplete')return '部分条款未自动修改，不能直接使用；请在「还要人工核」中按章节和原文检查（修订版不会标出未修改位置）';if(d.delivery_status==='complete')return '合同已修改完成，可查看报告并下载';if(d.job_status==='succeeded')return '处理已结束，未生成可交付合同文件';return '尚未生成修改后的合同';}
-  function targetChip(doc) {const counts=doc&&doc.target_counts;if(!counts||!Number.isFinite(counts.total))return '';return `<span class="chip-target" title="目标条款完成情况">目标 ${counts.total} · 已完成 ${counts.completed || 0} · 未完成 ${counts.unresolved || 0}</span>`;}
+  async function selectTask(id,navigate=true) {if(!id)return;state.tasksFailed=false;const t=ticket('selection');state.selected=id;state.task=null;state.docPage=1;state.taskDocs=[];state.review=null;state.reviewDecisions=new Map();state.reviewDocs=null;state.reviewDocsTask=null;state.reviewDocsKey='';$('doc-pagination').replaceChildren();$('doc-reason-filter').innerHTML='<option value="">全部原因</option>';window.FundLexSelectKit?.feed($('doc-reason-filter'));closeDetail();state.tokens.doc=(state.tokens.doc || 0)+1;$('doc-rows').innerHTML=emptyRow(7,'正在加载任务');renderTask();try{const task=await json(pathTask(id));if(!current(t)||state.selected!==id)return;state.task=task;renderBreadcrumb();renderTask();if(navigate)go('task');else if(state.view==='task')loadDocuments();}catch(e){if(current(t))errorNotice(e);}}
+    function docReason(d) {if(isDirectDoc(d))return directDocNote(d);if(d.upload_status==='rejected')return reason(d.error_code)||'接收校验未通过，请检查源文件后补传';if(d.upload_status==='pending')return '尚未上传，请选择本地文件补传';if(d.eligibility==='excluded_by_fund_type')return '基金类型不在本流程范围，已整份排除';if(d.error_code)return reason(d.error_code);if(d.reason_codes?.length)return reason(d.reason_codes[0]);if(displayJobStatus(d)==='paused')return '任务已暂停，恢复任务后将继续处理';if(['running','leased'].includes(d.job_status))return '正在处理，尚无结论';if(d.job_status==='queued')return '排队等待处理';if(d.job_status==='retry_wait')return '暂时异常，等待自动重试';if(d.delivery_status==='diagnosed')return '只读诊断已完成，仅提供诊断报告，未交付修改后的合同';if(d.delivery_status==='evaluation_modified')return '合同修订（评测）已完成，可下载评测修改版核对';if(d.delivery_status==='evaluation_modified_with_exceptions')return '合同修订（评测）已经完成；有条款未自动修改，按例外清单人工核对后使用';if(d.delivery_status==='evaluation_unmodified')return '原合同已符合当前规则，无需修改';if(d.delivery_status==='complete_with_exceptions')return '合同已修订并校验通过；有条款未自动修改，按例外清单人工核对后使用';if(d.delivery_status==='incomplete')return '部分条款未自动修改，不能直接使用；请在「还要人工核」中按章节和原文检查（修订版不会标出未修改位置）';if(d.delivery_status==='complete')return '合同已修改完成，可查看报告并下载';if(d.job_status==='succeeded')return '处理已结束，未生成可交付合同文件';return '尚未生成修改后的合同';}
+  function targetChip(doc) {if(!doc||isDirectDoc(doc))return '';const counts=doc.target_counts;if(!counts||!Number.isFinite(counts.total))return '';return `<span class="chip-target" title="目标条款完成情况">目标 ${counts.total} · 已完成 ${counts.completed || 0} · 未完成 ${counts.unresolved || 0}</span>`;}
   function docRowClass(d){const clean=d.job_status==='succeeded'&&d.delivery_status==='complete'&&d.eligibility==='eligible';if(d.job_status==='failed'||d.upload_status==='rejected'||d.eligibility==='failed'||d.delivery_status==='incomplete'||(d.job_status==='succeeded'&&d.delivery_status==='not_generated'&&d.eligibility!=='excluded_by_fund_type'))return 'row-exception';return clean?'row-muted':'';}
+  function syncDocColumns(direct){const q=$('doc-col-qualification'),d=$('doc-col-delivery'),j=$('doc-col-job');if(q)q.textContent=direct?'处理结果':'资格';if(d)d.textContent=direct?'修改处数':'交付完整性';if(j)j.textContent='处理状态';for(const id of ['doc-qualification-filter','doc-completeness-filter']){const el=$(id);if(!el)continue;el.hidden=!!direct;if(direct)el.value='';}}
   async function loadDocuments(quiet=false) {
     const name='doc',cols=7,id=state.selected,t=ticket('doc'),rows=$('doc-rows'),binding=`${state.epoch}:${id}`,hadData=rows.dataset.loadedFor===binding;
     renderFilterChips('doc');if(!id){patchHTML(rows,emptyRow(cols,'从任务总览选择任务'));return;}
@@ -764,7 +802,12 @@
     try{
       const p=await json(`${pathTask(id)}/documents?${param(values)}`);if(!current(t)||state.selected!==id)return;
       state.taskDocs=p.items;state.docPage=p.page;
-      patchHTML(rows,p.items.map((d,i)=>`<tr data-row-key="${esc(d.document_id||d.client_id||i)}" class="${docRowClass(d)}"><td><span class="filename" title="${esc(d.name)}">${esc(d.name)}</span>${targetChip(d)}</td><td>${badge(d.upload_status,d.upload_status==='pending'?'待上传':null)}</td><td>${badge(d.eligibility || 'pending')}</td><td>${badge(d.delivery_status)}</td><td>${badge(displayJobStatus(d))}</td><td class="reason-cell">${esc(docReason(d))}</td><td><button class="btn-link" data-detail="${name}:${i}">查看结果</button></td></tr>`).join('')||emptyRow(cols,'当前筛选下没有匹配的合同，可调整搜索或筛选条件'));
+      syncDocColumns(state.task?.result_schema==='direct_edit_v1'||p.items.some(isDirectDoc));
+      patchHTML(rows,p.items.map((d,i)=>{
+        if(isDirectDoc(d)){const outcome=directOutcome(null,d),count=Number.isInteger(d.edit_count)?d.edit_count:null;
+          const retryBtn=`<button class="btn-link" data-doc-retry="${esc(d.document_id)}" ${directRetryable(d)?'':'disabled'} title="${directRetryable(d)?'重新提交该合同处理':'当前状态不能重试（处理中/已成功/已达重试上限）'}">重试</button>`;
+          return `<tr data-row-key="${esc(d.document_id||d.client_id||i)}" class="${outcome==='failed'||outcome==='incomplete'?'row-exception':''}"><td><span class="filename" title="${esc(d.name)}">${esc(d.name)}</span></td><td>${badge(d.upload_status,d.upload_status==='pending'?'待上传':null)}</td><td><strong>${esc(DIRECT_OUTCOME_TEXT[outcome]||'未完成')}</strong></td><td>${outcome==='complete'||outcome==='incomplete'?(count===null?'—':`修改 ${count} 处`):'—'}</td><td>${badge(displayJobStatus(d))}</td><td class="reason-cell">${esc(directDocNote(d))}</td><td><button class="btn-link" data-detail="${name}:${i}">查看结果</button>${outcome==='failed'?retryBtn:''}</td></tr>`;}
+        return `<tr data-row-key="${esc(d.document_id||d.client_id||i)}" class="${docRowClass(d)}"><td><span class="filename" title="${esc(d.name)}">${esc(d.name)}</span>${targetChip(d)}</td><td>${badge(d.upload_status,d.upload_status==='pending'?'待上传':null)}</td><td>${badge(d.eligibility || 'pending')}</td><td>${badge(d.delivery_status)}</td><td>${badge(displayJobStatus(d))}</td><td class="reason-cell">${esc(docReason(d))}</td><td><button class="btn-link" data-detail="${name}:${i}">查看结果</button></td></tr>`;}).join('')||emptyRow(cols,'当前筛选下没有匹配的合同，可调整搜索或筛选条件'));
       rows.dataset.loadedFor=binding;patchHTML($('doc-pagination'),pagination(name,p.total,p.page,p.page_size));refreshNote('doc');
       const selected=$('doc-reason-filter').value,options=p.reason_options || [];
       patchHTML($('doc-reason-filter'),'<option value="">全部原因</option>'+options.map(o=>`<option value="${esc(o.code)}">${esc(reason(o.code))}（${o.count}）</option>`).join('')+(selected&&!options.some(o=>o.code===selected)?`<option value="${esc(selected)}">${esc(reason(selected))}</option>`:''));
@@ -778,10 +821,10 @@
   function displayJobStatus(d){return state.task?.status==='paused'&&['queued','running','leased','retry_wait','not_started'].includes(d?.job_status)?'paused':d?.job_status;}
   async function openDeepLinkedTask(){const params=new URLSearchParams(location.search),id=params.get('task');if(!id)return;if(state.auth.mode==='password'&&!state.auth.token)return;const clear=()=>{params.delete('task');const query=params.toString();history.replaceState(null,'',location.pathname+(query?'?'+query:'')+location.hash);};try{await json(pathTask(id));}catch(e){if(e.name==='AbortError'||e.code===401)return;if(e.code===404||e.code===403){clear();go('overview');toast('链接中的任务不存在，或不属于当前登录账号。已返回任务总览，请确认账号或让任务所有者重新分享。',true);return;}toast('链接中的任务暂未打开，请检查网络后重试。',true);return;}await selectTask(id);clear();}
    async function refresh(quiet=false) {const id=state.selected,selectionToken=state.tokens.selection,t=ticket('refresh');await loadCapabilities();if(!current(t))return;if(state.auth.mode==='password'&&!state.auth.token)return;await loadTasks(quiet);if(!current(t))return;if(id&&state.selected===id&&selectionToken===state.tokens.selection)try{const previous=state.task?.status;const task=await json(pathTask(id));if(!current(t)||state.selected!==id||selectionToken!==state.tokens.selection)return;state.task=task;renderTask();if(previous&&previous!==task.status&&['completed','completed_with_exceptions','failed'].includes(task.status)&&['uploading','queued','running','paused'].includes(previous)){notify(`${task.name}：${task.status==='failed'?'处理失败':task.status==='completed_with_exceptions'?'处理结束（含异常）':'处理结束'}，请查看结果`,false,task.id);if(document.visibilityState==='hidden')document.title=`✓ ${task.name} 处理结束 · FundLex`;}}catch(e){if(current(t))errorNotice(e);}if(current(t)&&state.view==='task')await loadDocuments(quiet);if(current(t))syncFirstRunGuide();if(current(t)&&state.view==='overview'&&(!quiet||!state.taskGuides))await loadTaskGuides(quiet);if(current(t)&&state.view==='guide'&&!state.guideBusy)await loadGuides(true);}
-  function importAnalysis() {const seen=new Set();const checked=state.imports.map(f=>{let issue='';const key=f.name.toLowerCase()+'|'+f.size;if(!/\.docx$/i.test(f.name))issue='不支持格式：仅接收 DOCX';else if(!f.size)issue='空文件，无法接收';else if(state.cap&&f.size>state.cap.upload_limits.max_file_bytes)issue=`超过单文件 ${size(state.cap.upload_limits.max_file_bytes)} 限制`;else if(seen.has(key))issue='疑似重复：文件名与大小相同';else if(state.recover&&!f.client_id)issue='与待补传清单不匹配';else seen.add(key);return {...f,issue:issue||f.serverIssue||''};});return {checked,accepted:checked.filter(f=>!f.issue),issues:checked.filter(f=>!!f.issue).length,total:checked.reduce((s,f)=>s+f.size,0)};}
+  function importAnalysis() {const seen=new Set();const checked=state.imports.map(f=>{let issue='';const key=f.name.toLowerCase()+'|'+f.size;if(!/\.docx?$/i.test(f.name))issue='不支持格式：仅接收 DOCX / .doc';else if(!f.size)issue='空文件，无法接收';else if(state.cap&&f.size>state.cap.upload_limits.max_file_bytes)issue=`超过单文件 ${size(state.cap.upload_limits.max_file_bytes)} 限制`;else if(seen.has(key))issue='疑似重复：文件名与大小相同';else if(state.recover&&!f.client_id)issue='与待补传清单不匹配';else seen.add(key);return {...f,issue:issue||f.serverIssue||''};});return {checked,accepted:checked.filter(f=>!f.issue),issues:checked.filter(f=>!!f.issue).length,total:checked.reduce((s,f)=>s+f.size,0)};}
   function nameError(show) {const value=$('task-name').value.trim(),bad=show&&!value,field=$('task-name-error');field.hidden=!bad;$('task-name').setAttribute('aria-invalid',bad?'true':'false');$('task-name').classList.toggle('invalid',bad);return !bad;}
   function syncImportMode() {const select=$('import-mode'),note=$('import-mode-note');if(!select)return;select.value='revision';select.disabled=true;if(!note)return;if(state.recover){note.textContent='补传沿用原任务的处理模式，不能切换。';return;}note.textContent=guideReady()?'使用当前指引修订合同，产出修订痕迹与最终版；可逐条审查接受或拒绝。':'当前指引不可用，暂时不能创建任务；请先在「指引配置」启用可用指引。';}
-  function renderImport() {$('export-pending').hidden=!state.recover;$('cancel-recover').hidden=!state.recover;syncImportMode();renderGuideBinding();renderFilterChips('import');renderUploadProgress();const a=importAnalysis(),q=$('import-search').value.trim().toLowerCase(),filter=$('import-filter').value,matching=a.checked.filter(f=>f.name.toLowerCase().includes(q)&&(!filter||(filter==='accepted'?!f.issue:!!f.issue))),pages=Math.max(1,Math.ceil(matching.length/state.importSize));state.importPage=Math.min(state.importPage,pages);const shown=matching.slice((state.importPage-1)*state.importSize,state.importPage*state.importSize);$('import-stats').innerHTML=[['文件总数',state.imports.length],['总大小',size(a.total)],['可接收',a.accepted.length],['异常',a.issues]].map(([l,n])=>`<span class="inline-kpi"><b>${n}</b>${l}</span>`).join('');$('import-validation').textContent=state.recover?`补传模式：待补传 ${state.recover.manifest.length} 份 · 已匹配 ${state.imports.filter(f=>f.client_id).length} 份。`:'异常文件不会提交，请检查重复文件。';$('import-rows').innerHTML=shown.map(f=>{const cls=f.issue?'row-exception':f.received?'row-muted':'';const statusLabel=f.issue||(f.received?'已接收':state.uploading?'上传中':'可接收');return `<tr class="${cls}"><td><span class="filename" title="${esc(f.name)}">${esc(f.name)}</span></td><td>${size(f.size)}</td><td>${badge(f.issue?'rejected':f.received?'accepted':state.uploading?'running':'accepted',statusLabel)}</td><td><div class="row-actions"><button class="btn-link" data-replace="${esc(f.id)}" ${state.uploading?'disabled':''} aria-label="替换 ${esc(f.name)}">替换</button><button class="btn-link" data-remove="${esc(f.id)}" ${state.uploading?'disabled':''} aria-label="移除 ${esc(f.name)}">移除</button></div></td></tr>`;}).join('');$('import-empty').hidden=matching.length>0;$('import-empty').innerHTML='<strong>当前清单没有匹配文件</strong>选择多个 DOCX、文件夹，或调整筛选。';$('import-pagination').innerHTML=pagination('import',matching.length,state.importPage,state.importSize);$('task-check').innerHTML=[['任务文件',`${state.recover?.total ?? state.imports.length} 份`],['本次可接收',`${a.accepted.length} 份`],['待确认异常',`${a.issues} 份`],['可接收总大小',size(a.accepted.reduce((n,f)=>n+f.size,0))]].map(([l,n])=>`<div class="plan-row"><strong>${l}</strong><span>${n}</span></div>`).join('');$('submit-task').disabled=!a.accepted.length||state.uploading||!state.cap||(!state.recover&&!guideReady());$('submit-task').textContent=state.uploading?'正在上传…':state.recover?'补传到原任务':'创建任务并上传';$('task-name').disabled=!!state.recover;document.querySelectorAll('[data-action="choose-files"],[data-action="choose-folder"],[data-action="clear-import"]').forEach(n=>n.disabled=state.uploading);}
+  function renderImport() {$('export-pending').hidden=!state.recover;$('cancel-recover').hidden=!state.recover;syncImportMode();renderGuideBinding();renderFilterChips('import');renderUploadProgress();const a=importAnalysis(),q=$('import-search').value.trim().toLowerCase(),filter=$('import-filter').value,matching=a.checked.filter(f=>f.name.toLowerCase().includes(q)&&(!filter||(filter==='accepted'?!f.issue:!!f.issue))),pages=Math.max(1,Math.ceil(matching.length/state.importSize));state.importPage=Math.min(state.importPage,pages);const shown=matching.slice((state.importPage-1)*state.importSize,state.importPage*state.importSize);$('import-stats').innerHTML=[['文件总数',state.imports.length],['总大小',size(a.total)],['可接收',a.accepted.length],['异常',a.issues]].map(([l,n])=>`<span class="inline-kpi"><b>${n}</b>${l}</span>`).join('');$('import-validation').textContent=state.recover?`补传模式：待补传 ${state.recover.manifest.length} 份 · 已匹配 ${state.imports.filter(f=>f.client_id).length} 份。`:'异常文件不会提交，请检查重复文件。';$('import-rows').innerHTML=shown.map(f=>{const cls=f.issue?'row-exception':f.received?'row-muted':'';const statusLabel=f.issue||(f.received?'已接收':state.uploading?'上传中':'可接收');return `<tr class="${cls}"><td><span class="filename" title="${esc(f.name)}">${esc(f.name)}</span></td><td>${size(f.size)}</td><td>${badge(f.issue?'rejected':f.received?'accepted':state.uploading?'running':'accepted',statusLabel)}</td><td><div class="row-actions"><button class="btn-link" data-replace="${esc(f.id)}" ${state.uploading?'disabled':''} aria-label="替换 ${esc(f.name)}">替换</button><button class="btn-link" data-remove="${esc(f.id)}" ${state.uploading?'disabled':''} aria-label="移除 ${esc(f.name)}">移除</button></div></td></tr>`;}).join('');$('import-empty').hidden=matching.length>0;$('import-empty').innerHTML='<strong>当前清单没有匹配文件</strong>选择多个 DOCX / .doc、文件夹，或调整筛选。';$('import-pagination').innerHTML=pagination('import',matching.length,state.importPage,state.importSize);$('task-check').innerHTML=[['任务文件',`${state.recover?.total ?? state.imports.length} 份`],['本次可接收',`${a.accepted.length} 份`],['待确认异常',`${a.issues} 份`],['可接收总大小',size(a.accepted.reduce((n,f)=>n+f.size,0))]].map(([l,n])=>`<div class="plan-row"><strong>${l}</strong><span>${n}</span></div>`).join('');$('submit-task').disabled=!a.accepted.length||state.uploading||!state.cap||(!state.recover&&!guideReady());$('submit-task').textContent=state.uploading?'正在上传…':state.recover?'补传到原任务':'创建任务并上传';$('task-name').disabled=!!state.recover;document.querySelectorAll('[data-action="choose-files"],[data-action="choose-folder"],[data-action="clear-import"]').forEach(n=>n.disabled=state.uploading);}
   function renderUploadProgress(){const box=$('upload-progress');if(!box)return;const p=state.uploadProgress;if(!p||!p.visible){box.hidden=true;return;}const pct=Math.max(0,Math.min(100,Number(p.pct)||0));box.hidden=false;$('upload-progress-label').textContent=p.label||'正在上传';$('upload-progress-pct').textContent=`${pct}%`;$('upload-progress-line').innerHTML=`<span class="${p.error?'p-fail':'p-done'}" style="width:${pct}%"></span>`;$('upload-progress-meta').textContent=p.meta||'';}
   function resetImportStages(task=null) {$('upload-message').textContent=task?'重新选择未接收的本地文件；按原名与大小匹配，已接收文件无需再次选择。':'选择或拖入 DOCX 合同，确认文件清单后创建任务。';}
   function newTask() {state.importSession++;state.tokens.recovery=(state.tokens.recovery||0)+1;state.recover=null;state.imports=[];state.createKey=null;state.importPage=1;state.uploadProgress=null;state.replaceTarget=null;$('task-name').value='';resetImportStages();renderImport();go('import');$('task-name').focus();}
@@ -865,11 +908,82 @@
   async function download(url,filename) {const t=ticket('download');try{const {response,epoch}=await api(url);const blob=await response.blob();if(!current(t)||!identityCurrent(epoch))return;const disposition=response.headers.get('Content-Disposition')||'';const encoded=disposition.match(/filename\*=UTF-8''([^;]+)/i),plain=disposition.match(/filename="([^"]+)"/i);if(encoded){try{filename=decodeURIComponent(encoded[1]);}catch{}}else if(plain)filename=plain[1];const object=URL.createObjectURL(blob),a=document.createElement('a');a.href=object;a.download=filename;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(object),1000);}catch(e){if(current(t))errorNotice(e,'下载失败：');}}
   function csvEscape(value){const s=String(value??'');return /[",\n\r]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;}
   function downloadText(text,filename,mime='text/csv;charset=utf-8'){const blob=new Blob([text],{type:mime});const object=URL.createObjectURL(blob),a=document.createElement('a');a.href=object;a.download=filename;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(object),1000);}
-  async function exportResults(){const id=state.selected;if(!id)return;const button=document.querySelector('[data-action="export-results"]');if(button)button.disabled=true;const t=ticket('export');try{const values={q:$('doc-search').value.trim(),upload_status:$('doc-upload-filter').value,eligibility:$('doc-qualification-filter').value,job_status:$('doc-status-filter').value,delivery_status:$('doc-completeness-filter').value,error_code:$('doc-reason-filter').value,sort:$('doc-sort').value,page_size:200,page:1};let all=[],total=Infinity,page=1;while(all.length<total&&page<=100){const p=await json(`${pathTask(id)}/documents?${param({...values,page})}`);if(!current(t)||state.selected!==id)return;all.push(...p.items);total=p.total;if(!p.items.length)break;page++;}const rows=[['序号','文件名','资格','处理状态','交付完整性','业务提示','原始原因码']].concat(all.map((d,i)=>[i+1,d.name,labels[d.eligibility||'pending']||'未判定',labels[d.job_status]||d.job_status,labels[d.delivery_status]||d.delivery_status,docReason(d),(d.reason_codes||[]).join('；')||d.error_code||'']));const csv='\ufeff'+rows.map(r=>r.map(csvEscape).join(',')).join('\r\n');downloadText(csv,`${state.task?.name||'任务'}_结果清单.csv`);toast(`已导出 ${all.length} 条状态清单（仅状态，不含合同文件）`);}catch(e){if(current(t))errorNotice(e,'导出失败：');}finally{if(button)button.disabled=false;}}
+  async function exportResults(){const id=state.selected;if(!id)return;const button=document.querySelector('[data-action="export-results"]');if(button)button.disabled=true;const t=ticket('export');try{const values={q:$('doc-search').value.trim(),upload_status:$('doc-upload-filter').value,eligibility:$('doc-qualification-filter').value,job_status:$('doc-status-filter').value,delivery_status:$('doc-completeness-filter').value,error_code:$('doc-reason-filter').value,sort:$('doc-sort').value,page_size:200,page:1};let all=[],total=Infinity,page=1;while(all.length<total&&page<=100){const p=await json(`${pathTask(id)}/documents?${param({...values,page})}`);if(!current(t)||state.selected!==id)return;all.push(...p.items);total=p.total;if(!p.items.length)break;page++;}const direct=all.some(isDirectDoc);
+      const rows=direct
+        ?[['序号','文件名','处理结果','修改处数','可下载文件']].concat(all.map((d,i)=>{const o=directOutcome(null,d);const dl=d.downloads||{};const files=[dl.final?'最终版':'',dl.redline?'带痕版':'',dl.selected_final?'选择版':''].filter(Boolean).join('、')||'—';return [i+1,d.name,DIRECT_OUTCOME_TEXT[o]||'未完成',o==='complete'||o==='incomplete'?(Number.isInteger(d.edit_count)?d.edit_count:'—'):'—',o==='complete'?files:'—'];}))
+        :[['序号','文件名','资格','处理状态','交付完整性','业务提示','原始原因码']].concat(all.map((d,i)=>[i+1,d.name,labels[d.eligibility||'pending']||'未判定',labels[d.job_status]||d.job_status,labels[d.delivery_status]||d.delivery_status,docReason(d),(d.reason_codes||[]).join('；')||d.error_code||'']));const csv='\ufeff'+rows.map(r=>r.map(csvEscape).join(',')).join('\r\n');downloadText(csv,`${state.task?.name||'任务'}_结果清单.csv`);toast(`已导出 ${all.length} 条状态清单（仅状态，不含合同文件）`);}catch(e){if(current(t))errorNotice(e,'导出失败：');}finally{if(button)button.disabled=false;}}
   function exportPending(){const recovering=state.recover;if(!recovering)return;const rows=[['文件名','大小(字节)','状态']].concat(recovering.manifest.map(d=>[d.name,d.size,d.upload_status==='rejected'?'接收失败':'待上传']));const csv='\ufeff'+rows.map(r=>r.map(csvEscape).join(',')).join('\r\n');downloadText(csv,`${recovering.name||state.task?.name||'任务'}_待补传清单.csv`);toast(`已导出待补传清单 ${recovering.manifest.length} 条`);}
   const proof = item => {if(typeof item==='string')return item?quoteBox('合同原文引用',item):'';if(!item||typeof item!=='object')return '';const text=item.quote || item.text || item.original_text || '';if(!text)return '';return quoteBox('合同原文引用',text);};
   const quoteBox = (label,text,cls='') => `<div class="evidence quote${cls?' '+cls:''}" title="点击展开或收起"><small class="quote-label">${esc(label)}</small><span class="quote-text">${esc(text)}</span></div>`;
+  // ── direct_edit_v1 直通报告（新口径，同 fundlex/direct_report.py）───────────
+  // 唯一计数来源：写回器重开验证的 changes(status=='written')。plan/提案/target
+  // 计数在此口径下绝不展示。旧引擎历史报告继续走后面的 legacy 渲染分支。
+  const DIRECT_WRITE_SCHEMA='direct_edit_write_v1';
+  function directWriteResult(report){if(!report||typeof report!=='object')return null;if(report.schema_version===DIRECT_WRITE_SCHEMA)return report;for(const key of ['write_result','direct_edit','direct_edit_v1','direct_write']){const c=report[key];if(c&&typeof c==='object'&&(c.schema_version===DIRECT_WRITE_SCHEMA||Array.isArray(c.changes)||('actual_written_count' in c&&'status' in c)))return c;}return null;}
+  function isDirectReport(report){return report?.report_contract==='direct_edit_v1'||!!directWriteResult(report)||report?.schema_version==='direct_edit_v1';}
+  function isDirectDoc(doc){return !!doc&&(doc.result_schema==='direct_edit_v1'||doc.report_schema==='direct_edit_v1');}
+  const DIRECT_ACTION={replace:'替换',delete:'删除',insert_before:'新增（条款前）',insert_after:'新增（条款后）',insert:'新增'};
+  function directChanges(report){const w=directWriteResult(report);if(!w)return [];const cards=new Map(((report&&report.guide&&report.guide.cards)||[]).map(c=>[String(c.card_id),String(c.title||c.card_id)]));const rows=[];for(const item of w.changes||[]){if(!item||item.status!=='written')continue;const cardId=String(item.rule_card_id||'');rows.push({action:DIRECT_ACTION[item.action]||'修改',location:String(item.section_path||item.location||'—'),before:String(item.before||'').trim(),after:String(item.after||'').trim(),card:cardId,cardTitle:cards.get(cardId)||cardId||'—'});}return rows;}
+  function directCount(report,doc){const rows=directChanges(report);if(rows.length)return rows.length;const w=directWriteResult(report);if(w&&w.changes==null&&Number.isInteger(w.actual_written_count)&&w.actual_written_count>0)return w.actual_written_count;if(!report&&doc&&Number.isInteger(doc.edit_count))return doc.edit_count;return rows.length;}
+  function directOutcome(report,doc){doc=doc||{};if(doc.upload_status==='rejected')return 'failed';const job=doc.job_status||'';const w=directWriteResult(report);
+    // 第 4 线冻结契约：终态权威字段 delivery_status ∈ {complete, incomplete, not_generated}
+    const delivery=doc.delivery_status||report?.delivery_status||'';
+    if(!w&&!delivery){if(['queued','running','leased','retry_wait','paused','not_started',''].includes(job)&&!doc.outcome)return 'processing';if(job==='failed')return 'failed';if(doc.outcome)return doc.outcome;}
+    if(job==='failed')return 'failed';
+    if(delivery==='not_generated')return 'failed';
+    if(delivery==='complete'||delivery==='incomplete')return delivery;
+    return directCount(report,doc)>=1?'complete':'incomplete';}
+  const DIRECT_OUTCOME_TEXT={complete:'完成',incomplete:'未完成',processing:'处理中',failed:'处理失败'};
+  function directNote(report,doc){const o=directOutcome(report,doc);if(o==='complete')return `实际修改 ${directCount(report,doc)} 处；「完成」表示本次处理已形成可交付修改并提供下载，不代表合同所有条款均已复核完毕。`;if(o==='processing')return '合同仍在处理中，结束后会显示实际修改结果。';if(o==='failed')return '本次处理发生故障，没有形成可交付的修改；可重新上传该合同再试一次。';return '本次按指引核对后没有形成可交付的修改，合同未做改动。';}
+  // 附带项①：失败行把错误 entries 的第一行错误码+脱敏堆尾捎进 reason（路径不外露）
+  function directFailureDigest(doc){const entries=Array.isArray(doc.errors)?doc.errors:[];
+    const first=entries.find(e=>e&&(e.code||e.message||e.detail));
+    let code=first&&(first.code||'')||doc.error_code||'';
+    if(!code)return '';
+    let tail='';
+    if(first){const src=String(first.detail||first.message||'').trim().split('\n').filter(Boolean);
+      const last=(src[src.length-1]||'').replace(/[\w/.-]*\/([\w.-]+)/g,'$1').slice(0,90).trim();
+      if(last&&last!==code)tail=last;}
+    return tail?`（${code}：${tail}）`:`（${code}）`;}
+  function directDocNote(doc){const o=directOutcome(null,doc);if(['queued','running','leased'].includes(doc.job_status)&&!doc.delivery_status)return '正在处理，尚无结论';if(doc.job_status==='queued')return '排队等待处理';if(displayJobStatus(doc)==='paused'&&!doc.delivery_status)return '任务已暂停，恢复任务后将继续处理';if(o==='failed')return `处理发生故障，未生成可交付文件${directFailureDigest(doc)}；可重新上传该合同再试`;if(o==='complete')return `已实际修改 ${doc.edit_count??'?'} 处，可查看逐处对照并下载`;return '本次没有形成可交付的修改，合同未做改动';}
+  function directRetryable(d){return d.job_status==='failed'&&(Number(d.attempt??d.attempts??0)<3);}
+  // 附带项②：手动重试——202→该行回排队态；409→按当前状态给诚实文案
+  async function retryFailedDocument(documentId,button){const taskId=state.selected;if(!taskId||!documentId)return;
+    const t=ticket('doc-retry');
+    try{const response=await fetch(`${pathTask(taskId)}/documents/${encodeURIComponent(documentId)}/retry`,{method:'POST',cache:'no-store'});if(!current(t)||state.selected!==taskId)return;
+      if(response.status===202){toast('已重新排队，将在 Worker 空闲时重试该合同。');const doc=state.taskDocs.find(d=>d.document_id===documentId);if(doc){doc.job_status='queued';delete doc.delivery_status;}
+        if(button){button.disabled=true;button.textContent='已排队';}
+        await loadDocuments(true);return;}
+      if(response.status===409){let detail='';try{detail=(await response.json()).detail||'';}catch{}
+        toast(detail==='LEGACY_READ_ONLY'?'该合同来自历史任务，不支持重试。':'当前状态不能重试：处理中的合同无需重试，已成功的无需重试，已达重试上限的请重新上传。',true);return;}
+      if(response.status===401){handleSessionExpired();return;}
+      throw new Error(`重试失败（${response.status}）`);}
+    catch(e){if(current(t)&&e.name!=='AbortError')errorNotice(e,'重试未完成：');}}
+  const DIRECT_FINAL_NOTE='最终版为全部修订已定案的版本：其中既有本次按指引的修改，也包括合同中原有的修订痕迹，均已定案不再显示标记。带痕版保留全部修订标记，可在 Word 中逐条接受或拒绝。';
+  // 拍板 C：normalized_base 档显著标注；tracked_overlay 档不标注
+  const NORMALIZED_BASE_NOTE='本合同原修订痕迹已并入定稿，无法单独撤回原修订。';
+  function directTier(report,doc){for(const src of [report,report&&report.direct_edit,directWriteResult(report),doc]){if(src&&src.revision_tier)return String(src.revision_tier);}const w=directWriteResult(report);if(w&&w.write_result&&w.write_result.revision_tier)return String(w.write_result.revision_tier);return 'strict_dual_layer';}
+  function directTierNote(report,doc){return directTier(report,doc)==='normalized_base'?NORMALIZED_BASE_NOTE:'';}
+  function directDownloadButton(kind){const labels={final:'最终版（全部修订已定案）',redline:'带痕版（保留全部修订标记）',selected_final:'选择版（按您的接受/拒绝）',selected_redline:'选择版（带痕）'};return `<button class="btn ${kind==='final'?'btn-primary':''} btn-sm" data-download="${kind}">${labels[kind]||kind}</button>`;}
+  function renderDirectReport(doc,report){
+    const outcome=directOutcome(report,doc),count=directCount(report,doc),changes=directChanges(report);
+    const headline=outcome==='complete'?`完成 · 实际修改 ${count} 处`:outcome==='processing'?'处理中':outcome==='failed'?'处理失败':'未完成';
+    const tierNote=directTierNote(report,doc);
+    let html=`<section class="result-summary" aria-label="结论"><div class="result-verdict"><h2>结论</h2><strong>${headline}</strong></div><p class="result-reason">${esc(directNote(report,doc))}</p>${tierNote?`<p class="result-warning" role="note">${esc(tierNote)}</p>`:''}<dl class="result-status-grid"><div><dt>处理结果</dt><dd>${esc(DIRECT_OUTCOME_TEXT[outcome]||'未完成')}</dd></div></dl>${(report?.has_toc_field===true||directWriteResult(report)?.has_toc_field===true)?'<p class="result-warning">下载后请在 Word 中更新目录。</p>':''}</section>`;
+    const downloads=doc.downloads||{};
+    const kinds=outcome==='complete'?['final','redline','selected_final','selected_redline']:['redline','selected_redline'];
+    const buttons=kinds.filter(kind=>downloads[kind]).map(directDownloadButton).join('');
+    html+=`<div class="result-action-grid">${buttons?`<section class="detail-section result-files"><h3>下载区</h3><div class="detail-actions">${buttons}</div><p class="subnote">${esc(DIRECT_FINAL_NOTE)}</p></section>`:''}${report&&outcome==='complete'?revisionSection(doc,report):''}</div>`;
+    if(report&&outcome==='complete'&&tierNote)html+=`<p class="subnote">修订审查仅列出本次按指引的修改（我方修订）；${esc(tierNote)}</p>`;
+    if(changes.length){
+      html+=`<section class="detail-section"><h3>改了哪些条款 · ${changes.length} 处</h3>${changes.map((c,i)=>`<details class="action-evidence"><summary><span class="clause-section">${i+1}. ${esc(c.location)}</span> <span class="badge b-blue">${esc(c.action)}</span> <span class="chip">${esc(c.cardTitle)}</span></summary><div class="clause-compare">${c.before?quoteBox('改之前',c.before,'quote-before'):''}${quoteBox('改成了什么',c.after||'（删除该句）','quote-after')}</div></details>`).join('')}</section>`;
+    }else if(outcome==='processing'){
+      html+='<p class="result-pending">报告尚未生成，处理完成后可查看。</p>';
+    }
+    $('detail-body').innerHTML=html;
+  }
   // 业务可读的条款改动：章节名 + 状态 + 改之前/改成了什么（不展示位置、字符偏移、哈希等技术字段）。
+  // 以下 legacy 渲染仅服务历史旧引擎报告（只读兼容），新直通报告走上面的 renderDirectReport。
   function changedClauses(report,doc) {
     const groups=Array.isArray(report?.guide?.groups)?report.guide.groups:[];
     const groupOf=ruleId=>groups.find(g=>g&&g.rule_id===ruleId) || null;
@@ -907,7 +1021,7 @@
       const found=quoteFor(item);
       const note=item.review_note||'该规则未写入修订版，修订痕迹中不会出现本处；请在 Word 中搜索下方原文核对。';
       return `<div class="candidate manual-review-item">
-        <p><strong>${index+1}. ${esc(title)}</strong>${section?` <span class="chip">${esc(section)}</span>`:''}</p>
+        <div class="issue-head"><strong>${index+1}. ${esc(title)}</strong>${section?` <span class="chip">${esc(section)}</span>`:''}<span class="badge b-amber">需人工核</span></div>
         <p>${esc(reason)}</p>
         ${requirement?`<p class="subnote">指引要求：${esc(requirement)}</p>`:''}
         ${found?quoteBox(found.exact?'合同中对应原文':'同规则参考原文（非本处）',found.text):''}
@@ -915,11 +1029,13 @@
 
       </div>`;
     }).join('');
-    const exceptionCards=exceptions.map((e,index)=>`<div class="candidate manual-review-item"><p><strong>${issues.length+index+1}. ${esc(e.description || e.title || e.action_id || '条款')}</strong></p><p>${esc(reason(e.reason)||'该条款未能自动修改，需要人工核对。')}</p></div>`).join('');
+    const exceptionCards=exceptions.map((e,index)=>`<div class="candidate manual-review-item"><div class="issue-head"><strong>${issues.length+index+1}. ${esc(e.description || e.title || e.action_id || '条款')}</strong><span class="badge b-amber">需人工核</span></div><p>${esc(reason(e.reason)||'该条款未能自动修改，需要人工核对。')}</p></div>`).join('');
     return `<div class="detail-section result-issues"><h3>还要人工核 · ${total} 处</h3>
       <p>未写入的内容不会显示在修订痕迹中，请逐条确认后再使用。${['complete','complete_with_exceptions'].includes(report.delivery_status)?'':'当前合同仍为未完成的工作文件。'}</p>
-      ${cards}${exceptionCards}</div>`;
+      ${cards}${exceptionCards}
+      <p class="subnote result-issues-tail">核完上述条款后，按下方「接下来怎么做」操作。</p></div>`;
   }
+  // FL-D896 N1 明细区塑形：摘要行露出「改为：」预览（减少点开成本）+ 三态徽标语义化（修改/符合=绿、规划=蓝、待修改=琥珀）。
   function clauseRow(row) {
     const op=row.operation||'';
     const status=row.state;
@@ -928,18 +1044,14 @@
     const afterBlock=after?quoteBox(row.state==='planned'?'拟修改为（尚未生成）':'改成了什么',after,'quote-after'):(op==='delete'?quoteBox(row.state==='planned'?'拟修改为（尚未生成）':'改成了什么','（删除该句）','quote-after'):'');
     const compare=(beforeBlock||afterBlock)?`<div class="clause-compare">${beforeBlock}${afterBlock}</div>`:'<p class="subnote">报告未提供修改对照。</p>';
     const reasonText=row.reason?(reasons[row.reason]||'其他调整'):'';
-    return `<details class="action-evidence"><summary><span class="clause-section">${esc(row.section||'条款')}</span> ${badge(status,row.state==='satisfied'?'已符合':row.state==='applied'?'已修改':null)}</summary>${reasonText?`<p>${esc(reasonText)}</p>`:''}${compare}</details>`;
+    // b-blue 令牌与琥珀同色（--blue=#8a5b14），已规划用 b-gray 保证三态可区分
+    const cls=status==='applied'||status==='satisfied'?'b-green':status==='planned'?'b-gray':'b-amber';
+    const badgeText=status==='satisfied'?'已符合':status==='applied'?'已修改':status==='planned'?'已规划':'待修改';
+    const core=after?after.replace(/\s+/g,' ').trim():(op==='delete'?'（删除该句）':'');
+    const previewText=core?(status==='planned'?'拟改为：':'改为：')+core:'';
+    return `<details class="action-evidence"><summary><span class="clause-summary"><span class="clause-section">${esc(row.section||'条款')}</span><span class="badge ${cls}">${badgeText}</span>${previewText?`<span class="clause-preview">${esc(previewText.slice(0,50))}${previewText.length>50?'…':''}</span>`:''}</span></summary>${reasonText?`<p>${esc(reasonText)}</p>`:''}${compare}</details>`;
   }
   function selectedContractLabel(doc){return ['complete','complete_with_exceptions'].includes(doc.delivery_status)?'最终版合同':'工作文件（未完成）';}
-  function revisionSection(doc,report) {
-    const delivery=report?.delivery_status || doc.delivery_status;
-    const downloads=doc.downloads || {};
-    const hasRedline=Boolean(downloads.working_redline || downloads.redline);
-    if(!hasRedline||doc.execution_mode==='evaluation') return '';
-    return `<div class="detail-section result-review-entry" id="revision-section"><h3>审阅修订</h3>
-      <div class="detail-actions"><button class="btn btn-sm btn-primary" data-action="open-review">打开修订审查</button><button class="btn btn-sm" data-action="accept-all">一键接受全部修订</button></div>
-      <p class="subnote" id="review-status"></p></div>`;
-  }
   function reviewNavInfo(review){
     const docs=review.docs&&review.docs.length?review.docs:[review.doc];
     const index=Math.max(0,docs.findIndex(d=>d.document_id===review.doc.document_id));
@@ -964,7 +1076,9 @@
         <div class="clause-compare">${before}${after}</div></li>`;
     }).join('');
     body.innerHTML=`<div class="review-layout">
-        <div class="review-doc-wrap"><div class="review-toolbar"><strong>合同呈现</strong>
+        <div class="review-doc-wrap">
+        <div id="review-section-nav" class="section-nav-wrap" role="navigation" aria-label="章节导航"></div>
+        <div class="review-toolbar"><strong>合同呈现</strong>
           <span class="subnote" id="review-count"></span>
           <span class="review-nav">
             <button class="btn btn-sm" data-action="review-prev" ${nav.prev?'':'disabled'} title="${nav.prev?`上一份：${esc(nav.prev.name)}`:'已经是第一份'}">← 上一份</button>
@@ -976,7 +1090,7 @@
           <button class="btn btn-sm" data-action="review-reject-all">全部拒绝</button></div>
           <div class="review-doc" id="review-doc">${review.html}</div></div>
         <div class="review-splitter" id="review-splitter" role="separator" aria-label="调整改动清单宽度" aria-orientation="vertical" aria-valuemin="280" aria-valuemax="680" aria-valuenow="360" tabindex="0" title="拖动调整修订清单宽度，双击恢复默认"></div>
-        <aside class="review-list"><h3>改动清单 · ${review.revisions.length} 条 <span class="review-kbd">A 接受 · R 拒绝</span></h3>
+        <aside class="review-list" id="review-rail"><h3><span class="review-list-title">改动清单 · ${review.revisions.length} 条</span> <span class="review-kbd">A 接受 · R 拒绝</span><button class="section-collapse-toggle" id="review-rail-collapse" type="button" aria-expanded="true" aria-controls="review-rail" aria-label="折叠或展开改动清单栏" title="折叠改动清单栏" data-title-expand="展开改动清单栏" data-title-collapse="折叠改动清单栏" data-text-expand="«" data-text-collapse="»">»</button></h3>
           <ol class="rev-list">${items||'<li class="subnote">本合同没有可选择的修订。</li>'}</ol></aside>
       </div>
       <div class="review-actions"><button class="btn btn-primary" data-action="generate-selected">生成选择版合同</button>
@@ -998,12 +1112,51 @@
       itemMap.set(String(item.getAttribute('data-rev-item')),{item,input:item.querySelector('[data-rev-toggle]')});
     });
     review.index={nodeMap,itemMap};
+    // FL-D1046：章节导航（与合同比对共用 FundLexSectionNav）——样式 doc-heading 优先、
+    // 「第X条」正则兜底。数据源=已渲染的合同呈现 DOM，零模型。
+    if (window.FundLexSectionNav) {
+      const navHost = $('review-section-nav'), navRoot = $('review-doc');
+      if (navHost && navRoot) {
+        body._sectionNav?.destroy?.();
+        body._sectionNav = window.FundLexSectionNav.mount({
+          host: navHost, root: navRoot, title: '章节',
+          pane: () => navRoot,
+          // FL-D1059（用户原话）：章节栏可折叠隐藏——与比对视图相互独立键。
+          collapse: {
+            key: 'fundlex-review-sectionnav-collapsed',
+            gridContainer: document.querySelector('.review-layout'),
+            stateClass: 'is-sectionnav-collapsed',
+          },
+        });
+        // FL-D1055-回归（用户原话「修订审查的章节栏现在无法拖动宽度」）：
+        // ① review-doc-wrap 只有 class 没有 id——$('review-doc-wrap') 恒为 null
+        //    导致 attachSplitter 早返 null（无拉手），改 closest 按真实 DOM 取；
+        // ② 修好①后挂重暴露泄漏：每次重开审查 innerHTML 重建（navHost 为
+        //    新元素），旧实例无 dispose（A9-F04 存活计数线性+1）——入册
+        //    avoid：重进先 dispose 旧实例（与 bindReviewSplitter.dispose 同款）。
+        state.sectionNavSplitter?.dispose?.();
+        navHost._navSplitter = window.FundLexSectionNav.attachSplitter(
+          navHost, navHost.closest('.review-doc-wrap') || navHost.parentElement,
+          () => navHost,
+          { key: 'fundlex-review-sectionnav-width', variable: '--review-sectionnav-width',
+            min: 200, max: 420, fallback: 200, ariaLabel: '调整章节导航宽度' });
+        state.sectionNavSplitter = navHost._navSplitter?.instance || null;
+        body._sectionNav.render(window.FundLexSectionNav.collect(navRoot, { selector: '.doc-heading, p', levels: [1] }));
+        body._sectionNav.refresh();
+      }
+    }
     syncReview();
     bindReviewSplitter();
   }
   function bindReviewSplitter() {
     const layout = document.querySelector('.review-layout'), handle = $('review-splitter');
     if (!layout || !handle || !window.FundLexColumnSplitter) return;
+    // FL-D1059（用户原话）：改动清单栏可折叠隐藏——独立 localStorage 键。
+    const railBtn = layout.querySelector('#review-rail-collapse');
+    if (railBtn && window.FundLexSectionNav) {
+      window.FundLexSectionNav.attachCollapse(
+        railBtn, layout, 'is-rail-collapsed', 'fundlex-review-rail-collapsed');
+    }
     bindReviewSplitter.instance?.dispose?.();
     bindReviewSplitter.instance = window.FundLexColumnSplitter(handle, layout, layout.querySelector('.review-list'), {
       key: 'fundlex-review-list-width',
@@ -1119,7 +1272,7 @@
       let selectionEpoch=review?review.selectionEpoch:null;
       let manifestHash=review?review.manifestHash:'';
       if((selectionEpoch==null||!manifestHash)&&doc.review_url){
-        try{const view=await json(doc.review_url);if(!active())return;selectionEpoch=Number.isInteger(view.selection_epoch)?view.selection_epoch:0;manifestHash=typeof view.manifest_hash==='string'?view.manifest_hash:'';}catch(e){if(!active())return;if(e.code!==409){const wrapped=new Error(`读取修订状态未完成：${e.message}`);wrapped.code=e.code;wrapped.raw=e.raw;wrapped.prelude=true;throw wrapped;}}
+        try{const view=await json(doc.review_url);if(!active())return;selectionEpoch=Number.isInteger(view.selection_epoch)?view.selection_epoch:0;manifestHash=typeof view.manifest_hash==='string'?view.manifest_hash:'';}catch(e){if(!active())return;if(e.code!==409){const wrapped=new Error(`读取修订状态未完成：${humanErrorText(e,'响应格式异常，请稍后重试。')}`);wrapped.code=e.code;wrapped.raw=e.raw;wrapped.prelude=true;throw wrapped;}}
       }
       const decisions=all==='accept'?null:review?review.revisions.map(r=>({del_id:r.del_id,
         decision:(review.chosen||{})[r.del_id]||'accept'})):null;
@@ -1150,37 +1303,96 @@
       else errorNotice(e);
     }finally{if(active()){state.selectionBusy=null;controls.filter(({el})=>el.isConnected).forEach(({el,disabled})=>el.disabled=disabled);}}
   }
+  // FL-D896 结果页信息架构：阅读顺序=用户三连问——L0 改完没（结论条）→L1 改了哪些→L2 还要人工核→L3 接下来怎么做→L4 判定依据；其余降级收起。
+  // FL-D1065③ 结论三块合一：状态徽章+修改数+入口动作一句话，宽屏一行、窄屏折行不溢出。
+  function resultActionHint(usable,withExceptions,evaluation,hasFinal,hasRedline,processing,displayedJob,eligibility){
+    if(eligibility==='excluded_by_fund_type')return '';
+    if(evaluation)return hasFinal?'下方可下载评测版核对修改效果。':'';
+    if(usable&&hasFinal)return '下方可下载最终版合同，需要逐条核对时先进入修订审查。';
+    if(withExceptions&&hasFinal)return '核完上方例外清单后，下方下载最终版使用。';
+    if(displayedJob==='paused')return '恢复任务后继续处理。';
+    if(processing)return '处理完成后本页自动更新。';
+    if(hasRedline)return '下方进入修订审查，逐条核对改动。';
+    return '';
+  }
+  function resultStatusWord(delivery,eligibility,evaluation,displayedJob,processing,usable,withExceptions){
+    if(evaluation)return {word:'评测结果 · 非正式合同',cls:'b-blue'};
+    if(usable)return {word:'已完成 · 可下载使用',cls:'b-green'};
+    if(withExceptions)return {word:'已完成 · 需人工核对',cls:'b-amber'};
+    if(eligibility==='excluded_by_fund_type')return {word:'不适用 · 已排除',cls:'b-gray'};
+    if(displayedJob==='paused')return {word:'已暂停',cls:'b-gray'};
+    if(processing)return {word:'正在处理',cls:'b-blue'};
+    if(delivery==='incomplete')return {word:'结果不完整',cls:'b-amber'};
+    return {word:'尚未交付',cls:'b-gray'};
+  }
+  // L0 不再放按钮：结论条只答「改完没」；行动权全部归 L3 行动面板（FL-D1018，避免 hero/面板重复按钮）。
+  // FL-D1018 行动区重塑：下载区=独立行动面板（主行动行+产物清单，行式直连不再收起）；审阅修订入口与下载同权（36px 同尺寸同行）。杜绝大框放小按钮。
+  // FL-D997 口径：按钮只显示中文标签；labels 缺键即跳过，绝不裸 kind。
+  const RESULT_FILE_LABELS={final:'最终版',redline:'带修改标记版',selected_final:'选择版',selected_redline:'选择版-带修改标记',working_final:'修改版（未完成）',working_redline:'修改版-带修改标记（未完成）',report_md:'文本报告',report_json:'原始数据（JSON）',evaluation_final:'评测版（非正式）',evaluation_redline:'评测版-带修改标记'};
+  // FL-D1065① 下载区=一横排按钮流：打开修订审查（最前）→ 产物（最终版主钮+其余同排）→ 一键接受全部修订（收尾）；取消分组小标题。
+  function artifactButtons(doc,usable,exclude=[]){
+    const downloads=doc.downloads || {};
+    const labels=RESULT_FILE_LABELS;
+    const available=kind=>downloads[kind]&&labels[kind]&&!exclude.includes(kind)&&!(kind==='final'&&!usable);
+    const groups=[['对照与审阅',['final','redline','selected_final','selected_redline','evaluation_final','evaluation_redline','working_final','working_redline']],['报告与数据',['report_md','report_json']]];
+    return groups.map(([title,names])=>{const list=names.filter(available);if(!list.length)return '';return `<span class="btn-group-label">${title}</span>`+list.map(kind=>`<button class="btn btn-sm${['final','working_final','evaluation_final'].includes(kind)?' btn-mid':''}" data-download="${kind}">${labels[kind]}</button>`).join('');}).join('');
+  }
+  function nextSection(doc,report,delivery,eligibility,displayedJob,processing,usable,withExceptions,evaluation,rc){
+    const downloads=doc.downloads || {};
+    const hasRedline=Boolean(downloads.working_redline || downloads.redline);
+    let guide;
+    const hasFinal=Boolean(downloads.final);
+    if(evaluation)guide='评测版仅供核对修改效果，不能作为正式合同；正式交付请使用正式任务。';
+    else if(usable)guide=!hasFinal?'已全部改完；最终版尚未生成，可先打开修订审查逐条核对。':(rc.unresolved?`先核完上方 ${rc.unresolved} 处人工核对项，再下载最终版使用。`:'已改完全部条款，可直接下载最终版使用；需要逐条核对时打开修订审查。');
+    else if(withExceptions)guide=!hasFinal?`先核完上方 ${rc.unresolved||'以上'} 处人工核对项；最终版尚未生成，请勿直接使用工作文件。`:`先核完上方 ${rc.unresolved||'以上'} 处人工核对项，再下载最终版使用；未自动修改处请以例外清单为准。`;
+    else if(eligibility==='excluded_by_fund_type')guide='该基金类型不在本流程范围，本文件不参与修改。';
+    else if(displayedJob==='paused')guide='任务已暂停，恢复任务后将继续处理；处理完成后状态会自动更新。';
+    else if(processing)guide='正在处理，完成后本页会自动更新，无需手动刷新。';
+    else if(delivery==='incomplete')guide='部分条款未自动修改，本文件不能直接使用；先逐条核对上方人工核对项，再决定是否下载工作文件。';
+    else guide='尚未生成可交付文件；如长时间无进展，请返回任务列表查看其他文件状态。';
+    // FL-D1065(2) 修订操作组=key 功能红回填（btn-primary 强主红）；交付件=次强 btn-mid。
+    const opsGroup=!evaluation&&hasRedline?`<span class="btn-group-label">修订操作</span><button class="btn btn-sm btn-primary" data-action="open-review">打开修订审查</button><button class="btn btn-sm" data-action="accept-all">一键接受全部修订</button>`:'';
+    const files=artifactButtons(doc,usable||withExceptions);
+    const anyButton=opsGroup||files;
+    const actionRow=anyButton?`<div class="detail-actions result-action-row" id="revision-section">${files}${opsGroup}</div>${hasRedline&&!evaluation?'<p class="subnote" id="review-status"></p>':''}`:'';
+    const hint=anyButton?'<p class="subnote result-files-hint">对照与工作文件供审阅对照；文本报告为 Markdown，原始数据为 JSON。</p>':'';
+    return `<section class="detail-section result-next"><h3>接下来怎么做</h3><p>${esc(guide)}</p>${actionRow}${hint}</section>`;
+  }
   function renderReport(doc,report) {
-    const delivery=report?.delivery_status || doc.delivery_status,eligibility=report?.qualification_status || doc.eligibility,actions=report?.actions || [];
-    const usable=eligibility==='eligible'&&delivery==='complete',withExceptions=eligibility==='eligible'&&delivery==='complete_with_exceptions';
+    if(isDirectReport(report)||(isDirectDoc(doc)&&doc.outcome)){renderDirectReport(doc,report);return;}
+    const delivery=report?.delivery_status || doc.delivery_status,eligibility=report?.qualification_status || doc.eligibility;
+    // FL-D1065② 状态口径：交付态=complete家族即按已交付处理，不再被 eligibility=pending（遗留/未判定）降级成「尚未交付」造成同屏矛盾；excluded 依旧排除。
+    const excluded=eligibility==='excluded_by_fund_type';
+    const usable=!excluded&&delivery==='complete',withExceptions=!excluded&&delivery==='complete_with_exceptions';
     const evaluation=(delivery||'').startsWith('evaluation_')||doc.execution_mode==='evaluation';
     const displayedJob=displayJobStatus(doc);
     const processing=['queued','running','leased','retry_wait'].includes(displayedJob);
-    const verdict=evaluation?'评测结果，非正式合同':usable?'已完成，可下载':withExceptions?'已交付，需核对例外':eligibility==='excluded_by_fund_type'?'不适用，已排除':displayedJob==='paused'?'已暂停':processing?'正在处理':delivery==='incomplete'?'结果不完整':'尚未交付';
-     const reasonText=docReason({...doc,delivery_status:delivery,eligibility});
     const rc=resultCounts(report,doc);
-    const headline=rc.total?`改完 ${rc.completed}/${rc.total} 处 · 待人工核 ${rc.unresolved} 处`:verdict;
-    let html=`<section class="result-summary" aria-label="结论"><div class="result-verdict"><h2>结论</h2><strong>${headline}</strong></div>${reasonText?`<p class="result-reason">${esc(reasonText)}</p>`:''}<dl class="result-status-grid"><div><dt>交付</dt><dd>${badge(delivery)}</dd></div></dl>${evaluation?'<p class="result-warning">评测文件不能作为正式合同。</p>':''}${report?.has_toc_field===true?'<p class="result-warning">下载后请在 Word 中更新目录。</p>':''}${state.task?.legacy?'<p class="result-warning">遗留任务只读，不能补传或重新修订。</p>':''}${report?.verification_status==='verification_blocked'?'<p class="result-warning" role="status">验证暂未完成，恢复任务后将继续校验；当前文件尚未通过最终交付核验。</p>':''}</section>`;
-    html+=`<div class="result-action-grid">${downloadSection(doc,delivery,usable||withExceptions)}${report?revisionSection(doc,report):''}</div>`;
+    const status=resultStatusWord(delivery,eligibility,evaluation,displayedJob,processing,usable,withExceptions);
+    const headline=rc.total?(rc.unresolved?`改完 ${rc.completed}/${rc.total} 处 · 待人工核 ${rc.unresolved} 处`:`改完 ${rc.completed}/${rc.total} 处 · 无需人工核`):status.word;
+    const heroHint=resultActionHint(usable,withExceptions,evaluation,Boolean(doc.downloads&&(doc.downloads.final||doc.downloads.evaluation_final)),Boolean(doc.downloads&&(doc.downloads.working_redline||doc.downloads.redline)),processing,displayedJob,eligibility);
+     const reasonText=docReason({...doc,delivery_status:delivery,eligibility});
+    const notes=[reasonText];
+    if(evaluation)notes.push('评测文件不能作为正式合同。');
+    if(report?.has_toc_field===true)notes.push('下载后请在 Word 中更新目录。');
+    if(state.task?.legacy)notes.push('遗留任务只读，不能补传或重新修订。');
+    if(report?.verification_status==='verification_blocked')notes.push('验证暂未完成，恢复任务后将继续校验；当前文件尚未通过最终交付核验。');
+    let html=`<section class="result-summary" aria-label="结论">
+      <p class="result-hero-label">结论</p>
+      <div class="result-hero-head"><span class="badge ${status.cls} result-hero-status">${esc(status.word)}</span><strong class="result-hero-line">${esc(headline)}</strong>${heroHint?`<span class="result-hero-hint">${esc(heroHint)}</span>`:''}</div>
+      ${notes.filter(Boolean).map(n=>`<p class="result-hero-note">${esc(n)}</p>`).join('')}</section>`;
     if(report){
       const summary=report.user_summary;
-      const issuesHTML=unresolvedIssuesHTML(report,summary);
       const rows=changedClauses(report,doc);
-      const clausesHTML=rows.length?`<section class="detail-section"><h3>改了哪些条款 · ${rows.length} 处</h3>${rows.map(clauseRow).join('')}</section>`:'';
-      if(clausesHTML&&issuesHTML)html+=`<div class="result-l1-columns">${clausesHTML}${issuesHTML}</div>`;else html+=clausesHTML+issuesHTML;
+      // FL-D896 N1：0 改动态给明确空态句（已交付/本身符合时），比整块缺失更可读
+      const clausesHTML=rows.length?`<section class="detail-section"><h3>改了哪些条款 · ${rows.length} 处</h3>${rows.map(clauseRow).join('')}</section>`
+        :(['complete','complete_with_exceptions','evaluation_unmodified'].includes(delivery)?'<section class="detail-section"><h3>改了哪些条款 · 0 处</h3><p class="subnote">报告未列出条款改动。</p></section>':'');
+      html+=clausesHTML+unresolvedIssuesHTML(report,summary);
     }else html+='<p class="result-pending">报告尚未生成，处理完成后可查看。</p>';
+    html+=nextSection(doc,report,delivery,eligibility,displayedJob,processing,usable,withExceptions,evaluation,rc);
     const showBasis=report&&(delivery==='diagnosed'||(eligibility&&!['eligible','pending'].includes(String(eligibility))));
     if(showBasis){html+=`<section class="detail-section"><h3>${eligibility==='excluded_by_fund_type'?'为什么不能处理':'判定依据'}</h3>${eligibilityEvidenceHTML(report)||`<p>${esc(reasonText||'报告未提供判定说明。')}</p>`}</section>`;}
     $('detail-body').innerHTML=html;
-  }
-  function downloadSection(doc,delivery,usable){
-    const downloads=doc.downloads || {};
-    const labels={final:'最终版',redline:'带修改标记版',selected_final:'选择版',selected_redline:'选择版-带修改标记',working_final:'修改版（未完成）',working_redline:'修改版-带修改标记（未完成）',report_md:'文本报告',report_json:'原始数据（JSON）',evaluation_final:'评测版（非正式）',evaluation_redline:'评测版-带修改标记'};
-    const available=kind=>downloads[kind]&&!(kind==='final'&&!usable);
-    const groups=[['最终用的合同',['final','selected_final','working_final']],['对照与审阅',['redline','selected_redline','working_redline']],['报告与数据',['report_md','report_json','evaluation_final','evaluation_redline']]];
-    const rendered=groups.map(([title,names])=>{const list=names.filter(available);if(!list.length)return '';const buttons=list.map(kind=>`<button class="btn ${['final','working_final','evaluation_final'].includes(kind)?'btn-primary':''} btn-sm" data-download="${kind}">${labels[kind]}</button>`).join('');return `<div class="result-artifact-group"><h4>${title}</h4><div class="detail-actions">${buttons}</div></div>`;}).join('');
-    if(!rendered)return '';
-    return '<section class="detail-section result-files"><h3>下载区</h3>'+rendered+'</section>';
   }
   function eligibilityEvidenceHTML(report) {const src=report.qualification || report.eligibility || {};const items=[];const quote=src.fund_type_quote;if(quote)items.push(proof(quote));if(src.fund_type_basis)items.push(`<p class="subnote">${esc(src.fund_type_basis)}</p>`);else if(src.basis)items.push(`<p class="subnote">依据：${esc(src.basis)}</p>`);const extra=report.qualification?.evidence || report.eligibility?.evidence || report.qualification_evidence || [];const list=Array.isArray(extra)?extra:[extra];for(const item of list)items.push(proof(item));return items.join('');}
   async function showDetail(doc) {
@@ -1193,12 +1405,11 @@
     catch(e){if(current(t)){$('detail-body').innerHTML='<div class="empty">报告暂无法读取，请返回后重试。</div>';errorNotice(e);}}
   }
   function closeDetail() {reviewDecisionsSave();state.review=null;state.tokens.review=(state.tokens.review||0)+1;if(!$('detail-overlay').hidden){$('detail-overlay').hidden=true;document.querySelector('.app').inert=false;state.focusReturn?.focus();}state.tokens.detail=(state.tokens.detail || 0)+1;state.detail=null;$('detail-body').replaceChildren();$('detail-title').textContent='';}
-  function resetWorkspace(){document.dispatchEvent(new Event('fundlex:identity-reset'));$('toast').replaceChildren();$('toast').hidden=true;showToast.recent={};$('help-overlay').hidden=true;$('notification-toggle').setAttribute('aria-expanded','false');notifications.length=0;taskStatuses=new Map();state.modelData=null;state.modelEdit=null;state.modelVerified={};state.modelCopyFrom=null;$('notification-panel').hidden=true;renderNotifications();state.epoch++;state.importSession++;state.controllers.forEach(c=>c.abort());state.controllers.clear();state.tokens={};state.selected=null;state.task=null;state.tasks=[];state.tasksLoaded=false;state.tasksFailed=false;state.cap=null;state.overviewStats=null;state.taskGuides=null;state.imports=[];state.recover=null;state.createKey=null;state.uploadToken=null;state.uploading=false;state.uploadProgress=null;state.replaceTarget=null;state.reviewDocs=null;state.reviewDocsTask=null;state.reviewDocsKey='';state.review=null;state.reviewDecisions=new Map();state.selectionBusy=null;state.guideDismissed=false;$('user-rows').replaceChildren();for(const id of ['new-user-name','new-user-display','new-user-password','pwd-old','pwd-new','pwd-confirm','register-password','register-confirm'])$(id).value='';$('password-view').hidden=true;for(const id of ['user-create-btn','pwd-submit'])$(id).disabled=false;for(const id of ['user-create-error','pwd-error']){$(id).textContent='';$(id).hidden=true;}state.taskPage=state.importPage=state.docPage=1;state.taskDocs=[];closeDetail();$('task-rows').innerHTML=emptyRow(7,'正在读取任务');$('doc-rows').innerHTML=emptyRow(7,'请选择当前身份的任务');$('task-pagination').replaceChildren();$('doc-pagination').replaceChildren();$('task-name').value='';$('detail-title').textContent='';$('task-guide-meta').hidden=true;$('task-guide-value').textContent='';$('doc-reason-filter').innerHTML='<option value="">全部原因</option>';$('upload-message').textContent='选择文件后检查清单，开始上传任务。';resetGuides();$('file-picker').value='';$('folder-picker').value='';$('replace-picker').value='';for(const id of ['task-search','import-search','doc-search'])$(id).value='';for(const id of ['task-filter','task-guide-filter','import-filter','doc-upload-filter','doc-qualification-filter','doc-completeness-filter','doc-status-filter','doc-reason-filter','doc-sort'])$(id).value='';syncFirstRunGuide();renderTaskGuideFilter();renderTask();renderImport();renderTopbarTitle(state.view);renderBreadcrumb(state.view);renderFooter();}
   function resetWorkspace(){document.dispatchEvent(new Event('fundlex:identity-reset'));$('toast').replaceChildren();$('toast').hidden=true;showToast.recent={};$('help-overlay').hidden=true;$('notification-toggle').setAttribute('aria-expanded','false');notifications.length=0;taskStatuses=new Map();state.modelData=null;state.modelEdit=null;state.modelVerified={};state.modelCopyFrom=null;$('notification-panel').hidden=true;renderNotifications();state.epoch++;state.importSession++;state.controllers.forEach(c=>c.abort());state.controllers.clear();state.tokens={};state.selected=null;state.task=null;state.tasks=[];state.tasksLoaded=false;state.tasksFailed=false;state.cap=null;state.overviewStats=null;state.taskGuides=null;state.imports=[];state.recover=null;state.createKey=null;state.uploadToken=null;state.uploading=false;state.uploadProgress=null;state.replaceTarget=null;state.reviewDocs=null;state.reviewDocsTask=null;state.reviewDocsKey='';state.review=null;state.reviewDecisions=new Map();state.selectionBusy=null;state.guideDismissed=(()=>{try{return localStorage.getItem(`fundlex-guide-dismissed:${localStorage.getItem('fundlex-dev-user')||'user'}`)==='1';}catch{return false;}})();$('user-rows').replaceChildren();for(const id of ['new-user-name','new-user-display','new-user-password','pwd-old','pwd-new','pwd-confirm','register-password','register-confirm'])$(id).value='';$('password-view').hidden=true;for(const id of ['user-create-btn','pwd-submit'])$(id).disabled=false;for(const id of ['user-create-error','pwd-error']){$(id).textContent='';$(id).hidden=true;}state.taskPage=state.importPage=state.docPage=1;state.taskDocs=[];closeDetail();$('task-rows').innerHTML=emptyRow(7,'正在读取任务');$('doc-rows').innerHTML=emptyRow(7,'请选择当前身份的任务');$('task-pagination').replaceChildren();$('doc-pagination').replaceChildren();$('task-name').value='';$('detail-title').textContent='';$('task-guide-meta').hidden=true;$('task-guide-value').textContent='';$('doc-reason-filter').innerHTML='<option value="">全部原因</option>';window.FundLexSelectKit?.feed($('doc-reason-filter'));$('upload-message').textContent='选择文件后检查清单，开始上传任务。';resetGuides();$('file-picker').value='';$('folder-picker').value='';$('replace-picker').value='';for(const id of ['task-search','import-search','doc-search'])$(id).value='';for(const id of ['task-filter','task-guide-filter','import-filter','doc-upload-filter','doc-qualification-filter','doc-completeness-filter','doc-status-filter','doc-reason-filter','doc-sort'])$(id).value='';syncFirstRunGuide();renderTaskGuideFilter();renderTask();renderImport();renderTopbarTitle(state.view);renderBreadcrumb(state.view);renderFooter();}
   function identityChanged(){resetWorkspace();hideLogin();try{localStorage.setItem('fundlex-dev-user',owner());}catch{}clearTimeout(identityChanged.timer);identityChanged.timer=setTimeout(()=>refresh(true),350);}
   async function loadMe(){const user=await json('/api/auth/me');setAuthSession(state.auth.token,user);return user;}
   function handleSessionExpired(){if(state.auth.mode!=='password')return;if(!state.auth.token&&!state.auth.user)return;clearAuthSession();resetWorkspace();showLogin('登录状态已失效，请重新登录。');}
-  async function submitLogin(event){event.preventDefault();const username=$('login-username').value.trim(),password=$('login-password').value,button=$('login-submit'),box=$('login-error');if(!username||!password){box.textContent='请输入用户名和密码。';box.hidden=false;return;}button.disabled=true;box.hidden=true;try{const response=await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,password}),cache:'no-store'});let payload=null;try{payload=await response.json();}catch{}if(!response.ok){const detail=payload&&typeof payload.detail==='string'?payload.detail:'';throw new Error(response.status===401?'用户名或密码不正确。':response.status===403?'账号已被禁用，请联系管理员。':response.status===404?'当前环境未启用账号登录。':detail||'登录未完成，请稍后重试。');}if(!payload||!payload.token||!payload.user)throw new Error('登录响应未通过格式校验，请稍后重试。');state.auth.mode='password';setAuthSession(payload.token,payload.user);hideLogin();await refresh(true);openDeepLinkedTask();}catch(e){if(e&&e.name!=='AbortError'){box.textContent=e.message||'登录未完成，请稍后重试。';box.hidden=false;}}finally{button.disabled=false;}}
+  async function submitLogin(event){event.preventDefault();const username=$('login-username').value.trim(),password=$('login-password').value,button=$('login-submit'),box=$('login-error');if(!username||!password){box.textContent='请输入用户名和密码。';box.hidden=false;return;}button.disabled=true;box.hidden=true;try{const response=await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,password}),cache:'no-store'});let payload=null;try{payload=await response.json();}catch{}if(!response.ok){const detail=payload&&typeof payload.detail==='string'?payload.detail:'';throw new Error(response.status===401?'用户名或密码不正确。':response.status===403?'账号已被禁用，请联系管理员。':response.status===404?'当前环境未启用账号登录。':detail||'登录未完成，请稍后重试。');}if(!payload||!payload.token||!payload.user)throw new Error('登录响应未通过格式校验，请稍后重试。');state.auth.mode='password';setAuthSession(payload.token,payload.user);hideLogin();await refresh(true);openDeepLinkedTask();}catch(e){if(e&&e.name!=='AbortError'){box.textContent=humanErrorText(e,'登录未完成，请稍后重试。');box.hidden=false;}}finally{button.disabled=false;}}
   async function logout(){const token=state.auth.token;clearAuthSession();resetWorkspace();showLogin('已退出登录。','info');try{await fetch('/api/auth/logout',{method:'POST',headers:token?{'Authorization':`Bearer ${token}`}:{},cache:'no-store'});}catch{}}
   function openPasswordDialog(){const view=$('password-view');if(!view||!state.auth.user)return;view.hidden=false;document.querySelector('.app').inert=true;$('pwd-error').hidden=true;$('pwd-old').value='';$('pwd-new').value='';$('pwd-confirm').value='';$('pwd-old').focus();}
   function closePasswordDialog(){const view=$('password-view');if(!view||view.hidden)return;view.hidden=true;if($('login-view').hidden)document.querySelector('.app').inert=false;}
@@ -1208,7 +1419,6 @@
   async function toggleUser(id,disabled){const t=ticket('users');try{const response=await fetch(`/api/admin/users/${encodeURIComponent(id)}/disable`,{method:'POST',headers:{'Content-Type':'application/json',...(state.auth.token?{'Authorization':`Bearer ${state.auth.token}`}:{})},body:JSON.stringify({disabled}),cache:'no-store'});if(!identityCurrent(t.epoch))return;if(response.status===401){handleSessionExpired();return;}if(!response.ok){let detail='';try{const p=await response.json();detail=typeof p.detail==='string'?p.detail:'';}catch{}throw new Error(detail||'操作未完成，请稍后重试。');}if(!current(t))return;toast(disabled?'账号已禁用，其登录会话已失效。':'账号已启用。');await loadUsers();}catch(e){if(current(t))errorNotice(e);}}
   async function createUser(){const epoch=state.epoch;const username=$('new-user-name').value.trim(),display=$('new-user-display').value.trim(),role=$('new-user-role').value,password=$('new-user-password').value,box=$('user-create-error'),button=$('user-create-btn');const fail=message=>{box.textContent=message;box.hidden=false;};box.hidden=true;if(username.length<3)return fail('用户名至少 3 位。');if(!/^[A-Za-z0-9_.-]+$/.test(username))return fail('用户名只能使用字母、数字或 _ . -。');if(password.length<8)return fail('初始密码至少 8 位。');button.disabled=true;try{const response=await fetch('/api/admin/users',{method:'POST',headers:{'Content-Type':'application/json',...(state.auth.token?{'Authorization':`Bearer ${state.auth.token}`}:{})},body:JSON.stringify({username,password,display_name:display,role}),cache:'no-store'});if(!identityCurrent(epoch))return;if(response.status===401){handleSessionExpired();return;}if(!response.ok){let detail='';try{const p=await response.json();detail=typeof p.detail==='string'?p.detail:'';}catch{}if(!identityCurrent(epoch))return;if(response.status===409)return fail('该用户名已存在。');if(response.status===422)return fail('输入不符合要求，请检查用户名与密码。');return fail(detail||'创建未完成，请稍后重试。');}$('new-user-name').value='';$('new-user-display').value='';$('new-user-password').value='';$('new-user-role').value='member';toast('账号已创建，请将用户名与初始密码告知本人。');await loadUsers();}catch{if(!identityCurrent(epoch))return;fail('无法连接本地服务，请稍后重试。');}finally{if(identityCurrent(epoch))button.disabled=false;}}
   const GUIDE_STATUSES=window.FUNDLEX_GUIDE_STATUSES||{uploaded:'待解析',parsing:'解析中',parsed:'已解析',validated:'校验通过',parse_failed:'解析失败',failed:'解析失败',released:'已发布',archived:'已归档'};
-  const GUIDE_QUALIFICATION={not_run:'未运行',frozen_builtin:'内置冻结',passed:'已通过',qualified:'已通过',failed:'未通过'};
   const GUIDE_ENABLEABLE=['parsed','released'],GUIDE_PARSEABLE=['uploaded','parse_failed','parsed','failed'];
   const shortHash=value=>value?String(value).slice(0,12):'—';
   const guideStatusLabel=value=>GUIDE_STATUSES[value] || '未确认';
@@ -1217,9 +1427,9 @@
   const guideCurrentFlag=item=>item.current?'<span class="badge b-green">当前使用</span>':'';
   const guideByName=id=>(state.guides || []).find(item=>item.id===id) || null;
   const guideReady=()=>!!state.cap?.engine?.guide&&state.cap.engine.delivery_mode==='formal';
-  const guideOps=counts=>{const value=counts&&typeof counts==='object'?counts:{};return [['新增',value.append],['替换',value.replace],['删除',value.delete],['无需修改',value.noop]].map(([label,count])=>`${label} ${Number(count) || 0}`).join(' · ');};
+  // （旧 guide-rules-v1 的 guideOps noop 枚举渲染已随旧格式兼容展示一并物理删除）
   function renderGuideBinding() {const box=$('guide-binding');if(!box)return;const cap=state.cap,guide=cap?.engine?.guide || null;box.hidden=false;if(!cap){box.className='guide-binding';box.textContent='当前指引尚未加载，请稍后重试。';return;}
-    if(guide&&guideReady()){box.className='guide-binding';box.innerHTML=`当前指引：<strong>${esc(guide.filename)}</strong>（规则 ${guide.groups || 0} 条 · ${esc(guideStatusLabel(guide.status))}）${guideKind(guide)}`;return;}
+    if(guide&&guideReady()){box.className='guide-binding';box.innerHTML=`本任务将使用指引：<strong>${esc(guide.filename)}</strong>（版本 ${esc(shortHash(guide.id))} · 指引规则 ${guide.groups || 0} 条 · ${esc(guideStatusLabel(guide.status))}）${guideKind(guide)}<br><span class="subnote">启用新指引只影响之后创建的任务；已在处理的任务仍用创建时绑定的版本。</span>`;return;}
     box.className='guide-binding guide-binding-warning';box.innerHTML='当前指引不可用：暂时不能创建任务。请先到 <button type="button" class="btn-link" data-nav="guide">指引配置</button> 启用可用指引，再刷新本页。';}
   function resetGuides() {state.guides=null;state.guidesFailed=false;state.guideBusy=null;state.guideUploading=false;clearTimeout(state.guideTimer);state.guideTimer=null;const input=$('guide-file');if(input)input.value='';const name=$('guide-file-name');if(name)name.textContent='尚未选择文件';const button=$('guide-upload-btn');if(button)button.disabled=true;const message=$('guide-upload-message');if(message)message.textContent='解析失败可在列表中查看问题并重新解析。';$('guide-rows').innerHTML=emptyRow(7,'正在读取指引列表');$('guide-current-body').textContent='正在读取当前指引…';$('guide-current-flags').replaceChildren();$('guide-list-state').textContent='';$('guide-reset-btn').disabled=true;$('guide-reset-btn').title='恢复内置指引并用于之后创建的任务';closeGuidePanel();}
   async function loadGuides(quiet=false) {if(state.auth.mode==='password'&&!state.auth.token)return;const t=ticket('guide'),rows=$('guide-rows');if(!quiet){rows.setAttribute('aria-busy','true');$('guide-list-state').textContent='正在读取指引列表…';}
@@ -1228,10 +1438,10 @@
     finally{if(current(t))rows.removeAttribute('aria-busy');}}
   function renderGuides() {const items=state.guides || [],current=items.find(item=>item.current) || null,busy=!!state.guideBusy;
     $('guide-current-flags').innerHTML=current?guideKind(current)+guideCurrentFlag(current):'';
-    $('guide-current-body').innerHTML=current?`<dl class="detail-grid"><dt>文件名</dt><dd><span class="filename" title="${esc(current.filename)}">${esc(current.filename)}</span></dd><dt>状态</dt><dd>${badge(current.status, GUIDE_STATUSES[current.status])}</dd><dt>规则条数</dt><dd>${current.groups} 条</dd><dt>资格状态</dt><dd>${esc(GUIDE_QUALIFICATION[current.qualification_status] || current.qualification_status || '未运行')}</dd></dl>`:'<p class="subnote">尚未确定当前指引。请刷新列表，或上传并启用一个已解析的自定义指引。</p>';
+    $('guide-current-body').innerHTML=current?`<dl class="detail-grid"><dt>文件名</dt><dd><span class="filename" title="${esc(current.filename)}">${esc(current.filename)}</span></dd><dt>状态</dt><dd>${badge(current.status, GUIDE_STATUSES[current.status])}</dd><dt>规则条数</dt><dd>${current.groups} 条</dd><dt>版本</dt><dd>${esc(shortHash(current.id))}</dd></dl>`:'<p class="subnote">尚未确定当前指引。请刷新列表，或上传并启用一个已解析的自定义指引。</p>';
     $('guide-rows').innerHTML=items.map(item=>{const enable=GUIDE_ENABLEABLE.includes(item.status),parse=!item.built_in&&GUIDE_PARSEABLE.includes(item.status);
-      return `<tr><td><span class="filename" title="${esc(item.filename)}">${esc(item.filename)}</span>${item.parent_version_id?'<span class="row-sub">由旧版本重新解析而来</span>':''}</td><td>${badge(item.status, GUIDE_STATUSES[item.status])}</td><td>${item.groups} 条</td><td>${item.issues} 项</td><td>${guideKind(item)}${guideCurrentFlag(item)}</td><td>${esc(guideTime(item.created_at))}</td><td><div class="guide-actions"><button class="btn-link" data-guide-issues="${esc(item.id)}" ${busy?'disabled':''}>查看问题</button></div></td></tr>`;}).join('') || emptyRow(7,'还没有可用指引');
-    $('guide-list-state').textContent=items.length?`共 ${items.length} 个版本 · 上传后自动解析；启用只影响之后创建的任务。`:'';
+      return `<tr><td><span class="filename" title="${esc(item.filename)}">${esc(item.filename)}</span>${item.parent_version_id?'<span class="row-sub">由旧版本重新解析而来</span>':''}</td><td>${badge(item.status, GUIDE_STATUSES[item.status])}</td><td>${item.groups} 条</td><td>${item.issues} 项</td><td>${guideKind(item)}${guideCurrentFlag(item)}</td><td>${esc(guideTime(item.created_at))}</td><td><div class="guide-actions"><button class="btn-link" data-guide-enable="${esc(item.id)}" ${busy||item.current||!enable?'disabled':''} title="${item.current?'该指引当前正在使用':enable?'新任务改用该指引':'解析完成后才能启用'}">启用指引</button><button class="btn-link" data-guide-issues="${esc(item.id)}" ${busy?'disabled':''}>解析详情</button></div></td></tr>`;}).join('') || emptyRow(7,'还没有可用指引');
+    $('guide-list-state').textContent=items.length?`共 ${items.length} 个版本 · 解析成功并形成可执行指引卡后即成为之后任务的默认指引；手动启用其他版本只影响之后创建的任务，解析中或解析失败的版本不会被使用。`:'';
     $('guide-reset-btn').disabled=busy||!current||!!current.built_in;
     $('guide-reset-btn').title=current&&current.built_in?'当前已使用内置指引':'恢复内置指引并用于之后创建的任务';
     refreshGuideDiffCard();
@@ -1239,20 +1449,20 @@
   function guidePolling() {clearTimeout(state.guideTimer);state.guideTimer=null;if(state.view!=='guide')return;if(!(state.guides || []).some(item=>item.status==='uploaded'||item.status==='parsing'))return;const epoch=state.epoch;state.guideTimer=setTimeout(()=>{if(identityCurrent(epoch)&&state.view==='guide')loadGuides(true);},4000);}
   // ── 指引版本对比（规则差异 + 原文比对；全确定性，不调模型）──────────────────
   function guideDiffLabel(item){return `${item.filename} · ${esc(guideTime(item.created_at))}${item.current?'（当前）':''}${item.built_in?'（内置）':''}`;}
-  function refreshGuideDiffCard(){const card=$('guide-diff-card');if(!card)return;const items=state.guides||[],d=state.guideDiff||=({from:'',to:'',tab:'rules',view:'merged'});
+  function refreshGuideDiffCard(){const card=$('guide-diff-card');if(!card)return;const items=state.guides||[],d=state.guideDiff||=({from:'',to:'',tab:'text',view:'merged'});
+    d.tab='text';// 用户口径：「规则差异」标签页整页隐藏，仅保留原文比对
     const from=$('guide-diff-from'),to=$('guide-diff-to');
-    if(items.length<2){from.innerHTML='';to.innerHTML='';from.disabled=to.disabled=true;$('guide-diff-body').innerHTML='<p class="subnote">至少需要两个指引版本才能对比；再上传或生成一个版本后回到这里。</p>';return;}
+    // 用户 2026-11-03 口径：原文比对仅当两端都有可获取源文件（上传版）才有意义；内置不进候选。
+    const uploaded=[...items].filter(item=>!item.built_in).sort((a,b)=>(b.created_at||0)-(a.created_at||0));
+    if(uploaded.length<2){from.innerHTML='';to.innerHTML='';from.disabled=to.disabled=true;d.from=d.to='';$('guide-diff-body').innerHTML='<p class="subnote">需要两份已上传的指引才能原文比对；内置指引没有原文文件，不参与配对。请先上传另一个指引版本。</p>';return;}
     from.disabled=to.disabled=false;
-    // 选项按创建时间新→旧，自定义版本在前、内置殿后；
-    // 默认对比最近两个自定义版（内置只在用户主动选时参与）。
-    const customs=[...items].filter(item=>!item.built_in).sort((a,b)=>(b.created_at||0)-(a.created_at||0));
-    const builtins=items.filter(item=>item.built_in);
-    const ordered=[...customs,...builtins];
-    const valid=sel=>ordered.some(item=>item.id===d[sel]&&item.id!==d[sel==='from'?'to':'from']);
-    if(!valid('to'))d.to=(customs[0]||ordered[0]).id;
-    if(!valid('from'))d.from=(customs.find(item=>item.id!==d.to)||ordered.find(item=>item.id!==d.to)).id;
-    const options=sel=>ordered.map(item=>`<option value="${esc(item.id)}" ${item.id===d[sel]?'selected':''}>${guideDiffLabel(item)}</option>`).join('');
+    const valid=sel=>uploaded.some(item=>item.id===d[sel]&&item.id!==d[sel==='from'?'to':'from']);
+    if(!valid('to'))d.to=uploaded[0].id;
+    if(!valid('from'))d.from=(uploaded.find(item=>item.id!==d.to)||uploaded[1]).id;
+    const options=sel=>uploaded.map(item=>`<option value="${esc(item.id)}" ${item.id===d[sel]?'selected':''}>${guideDiffLabel(item)}</option>`).join('');
     from.innerHTML=options('from');to.innerHTML=options('to');
+    from.value=d.from;to.value=d.to;
+    window.FundLexSelectKit?.feed(from);window.FundLexSelectKit?.feed(to);
     renderGuideDiff();}
   function guideDiffFieldLabel(name){return {title:'标题',requirement:'要求',operations:'修改操作',old_text_variants:'原文线索',slot_tokens:'槽位',class_substitution:'类别替换',references:'依据',section_hint:'章节提示'}[name]||name;}
   function guideDiffOpLine(op){if(!op||typeof op!=='object')return '';const label={append:'追加',replace:'替换为',delete:'删除',noop:'不改'}[op.op]||'调整';const text=op.new_text?`「${esc(String(op.new_text))}」`:'';const cond=op.condition?'（满足条件时）':'';return `${label}${text}${cond}`;}
@@ -1272,10 +1482,21 @@
         return `<details class="guide-diff-change"><summary><strong>${esc(item.rule_id)}</strong> · ${fields.length} 个字段有变化</summary><dl class="guide-diff-fields">${fields.map(([name,change])=>`<div class="guide-diff-field"><dt>${guideDiffFieldLabel(name)}</dt><dd><span class="guide-diff-old">${guideDiffValue(name,change.old)}</span><span class="guide-diff-arrow">→</span><span class="guide-diff-new">${guideDiffValue(name,change.new)}</span></dd></div>`).join('')}</dl></details>`;}).join(''))];
     rows.push(`<div class="guide-diff-grid">${groups.join('')}</div>`);
     return rows.join('');}
+  // ── FL-D1063：版本对比弹窗（查看器式只读：选择器/word合并稿或双栏/缩放/IRD 清单）──
+  function renderGuideTextDiff(d,body){
+    const td=d.textDiff;if(!td)return;const s=td.summary;
+    const pills=td.identical?'<span class="badge b-gray">两个版本的原文完全一致</span>':`<span class="badge b-green">I 新增 ${s.insert}</span><span class="badge b-red">D 删除 ${s.delete}</span><span class="badge b-amber">R 修改 ${s.modify}</span>`;
+    const head=`<div class="guide-diff-ird">${pills}<span class="subnote">共 ${s.diffs} 处差异</span><span class="guide-diff-viewbtns"><button type="button" class="btn btn-sm ${d.view==='merged'?'btn-primary':''}" data-guide-diff-view="merged" ${d.view==='merged'?'disabled':''}>Word 合并稿</button><button type="button" class="btn btn-sm ${d.view==='side'?'btn-primary':''}" data-guide-diff-view="side" ${d.view==='side'?'disabled':''}>双栏对照</button></span></div>`;
+    const rows=(td.diffs||[]).slice(0,200).map(row=>`<li><span class="badge ${row.type==='insert'?'b-green':row.type==='delete'?'b-red':'b-amber'}">${esc(row.type_label||row.type)}</span>${row.location?` <small class="subnote">${esc(row.location)}</small>`:''}<p class="guide-diff-line">${esc((row.old_text||'').slice(0,80))}${row.old_text?' → ':''}${esc((row.new_text||'').slice(0,80))}</p></li>`).join('');
+    const rail=rows?`<details class="guide-diff-rail"><summary>修订清单（${td.diffs.length} 条，滚轨只读）</summary><ol class="guide-diff-rail-items">${rows}</ol></details>`:'';
+    const zoom=`font-size:${d.zoom||100}%`;
+    body.innerHTML=head+rail+(d.view==='side'?`<div class="guide-diff-panes gd-zoom-root" style="${zoom}"><div class="compare-pane guide-diff-pane" aria-label="基准版本原文">${td.left_html}</div><div class="compare-pane guide-diff-pane" aria-label="对比版本原文">${td.right_html}</div></div>`:`<div class="guide-diff-merged compare-pane gd-zoom-root" style="${zoom}">${td.merged_html}</div>`);
+  }
   async function renderGuideDiff(){const d=state.guideDiff,body=$('guide-diff-body');if(!d||!body||!d.from||!d.to)return;
+    d.tab='text';// 仅保留原文比对（内置防御：任何路径置回 rules 一律纠正）
     document.querySelectorAll('[data-guide-diff-tab]').forEach(btn=>{btn.setAttribute('aria-selected',String(btn.dataset.guideDiffTab===d.tab));btn.classList.toggle('is-active',btn.dataset.guideDiffTab===d.tab);});
     const t=ticket('guide-diff');d.error='';
-    if(d.tab==='text'&&(guideByName(d.from)?.built_in||guideByName(d.to)?.built_in)){body.innerHTML='<p class="subnote">内置指引没有上传的原文文件，无法做原文比对；可查看「规则差异」，或改用两个自己上传的版本。</p>';return;}
+    if(d.tab==='text'&&(guideByName(d.from)?.built_in&&guideByName(d.to)?.built_in)){body.innerHTML='<p class="subnote">两侧都是内置默认指引，内容一致；换一个自定义版本再看差异。</p>';return;}
     body.innerHTML='<p class="subnote">正在计算差异…</p>';
     const url=d.tab==='rules'?`/api/guides/${encodeURIComponent(d.to)}/diff?against=${encodeURIComponent(d.from)}`:`/api/guides/${encodeURIComponent(d.to)}/text-diff?against=${encodeURIComponent(d.from)}`;
     try{const payload=await json(url);if(!current(t))return;
@@ -1286,7 +1507,7 @@
       if(d.view==='side'){const wrap=body.querySelector('.guide-diff-panes'),handle=body.querySelector('#guide-diff-splitter');
         if(wrap&&handle&&window.FundLexColumnSplitter){window.FundLexColumnSplitter(handle,wrap,()=>wrap.querySelector('.guide-diff-pane'),{key:'fundlex-guide-diff-left-w',variable:'--guide-diff-left-w',min:240,minOther:320,side:'left',disabled:()=>matchMedia('(max-width: 760px)').matches});}
         bindGuideDiffScrollSync(wrap);}}}
-    catch(e){if(!current(t))return;body.innerHTML=`<p class="subnote">${e&&e.detail==='BUILTIN_SOURCE_UNAVAILABLE'?'内置指引没有上传的原文文件，无法做原文比对。':'差异暂未算出来，请稍后重试。'}</p>`;if(e&&e.code!==404)errorNotice(e);}}
+    catch(e){if(!current(t))return;body.innerHTML=`<p class="subnote">${e&&e.code===404?'该版本的原文档案暂不可用，请换一个版本再试。':'差异暂未算出来，请稍后重试。'}</p>`;if(e&&e.code!==404)errorNotice(e);}}
   // A8 指引版本比对：并排对照两栏滚动比例同步（CX 契约最短路径）。
   // rAF 闸刀 + syncTargets 回声抑制（160ms 无事件释放，防惯性滚动回环）+ 手势夺权。
   const guideDiffSyncState={targets:new Set(),frame:null,releaseTimer:undefined};
@@ -1325,12 +1546,16 @@
   // ── 指引页分区 tab（版本 / 对比与上传）──────────────────────────────────
   function renderGuideTabs(){const tab=state.guideTab||'versions';document.querySelectorAll('[data-guide-page-tab]').forEach(btn=>{const active=btn.dataset.guidePageTab===tab;btn.classList.toggle('is-active',active);btn.setAttribute('aria-selected',String(active));});document.querySelectorAll('[data-guide-pane]').forEach(pane=>{pane.hidden=pane.dataset.guidePane!==tab;});}
   function openGuideTab(tab){state.guideTab=tab;renderGuideTabs();}
+  // ── FL-D1063：版本对比弹窗开关（默认 rules tab；只读）──
+  function openGuideDiffOverlay(tab){const overlay=$('guide-diff-overlay');if(!overlay)return;const d=state.guideDiff||=({from:'',to:'',tab:'rules',view:'merged'});if(tab)d.tab=tab;overlay.hidden=false;document.querySelector('.app').inert=true;refreshGuideDiffCard();$('guide-diff-close').focus();}
+  function closeGuideDiffOverlay(){const overlay=$('guide-diff-overlay');if(!overlay||overlay.hidden)return;overlay.hidden=true;if($('login-view').hidden&&$('password-view').hidden&&$('guide-overlay').hidden)document.querySelector('.app').inert=false;state.tokens['guide-diff']=(state.tokens['guide-diff']||0)+1;}
+  function applyGuideDiffZoom(){const d=state.guideDiff;if(!d)return;const lv=$('gd-zoom-level');if(lv)lv.textContent=`${d.zoom||100}%`;document.querySelector('#guide-diff-body')?.querySelectorAll('.gd-zoom-root').forEach(el=>{el.style.fontSize=`${d.zoom||100}%`;});}
   function downloadGuideSource(id) {const item=guideByName(id);if(!item||item.built_in)return;download(`/api/guides/${encodeURIComponent(id)}/source`,item.filename || `${id}.docx`);}
   async function uploadGuide() {const input=$('guide-file'),file=input&&input.files?input.files[0]:null,message=$('guide-upload-message');if(!file||state.guideUploading)return;
     if(!/\.docx$/i.test(file.name)){message.textContent='仅支持 DOCX 指引文件，请重新选择。';return;}
     const limit=state.cap&&state.cap.upload_limits?state.cap.upload_limits.max_file_bytes:0;if(limit&&file.size>limit){message.textContent=`文件超过单文件 ${size(limit)} 限制，请压缩后再上传。`;return;}
     const epoch=state.epoch;state.guideUploading=true;$('guide-upload-btn').disabled=true;const form=new FormData();form.append('file',file,file.name);message.textContent='正在上传指引原件…';
-    try{const payload=await uploadRequest('/api/guides',form,(loaded,total)=>{if(identityCurrent(epoch))message.textContent=`正在上传指引原件 · ${Math.min(100,Math.round(100*loaded/total))}%`;});if(!identityCurrent(epoch))return;const version=payload&&payload.version;message.textContent=`已上传 ${version&&version.filename?version.filename:file.name}；解析会自动进行，完成后在「可用指引」中查看状态并启用。`;input.value='';$('guide-file-name').textContent='尚未选择文件';toast('指引已上传，正在自动解析');await loadGuides();}
+    try{const payload=await uploadRequest('/api/guides',form,(loaded,total)=>{if(identityCurrent(epoch))message.textContent=`正在上传指引原件 · ${Math.min(100,Math.round(100*loaded/total))}%`;});if(!identityCurrent(epoch))return;const version=payload&&payload.version;message.textContent=`已上传 ${version&&version.filename?version.filename:file.name}，等待解析（上传成功不代表解析完成）；解析成功并形成可执行指引卡后会自动成为之后任务的默认指引。`;input.value='';$('guide-file-name').textContent='尚未选择文件';toast('指引已上传，正在自动解析');await loadGuides();}
     catch(e){if(!identityCurrent(epoch)||e.name==='AbortError')return;message.textContent=e.code===415?'仅支持 DOCX 指引文件，请重新选择。':e.code===413?`文件超过接收限制${limit?`（单文件 ≤ ${size(limit)}）`:''}。`:e.message || '上传未完成，请稍后重试。';errorNotice(e,'指引上传失败：');}
     finally{if(identityCurrent(epoch)){state.guideUploading=false;$('guide-upload-btn').disabled=!(input.files&&input.files.length);}}}
   // ── 指引详情弹层（FL-D993：规则开关子页面与启停功能已删除，仅保留信息/概览/问题）──
@@ -1371,13 +1596,28 @@
     if(value.clean===true)html+='<p class="subnote">最近一次解析已通过确定性校验与独立核验。</p>';
     if(item&&!item.built_in&&GUIDE_PARSEABLE.includes(item.status))html+=`<div class="guide-issue-actions"><button class="btn btn-sm btn-primary" type="button" data-guide-reparse="${esc(item.id)}">重新解析</button></div>`;
     return html;}
-  function renderGuidePanel(item,data) {const overview=Array.isArray(data.rules_overview)?data.rules_overview:[],issues=data.issues_detail||{},qualification=data&&data.qualification_status;
-    let html=`<div class="detail-section"><h3>指引信息</h3><dl class="detail-grid"><dt>状态</dt><dd>${badge(item.status, GUIDE_STATUSES[item.status])}</dd><dt>类型</dt><dd>${guideKind(item)}${guideCurrentFlag(item)}</dd><dt>规则条数</dt><dd>${item.groups} 条</dd><dt>创建时间</dt><dd>${esc(guideTime(item.created_at))}</dd><dt>更新时间</dt><dd>${esc(guideTime(item.updated_at))}</dd>${qualification?`<dt>资格状态</dt><dd>${esc(GUIDE_QUALIFICATION[qualification] || qualification)}</dd>`:''}</dl><div class="detail-actions"><button class="btn btn-sm btn-primary" type="button" data-guide-enable="${esc(item.id)}" ${item.current||!GUIDE_ENABLEABLE.includes(item.status)?'disabled':''} title="${item.current?'该指引当前正在使用':GUIDE_ENABLEABLE.includes(item.status)?'新任务改用该指引':'解析完成后才能启用'}">启用</button><button class="btn btn-sm" type="button" data-guide-parse="${esc(item.id)}" ${item.built_in||!GUIDE_PARSEABLE.includes(item.status)?'disabled':''} title="${item.built_in?'内置指引无需重新解析':GUIDE_PARSEABLE.includes(item.status)?'重新提交解析并自动修复解析问题':'当前状态不能重新解析'}">重新解析</button><button class="btn btn-sm" type="button" data-guide-source="${esc(item.id)}" ${item.built_in?'disabled':''} title="${item.built_in?'内置指引不提供原件下载':'下载上传的指引原件'}">下载原件</button></div></div>`;
-    html+=`<div class="detail-section"><h3>规则概览 · ${overview.length} 项</h3>${overview.length?`<div class="table-wrap"><table class="table" style="min-width:520px"><thead><tr><th>规则</th><th>标题</th><th>适用章节</th><th>操作</th></tr></thead><tbody>${overview.map(rule=>`<tr><td>${esc(rule&&rule.rule_id?rule.rule_id:'—')}</td><td>${esc(rule&&rule.title?rule.title:'—')}</td><td>${esc(rule&&rule.section_hint?rule.section_hint:'—')}</td><td class="guide-ops">${typeof (rule&&rule.operations)==='string'?esc(rule.operations||'—'):guideOps(rule&&rule.operations)}</td></tr>`).join('')}</tbody></table></div>`:'<p class="subnote">暂无规则概览；解析完成后生成。</p>'}</div>`;
+  function guideCardActionText(card){const t=String(card&&(card.action_type??card.action)||'');return {replace:'替换',delete:'删除',insert_before:'新增（条款前）',insert_after:'新增（条款后）'}[t]||esc(t||'—');}
+  function guideCardRows(data){// 卡包数据源优先级：cards_overview（六字段）→ rules_overview 卡行兜底
+    const cards=Array.isArray(data.cards_overview)?data.cards_overview:[];
+    if(cards.length)return cards.map(card=>({id:card.card_id||'—',title:card.title||'—',applicability:(card.applicability||'').toString().trim()||'（无条件）',sections:Array.isArray(card.target_sections)&&card.target_sections.length?card.target_sections.join('、'):'—',action:guideCardActionText(card),source:Array.isArray(card.source_paragraphs)&&card.source_paragraphs.length?`来源段落 ${card.source_paragraphs.join('、')}`:''}));
+    const legacy=Array.isArray(data.rules_overview)?data.rules_overview:[];
+    return legacy.filter(rule=>rule&&rule.card_id).map(rule=>({id:rule.card_id,title:rule.title||'—',applicability:rule.applicability||'—',sections:rule.section_hint||'—',action:guideCardActionText(rule)+(Number.isFinite(rule.locator_quotes)?` · 引句 ${rule.locator_quotes} 条`:''),source:''}));}
+  function renderGuidePanel(item,data) {const overview=Array.isArray(data.rules_overview)?data.rules_overview:[],issues=data.issues_detail||{};
+    const cardMode=data.guide_schema==='guide_card_v1'||overview.some(rule=>rule&&rule.card_id);const cardRows=cardMode?guideCardRows(data):[];
+    let html=`<div class="detail-section"><h3>指引信息</h3><dl class="detail-grid"><dt>状态</dt><dd>${badge(item.status, GUIDE_STATUSES[item.status])}</dd><dt>类型</dt><dd>${guideKind(item)}${guideCurrentFlag(item)}</dd><dt>规则条数</dt><dd>${item.groups} 条</dd><dt>创建时间</dt><dd>${esc(guideTime(item.created_at))}</dd><dt>更新时间</dt><dd>${esc(guideTime(item.updated_at))}</dd></dl><div class="detail-actions"><button class="btn btn-sm btn-primary" type="button" data-guide-enable="${esc(item.id)}" ${item.current||!GUIDE_ENABLEABLE.includes(item.status)?'disabled':''} title="${item.current?'该指引当前正在使用':GUIDE_ENABLEABLE.includes(item.status)?'新任务改用该指引':'解析完成后才能启用'}">启用</button><button class="btn btn-sm" type="button" data-guide-parse="${esc(item.id)}" ${item.built_in||!GUIDE_PARSEABLE.includes(item.status)?'disabled':''} title="${item.built_in?'内置指引无需重新解析':GUIDE_PARSEABLE.includes(item.status)?'重新解析该版本（产生新版本，原版本保留）':'当前状态不能重新解析'}">重新解析</button><button class="btn btn-sm" type="button" data-guide-source="${esc(item.id)}" ${item.built_in?'disabled':''} title="${item.built_in?'内置指引不提供原件下载':'下载上传的指引原件'}">下载原件</button></div></div>`;
+    if(cardMode&&cardRows.length){
+      html+=`<div class="detail-section" data-testid="guide-cards-table"><h3>指引卡 · ${cardRows.length} 张</h3><div class="table-wrap"><table class="table" style="min-width:640px"><thead><tr><th>卡号</th><th>标题</th><th>适用情形</th><th>目标章节</th><th>操作类型</th></tr></thead><tbody>${cardRows.map(card=>`<tr><td>${esc(card.id)}</td><td>${esc(card.title)}</td><td>${esc(card.applicability)}</td><td>${esc(card.sections)}</td><td class="guide-ops">${card.action}${card.source?`<span class="row-sub">${esc(card.source)}</span>`:''}</td></tr>`).join('')}</tbody></table></div></div>`;
+    }else if(cardMode){
+      html+='<div class="detail-section" data-testid="guide-cards-table"><h3>指引卡</h3><p class="subnote">暂无指引卡；解析完成后生成。</p></div>';
+    }else{
+      // 用户 2026-11-03 口径：不维护 guide-rules-v1 旧格式兼容渲染，
+      // 历史旧版仅最小化提示，保证可打开不出错。
+      html+='<div class="detail-section"><h3>规则概览</h3><p class="subnote">历史版本（旧格式）：仅保留版本记录与重新解析入口，不再展示旧格式规则明细。</p></div>';
+    }
     html+=`<div class="detail-section"><h3>解析问题</h3>${guideIssuesHTML(issues,item)}</div>`;
     const target=$('guide-overlay-body');target.innerHTML=html;}
   function closeGuidePanel() {const overlay=$('guide-overlay');if(!overlay||overlay.hidden)return;overlay.hidden=true;if($('login-view').hidden&&$('password-view').hidden)document.querySelector('.app').inert=false;state.tokens['guide-detail']=(state.tokens['guide-detail'] || 0)+1;state.guideDetail=null;$('guide-overlay-body').replaceChildren();$('guide-overlay-title').textContent='';if(state.focusReturn){state.focusReturn.focus();state.focusReturn=null;}}
-  document.addEventListener('click',e=>{const pageTab=e.target.closest('[data-guide-page-tab]');if(pageTab){openGuideTab(pageTab.dataset.guidePageTab);return;}const diffTab=e.target.closest('[data-guide-diff-tab]');if(diffTab){const d=state.guideDiff||=({from:'',to:'',tab:'rules',view:'merged'});d.tab=diffTab.dataset.guideDiffTab;renderGuideDiff();return;}const diffView=e.target.closest('[data-guide-diff-view]');if(diffView){const d=state.guideDiff;if(d){d.view=diffView.dataset.guideDiffView;renderGuideDiff();}return;}const bindingAction=(e.target.closest('[data-action]')||{}).dataset?.action;if(bindingAction==='feishu-oauth-start'){startFeishuOAuth();return;}const crumb=e.target.closest('[data-crumb]');if(crumb){e.preventDefault();go(crumb.dataset.crumb,crumb.dataset.crumbId?{id:crumb.dataset.crumbId}:{});return;}const nav=e.target.closest('[data-nav]');if(nav){e.preventDefault();if(nav.dataset.nav==='import'&&(state.recover||!state.imports.length))newTask();else go(nav.dataset.nav);return;}const reviewAction=(e.target.closest('[data-action]')||{}).dataset?.action;if(reviewAction==='open-review'){openReview();return;}if(reviewAction==='accept-all'){generateSelected('accept');return;}if(reviewAction==='generate-selected'){generateSelected();return;}if(reviewAction==='review-close'){closeReview();return;}if(reviewAction==='review-accept-all'){setAllRevisions('accept');return;}if(reviewAction==='review-reject-all'){setAllRevisions('reject');return;}if(reviewAction==='review-prev'){switchReview(-1);return;}if(reviewAction==='review-next'){switchReview(1);return;}if(reviewAction==='download-selected'){const d=state.detail;if(d&&d.downloads&&d.downloads.selected_final)download(d.downloads.selected_final,`${d.name.replace(/\.docx$/i,'')}_selected_final.docx`);return;}const revItem=e.target.closest('[data-rev-item]');if(revItem){if(!e.target.closest('input,label'))focusRevision(Number(revItem.dataset.revItem));return;}const revNode=e.target.closest('#review-doc [data-rev]');if(revNode){if(!e.target.closest('a')){const entry=state.review?.revisions.find(r=>(r.revision_ids||[r.del_id,r.ins_id??Number(r.del_id)+1]).some(id=>String(id)===revNode.dataset.rev));if(entry)focusRevision(entry.del_id);}return;}const task=e.target.closest('[data-task]');if(task){selectTask(task.dataset.task);return;}const userToggle=e.target.closest('[data-user-toggle]');if(userToggle){toggleUser(userToggle.dataset.userToggle,userToggle.dataset.userDisabled!=='1');return;}const detail=e.target.closest('[data-detail]');if(detail){const [name,index]=detail.dataset.detail.split(':');showDetail(state.taskDocs[Number(index)]);return;}const replace=e.target.closest('[data-replace]');if(replace&&!state.uploading){state.replaceTarget=replace.dataset.replace;$('replace-picker').click();return;}const remove=e.target.closest('[data-remove]');if(remove&&!state.uploading){state.imports=state.imports.filter(f=>f.id!==remove.dataset.remove);state.createKey=null;renderImport();return;}const clearOne=e.target.closest('[data-clear-filter]');if(clearOne){const [scope,key]=clearOne.dataset.clearFilter.split(':');clearFilter(scope,key);return;}const clearAll=e.target.closest('[data-clear-filters]');if(clearAll){clearAllFilters(clearAll.dataset.clearFilters);return;}const page=e.target.closest('[data-page]');if(page){const name=page.dataset.page;state[`${name}Page`]+=page.dataset.dir==='next'?1:-1;if(name==='import')renderImport();else if(name==='task')loadTasks();else loadDocuments();return;}const dl=e.target.closest('[data-download]');if(dl&&state.detail){const kind=dl.dataset.download;const ext=kind.startsWith('report_')?(kind==='report_json'?'json':'md'):'docx';const label={final:'最终版',selected_final:'最终版（按人工选择）',redline:'修订版（引擎全量痕迹）',selected_redline:'修订版（仅人工接受）',working_final:'工作文件（未完成）',working_redline:'工作文件（未完成）修订痕迹'}[kind];download(state.detail.downloads[kind],`${state.detail.name.replace(/\.docx$/i,'')}${label?`_${label}`:''}.${ext}`);return;}const guideEnable=e.target.closest('[data-guide-enable]');if(guideEnable){enableGuide(guideEnable.dataset.guideEnable);return;}const guideParse=e.target.closest('[data-guide-parse]');if(guideParse){reparseGuide(guideParse.dataset.guideParse);return;}const guideReparse=e.target.closest('[data-guide-reparse]');if(guideReparse){closeGuidePanel();reparseGuide(guideReparse.dataset.guideReparse);return;}const guideIssues=e.target.closest('[data-guide-issues]');if(guideIssues){openGuidePanel(guideIssues.dataset.guideIssues);return;}const guideSource=e.target.closest('[data-guide-source]');if(guideSource){downloadGuideSource(guideSource.dataset.guideSource);return;}const action=e.target.closest('[data-action]')?.dataset.action;if(!action)return;switch(action){case 'open-password':openPasswordDialog();break;case 'help-open':openHelp();break;case 'help-close':closeHelp();break;case 'notifications':{const panel=$('notification-panel');panel.hidden=!panel.hidden;$('notification-toggle').setAttribute('aria-expanded',String(!panel.hidden));if(!panel.hidden){notifications.forEach(n=>n.read=true);renderNotifications();}break;}case 'download-all':if(!state.task){notify('请先选择任务。',true);break;}// FL-D1041：改 aria-disabled 后 click 可达——禁用态点击给学生同样可理的提醒。
+  document.addEventListener('click',e=>{const gdOpen=e.target.closest('[data-action="guide-diff-open"]');if(gdOpen){e.preventDefault();openGuideDiffOverlay();return;}const gdClose=e.target.closest('#guide-diff-close');if(gdClose){closeGuideDiffOverlay();return;}const gdZoom=e.target.closest('[data-gd-zoom]');if(gdZoom){const d=state.guideDiff||=({from:'',to:'',tab:'text',view:'merged'});d.zoom=Math.min(200,Math.max(75,(d.zoom||100)+Number(gdZoom.dataset.gdZoom||0)));applyGuideDiffZoom();return;}const retryBtn=e.target.closest('[data-doc-retry]');if(retryBtn){if(retryBtn.disabled)return;retryFailedDocument(retryBtn.dataset.docRetry,retryBtn);return;}const pageTab=e.target.closest('[data-guide-page-tab]');if(pageTab){openGuideTab(pageTab.dataset.guidePageTab);return;}const diffTab=e.target.closest('[data-guide-diff-tab]');if(diffTab){const d=state.guideDiff||=({from:'',to:'',tab:'text',view:'merged'});d.tab=diffTab.dataset.guideDiffTab;renderGuideDiff();return;}const diffView=e.target.closest('[data-guide-diff-view]');if(diffView){const d=state.guideDiff;if(d){d.view=diffView.dataset.guideDiffView;if(d.textDiff)renderGuideTextDiff(d,$('guide-diff-body'));else renderGuideDiff();}return;}const bindingAction=(e.target.closest('[data-action]')||{}).dataset?.action;if(bindingAction==='feishu-oauth-start'){startFeishuOAuth();return;}const crumb=e.target.closest('[data-crumb]');if(crumb){e.preventDefault();go(crumb.dataset.crumb,crumb.dataset.crumbId?{id:crumb.dataset.crumbId}:{});return;}const nav=e.target.closest('[data-nav]');if(nav){e.preventDefault();if(nav.dataset.nav==='import'&&(state.recover||!state.imports.length))newTask();else go(nav.dataset.nav);return;}const reviewAction=(e.target.closest('[data-action]')||{}).dataset?.action;if(reviewAction==='open-review'){openReview();return;}if(reviewAction==='accept-all'){generateSelected('accept');return;}if(reviewAction==='generate-selected'){generateSelected();return;}if(reviewAction==='review-close'){closeReview();return;}if(reviewAction==='review-accept-all'){setAllRevisions('accept');return;}if(reviewAction==='review-reject-all'){setAllRevisions('reject');return;}if(reviewAction==='review-prev'){switchReview(-1);return;}if(reviewAction==='review-next'){switchReview(1);return;}if(reviewAction==='download-selected'){const d=state.detail;if(d&&d.downloads&&d.downloads.selected_final)download(d.downloads.selected_final,`${d.name.replace(/\.docx$/i,'')}_selected_final.docx`);return;}const revItem=e.target.closest('[data-rev-item]');if(revItem){if(!e.target.closest('input,label'))focusRevision(Number(revItem.dataset.revItem));return;}const revNode=e.target.closest('#review-doc [data-rev]');if(revNode){if(!e.target.closest('a')){const entry=state.review?.revisions.find(r=>(r.revision_ids||[r.del_id,r.ins_id??Number(r.del_id)+1]).some(id=>String(id)===revNode.dataset.rev));if(entry)focusRevision(entry.del_id);}return;}const task=e.target.closest('[data-task]');if(task){selectTask(task.dataset.task);return;}const userToggle=e.target.closest('[data-user-toggle]');if(userToggle){toggleUser(userToggle.dataset.userToggle,userToggle.dataset.userDisabled!=='1');return;}const detail=e.target.closest('[data-detail]');if(detail){const [name,index]=detail.dataset.detail.split(':');showDetail(state.taskDocs[Number(index)]);return;}const replace=e.target.closest('[data-replace]');if(replace&&!state.uploading){state.replaceTarget=replace.dataset.replace;$('replace-picker').click();return;}const remove=e.target.closest('[data-remove]');if(remove&&!state.uploading){state.imports=state.imports.filter(f=>f.id!==remove.dataset.remove);state.createKey=null;renderImport();return;}const clearOne=e.target.closest('[data-clear-filter]');if(clearOne){const [scope,key]=clearOne.dataset.clearFilter.split(':');clearFilter(scope,key);return;}const clearAll=e.target.closest('[data-clear-filters]');if(clearAll){clearAllFilters(clearAll.dataset.clearFilters);return;}const page=e.target.closest('[data-page]');if(page){const name=page.dataset.page;state[`${name}Page`]+=page.dataset.dir==='next'?1:-1;if(name==='import')renderImport();else if(name==='task')loadTasks();else loadDocuments();return;}const dl=e.target.closest('[data-download]');if(dl&&state.detail){const kind=dl.dataset.download;const ext=kind.startsWith('report_')?(kind==='report_json'?'json':'md'):'docx';const label=isDirectDoc(state.detail)?{final:'最终版（全部修订已定案）',redline:'带痕版（保留全部修订标记）',selected_final:'选择版（按您的接受拒绝）',selected_redline:'选择版（带痕）'}[kind]:{final:'最终版',selected_final:'最终版（按人工选择）',redline:'修订版（引擎全量痕迹）',selected_redline:'修订版（仅人工接受）',working_final:'工作文件（未完成）',working_redline:'工作文件（未完成）修订痕迹'}[kind];download(state.detail.downloads[kind],`${state.detail.name.replace(/\.docx$/i,'')}${label?`_${label}`:''}.${ext}`);return;}const guideEnable=e.target.closest('[data-guide-enable]');if(guideEnable){enableGuide(guideEnable.dataset.guideEnable);return;}const guideParse=e.target.closest('[data-guide-parse]');if(guideParse){reparseGuide(guideParse.dataset.guideParse);return;}const guideReparse=e.target.closest('[data-guide-reparse]');if(guideReparse){closeGuidePanel();reparseGuide(guideReparse.dataset.guideReparse);return;}const guideIssues=e.target.closest('[data-guide-issues]');if(guideIssues){openGuidePanel(guideIssues.dataset.guideIssues);return;}const guideSource=e.target.closest('[data-guide-source]');if(guideSource){downloadGuideSource(guideSource.dataset.guideSource);return;}const action=e.target.closest('[data-action]')?.dataset.action;if(!action)return;switch(action){case 'open-password':openPasswordDialog();break;case 'help-open':openHelp();break;case 'help-close':closeHelp();break;case 'notifications':{const panel=$('notification-panel');panel.hidden=!panel.hidden;$('notification-toggle').setAttribute('aria-expanded',String(!panel.hidden));if(!panel.hidden){notifications.forEach(n=>n.read=true);renderNotifications();}break;}case 'download-all':if(!state.task){notify('请先选择任务。',true);break;}// FL-D1041：改 aria-disabled 后 click 可达——禁用态点击给学生同样可理的提醒。
       if(document.querySelector('[data-action="download-all"]')?.getAttribute('aria-disabled')==='true'){notify('该任务尚无可下载的合同结果，请等待处理完成或先在“任务详情”确认文件是否已生成。',true);break;}download(`${pathTask()}/download/all`,`${state.task.name}_全部结果.zip`);break;case 'new-task':newTask();break;case 'cancel-recover':if(state.uploading)break;state.importSession++;state.tokens.recovery=(state.tokens.recovery||0)+1;state.recover=null;state.imports=[];state.createKey=null;state.importPage=1;$('task-name').value='';resetImportStages();renderImport();go('task');break;case 'choose-files':$('file-picker').click();break;case 'choose-folder':$('folder-picker').click();break;case 'clear-import':if(!state.uploading){state.imports=[];state.createKey=null;state.importPage=1;state.uploadProgress=null;state.replaceTarget=null;resetImportStages(state.recover?(state.task?.id===state.recover.id?state.task:state.recover):null);renderImport();}break;case 'submit':submit();break;case 'dismiss-guide':{state.guideDismissed=true;try{localStorage.setItem(`fundlex-guide-dismissed:${localStorage.getItem('fundlex-dev-user')||'user'}`,'1');}catch{}$('first-run-guide').setAttribute('hidden','');break;}case 'refresh':refresh();break;case 'recover':recover();break;case 'toggle-pause':togglePause();break;case 'download-summary':if(state.task)download(state.task.summary_url,`${state.task.name}_结果总览.md`);else notice('请先选择任务。',true);break;case 'export-results':exportResults();break;case 'export-pending':exportPending();break;case 'users-refresh':loadUsers();break;case 'user-create':createUser();break;case 'model-settings-save':saveModelSettings(e.target.closest('[data-action="model-settings-save"]')?.dataset.modelSave||null);break;case 'guide-refresh':loadGuides();break;case 'guide-reset':resetToBuiltinGuide();break;case 'guide-choose':$('guide-file').click();break;case 'guide-upload':uploadGuide();break;}});
   for(const id of ['file-picker','folder-picker'])$(id).addEventListener('change',e=>{addFiles([...e.target.files]);e.target.value='';});$('replace-picker').addEventListener('change',e=>{const file=e.target.files&&e.target.files[0];const id=state.replaceTarget;state.replaceTarget=null;e.target.value='';if(file&&id)replaceFile(id,file);});const drop=$('dropzone');drop.addEventListener('dragover',e=>{e.preventDefault();if(!state.uploading)drop.classList.add('dragging');});drop.addEventListener('dragleave',()=>drop.classList.remove('dragging'));drop.addEventListener('drop',e=>{e.preventDefault();drop.classList.remove('dragging');addFiles([...e.dataTransfer.files]);});
   const debounces={};function changed(name){state[`${name}Page`]=1;if(name==='import')renderImport();else if(name==='task')loadTasks();else loadDocuments();}

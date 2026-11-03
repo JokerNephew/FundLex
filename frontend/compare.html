@@ -4,10 +4,18 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>FundLex合同修订工作台</title>
+<!-- vendor 主题文件必须前载：宿主令牌映射在 app.css 后载才稳赢同特异性（FL-D1015 驳回①） -->
+<link rel="stylesheet" href="/static/vendor/slimselect/slimselect.css">
 <link rel="stylesheet" href="/static/app.css">
 <link rel="icon" type="image/png" href="/static/assets/gf-favicon.png">
 <link rel="stylesheet" href="/static/compare.css">
 <link rel="stylesheet" href="/static/guide_generation.css">
+<script src="/static/vendor/slimselect/slimselect.js" defer>
+</script>
+<script src="/static/selectkit.js" defer>
+</script>
+<script src="/static/sectionnav.js" defer>
+</script>
 <script src="/static/status_labels.js" defer>
 </script>
 <script src="/static/app.js" defer>
@@ -121,17 +129,17 @@
 <span>修改指引</span>
 </button>
 <button class="nav-btn" data-nav="models"><svg><use href="#i-settings"/></svg><span>模型配置</span></button>
-<button class="nav-btn" data-nav="settings">
-<svg>
-<use href="#i-settings"/>
-</svg>
-<span>设置</span>
-</button>
 <button class="nav-btn" data-nav="feishu">
 <svg>
 <use href="#i-link"/>
 </svg>
 <span>飞书绑定</span>
+</button>
+<button class="nav-btn" data-nav="settings">
+<svg>
+<use href="#i-settings"/>
+</svg>
+<span>设置</span>
 </button>
 <button class="nav-btn" data-nav="users" id="nav-users" hidden>
 <svg>
@@ -154,7 +162,7 @@
     <button type="button" class="card workspace-metric" data-workspace-status="completed"><span>近期完成的任务</span><strong id="workspace-completed">—</strong></button>
   </div>
   <div class="card card-pad workspace-task-card"><div class="section-title"><div><h2>全部任务</h2><small>汇总合同修改、合同比对、指引生成三类任务；各业务专属队列见对应页面</small></div><button class="btn btn-sm" id="workspace-refresh" type="button">刷新</button></div>
-    <div class="business-tabs" role="group" aria-label="任务类型"><button type="button" class="is-active" data-workspace-kind="">全部</button><button type="button" data-workspace-kind="revision">修改</button><button type="button" data-workspace-kind="compare">比对</button><button type="button" data-workspace-kind="generation">生成</button></div>
+    <div class="business-tabs" role="group" aria-label="任务类型"><button type="button" class="is-active" data-workspace-kind="">全部</button><button type="button" data-workspace-kind="revision">修改</button><button type="button" data-workspace-kind="compare">比对</button></div>
     <div class="toolbar workspace-toolbar"><div class="searchbox"><input id="workspace-search" type="search" placeholder="搜索任务名称" aria-label="搜索全部业务任务"></div><select class="control-select" id="workspace-status" aria-label="任务情况"><option value="">全部任务</option><option value="active">进行中</option><option value="attention">需要处理</option><option value="completed">近期完成</option></select><label class="workspace-date">创建日期<input type="text" inputmode="numeric" maxlength="10" placeholder="YYYY-MM-DD" pattern="\d{4}-\d{2}-\d{2}" id="workspace-date-from" aria-label="创建起始日期，格式 YYYY-MM-DD"></label><label class="workspace-date">至<input type="text" inputmode="numeric" maxlength="10" placeholder="YYYY-MM-DD" pattern="\d{4}-\d{2}-\d{2}" id="workspace-date-to" aria-label="创建结束日期，格式 YYYY-MM-DD"></label><select class="control-select" id="workspace-sort" aria-label="任务排序"><option value="updated_desc">最近更新</option><option value="created_desc">最近创建</option><option value="name">任务名称</option></select></div>
     <div id="workspace-state" class="subnote" role="status" aria-live="polite"></div><div class="table-wrap"><table class="table workspace-table"><thead><tr><th>任务名称</th><th>业务</th><th>规模</th><th>当前进展</th><th>待办与结果提示</th><th>创建时间</th><th></th></tr></thead><tbody id="workspace-task-rows"></tbody></table></div><div class="pagination" id="workspace-pagination"></div>
   </div>
@@ -162,7 +170,7 @@
     <section class="section" id="view-overview" aria-label="合同修改">
 <div class="split task-overview">
 <div class="card card-pad">
-<div class="section-title"><div><h2>修改任务</h2></div></div>
+<!-- FL-D1063-E/⑤：「修改任务」标题按用户令移除，列表直上 -->
 <div class="toolbar">
 <div class="searchbox">
 <input id="task-search" type="search" placeholder="搜索任务名称" aria-label="搜索任务名称">
@@ -258,9 +266,9 @@
 </div>
 <small id="upload-limit">正在读取单文件限制</small>
 </div>
-<input id="file-picker" class="sr-only" type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" multiple aria-label="选择一份或多份 DOCX 合同文件">
+<input id="file-picker" class="sr-only" type="file" accept=".doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" multiple aria-label="选择一份或多份 DOCX 合同文件">
 <input id="folder-picker" class="sr-only" type="file" webkitdirectory directory multiple aria-label="选择包含合同的文件夹">
-<input id="replace-picker" class="sr-only" type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" aria-label="选择用于替换的合同文件">
+<input id="replace-picker" class="sr-only" type="file" accept=".doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" aria-label="选择用于替换的合同文件">
 <div class="import-top">
 <h2>文件清单</h2>
 <div class="actions">
@@ -471,9 +479,9 @@
 <tr>
 <th style="width:28%">合同文件</th>
 <th>上传状态</th>
-<th>资格</th>
-<th>交付完整性</th>
-<th>处理状态</th>
+<th id="doc-col-qualification">资格</th>
+<th id="doc-col-delivery">交付完整性</th>
+<th id="doc-col-job">处理状态</th>
 <th style="width:24%">业务提示</th>
 <th>
 </th>
@@ -520,6 +528,8 @@
 </div>
 <p id="compare-upload-message" role="status" aria-live="polite">
 </p>
+<!-- FL-D1060：.doc 选择即持久提示（不被上传进度覆盖） -->
+<p id="compare-doc-hint" class="subnote" role="status" hidden></p>
 </div>
       <div class="card card-pad compare-detail" id="compare-detail" hidden>
 <div class="section-title">
@@ -578,7 +588,8 @@
 </div>
 <p class="compare-viewer-empty" id="compare-viewer-empty" role="status" hidden></p>
 <div class="compare-view-body" id="compare-view-body" data-view-mode="word">
-<aside class="compare-diff-rail compare-word-revisions" aria-labelledby="compare-rail-title">
+<div id="compare-section-nav" class="section-nav-wrap" role="navigation" aria-label="章节导航"></div>
+<aside class="compare-diff-rail compare-word-revisions" id="compare-diff-rail" aria-labelledby="compare-rail-title">
 <div class="compare-word-pane-head compare-word-revisions-head">
 <div>
 <span class="compare-word-pane-kicker">修订</span>
@@ -589,6 +600,12 @@
 <strong id="compare-diff-counter" aria-live="polite">0 / 0</strong>
 <button class="btn btn-sm" id="compare-next-diff" type="button" title="下一处修订">下一处 ↓</button>
 </div>
+<!-- FL-D1059（用户原话）：修订栏可折叠隐藏——收起只留把手，双视图独立键记忆。 -->
+<button class="section-collapse-toggle" id="compare-rail-collapse" type="button"
+        aria-expanded="true" aria-controls="compare-diff-rail" aria-label="折叠或展开修订清单栏"
+        title="折叠修订清单栏"
+        data-title-expand="展开修订清单栏" data-title-collapse="折叠修订清单栏"
+        data-text-expand="«" data-text-collapse="»">»</button>
 </div>
 <div class="compare-diff-toolbar">
 <label for="compare-diff-filter">筛选</label>
@@ -715,12 +732,10 @@
 <section class="section" id="view-generation" aria-label="指引生成"><div id="gg-root"></div></section>
 <section class="section" id="view-document" aria-label="合同结果"><div id="document-host"></div></section>
     <section class="section" id="view-guide" aria-label="我的指引">
-<div class="page-actions"><p class="subnote">管理自己的指引版本，并决定新建任务使用哪一版。生成的候选指引需经过导入与核验，不能自动替换当前版本。</p><button class="btn" type="button" data-nav="generation">前往指引生成</button></div>
-<div class="guide-diff-tabs guide-page-tabs" role="tablist" aria-label="指引管理分区">
-<button type="button" role="tab" data-guide-page-tab="versions" class="is-active" aria-selected="true">指引版本</button>
-<button type="button" role="tab" data-guide-page-tab="diff" aria-selected="false">版本对比与上传</button>
+<div class="page-actions">
+<div class="head-actions"><button class="btn" type="button" data-action="guide-diff-open">版本对比</button><button class="btn" type="button" data-nav="generation">前往指引生成</button></div>
 </div>
-<div data-guide-pane="versions">
+<div>
       <div class="card card-pad">
 <div class="section-title">
 <div class="batch-title">
@@ -762,26 +777,6 @@
 </p>
 </div>
 </div>
-<div data-guide-pane="diff" hidden>
-      <div class="card card-pad u-mt-4" id="guide-diff-card">
-<div class="section-title">
-<h2>版本对比</h2>
-<small>选两个版本，看规则改了哪几条、原文哪里动了；对比完全在服务器本地计算，不调用模型</small>
-</div>
-<div class="guide-diff-selects">
-<label>基准版本（旧）
-<select id="guide-diff-from" class="control-select" aria-label="基准版本（旧）"></select>
-</label>
-<label>对比版本（新）
-<select id="guide-diff-to" class="control-select" aria-label="对比版本（新）"></select>
-</label>
-</div>
-<div class="guide-diff-tabs" role="tablist" aria-label="对比内容">
-<button type="button" role="tab" id="guide-diff-tab-rules" data-guide-diff-tab="rules" aria-selected="true">规则差异</button>
-<button type="button" role="tab" id="guide-diff-tab-text" data-guide-diff-tab="text" aria-selected="false">原文比对</button>
-</div>
-<div id="guide-diff-body" aria-live="polite"></div>
-</div>
       <div class="card card-pad u-mt-4">
 <div class="section-title">
 <h2>上传自定义指引</h2>
@@ -794,14 +789,26 @@
 <span class="subnote" id="guide-file-name">尚未选择文件</span>
 <button class="btn btn-primary" type="button" data-action="guide-upload" id="guide-upload-btn" disabled>上传指引</button>
 </div>
-<p class="subnote" id="guide-upload-message" aria-live="polite">解析失败可在列表中查看问题并重新解析。</p>
-</div>
+<p class="subnote" id="guide-upload-message" aria-live="polite">解析失败可在列表里点开「解析详情」查看并重新解析。</p>
 </div>
     </section>
     <section class="section" id="view-models" aria-label="模型配置">
-<div class="card card-pad u-mb-4" id="model-settings-card">
-<div class="section-title"><h2>模型配置</h2><small id="model-settings-source">读取中</small></div>
-<div id="model-settings-body" class="subnote">正在读取模型配置…</div>
+<div class="model-layout">
+<div id="model-settings-body" class="model-main subnote">正在读取模型配置…</div>
+<aside class="card model-help-card" aria-label="配置说明">
+<h2>从配置到生效，三步</h2>
+<ol class="feishu-steps">
+<li><span>1</span><div><strong>选择使用方式</strong><p>系统默认由管理员统一配置，无需设置即可使用；想换自己的模型，在左侧卡片点「修改配置」。</p></div></li>
+<li><span>2</span><div><strong>填密钥与模型</strong><p>在供应商控制台获取访问密钥（API Key），粘贴后填写模型名称，再点「验证连接」。</p></div></li>
+<li><span>3</span><div><strong>验证通过后保存</strong><p>保存后只影响你之后新建的合同修改任务，进行中的任务不受影响。</p></div></li>
+</ol>
+<div class="model-help-copy">
+<strong>复核模型想省事？</strong>
+<p>把修改模型的配置一键复制过去，再单独验证保存。</p>
+<button class="btn btn-sm" type="button" id="model-copy-btn" data-action="model-copy-primary" disabled>复制修改模型的配置给复核模型</button>
+</div>
+<div class="feishu-safety-note"><strong>你的信息安全</strong><p>密钥加密保存，本页不回显；「验证连接」只发起一次冒烟请求，不会发送任何合同内容。</p></div>
+</aside>
 </div>
 </section>
     <section class="section" id="view-settings" aria-label="设置">
@@ -816,7 +823,6 @@
 </div>
 </section>
     <section class="section" id="view-feishu" aria-label="飞书绑定">
-<div class="section-title"><h2>飞书绑定</h2><small>绑定后可直接在飞书私聊机器人发送合同、提交任务</small></div>
 <div class="feishu-binding-layout">
 <div class="card feishu-connect-card" id="feishu-connect-card" data-state="loading">
 <div class="feishu-status-row"><span class="feishu-app-icon" aria-hidden="true">↗</span><div><h2>连接你的飞书账号</h2><p>绑定到当前 FundLex 账号 <strong id="feishu-current-user">—</strong></p></div><span class="feishu-status-badge" id="feishu-binding-badge">读取中</span></div>
@@ -1013,6 +1019,40 @@
 <button class="btn btn-sm" id="close-detail" aria-label="返回任务" hidden>返回任务</button>
 </div>
 <div class="detail-body" id="detail-body">
+</div>
+</div>
+</div>
+<!-- FL-D1063：版本对比弹窗（查看器式，只读；数据=规则差异 / text-diff canonical） -->
+<div class="detail-overlay" id="guide-diff-overlay" hidden>
+<div class="detail-panel detail-panel--wide" role="dialog" aria-modal="true" aria-labelledby="guide-diff-title">
+<div class="detail-head">
+<div>
+<small>指引版本对比 · 只读 · 服务器本地计算，不调用模型</small>
+<h2 id="guide-diff-title">版本对比</h2>
+</div>
+<button class="btn btn-sm" id="guide-diff-close" aria-label="关闭版本对比">✕</button>
+</div>
+<div class="detail-body" id="guide-diff-card">
+<div class="guide-diff-selects">
+<label>基准版本（旧）
+<select id="guide-diff-from" class="control-select" aria-label="基准版本（旧）"></select>
+</label>
+<label>对比版本（新）
+<select id="guide-diff-to" class="control-select" aria-label="对比版本（新）"></select>
+</label>
+</div>
+<div class="guide-diff-toolbar">
+<div class="guide-diff-tabs" role="tablist" aria-label="对比内容" style="display:none">
+<button type="button" role="tab" id="guide-diff-tab-rules" data-guide-diff-tab="rules" aria-selected="true">规则差异</button>
+<button type="button" role="tab" id="guide-diff-tab-text" data-guide-diff-tab="text" aria-selected="false">原文比对</button>
+</div>
+<div class="guide-diff-zoom" role="group" aria-label="缩放">
+<button type="button" class="btn btn-sm" data-gd-zoom="-10" aria-label="缩小">−</button>
+<span id="gd-zoom-level">100%</span>
+<button type="button" class="btn btn-sm" data-gd-zoom="10" aria-label="放大">＋</button>
+</div>
+</div>
+<div id="guide-diff-body" aria-live="polite"></div>
 </div>
 </div>
 </div>

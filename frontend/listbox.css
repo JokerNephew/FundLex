@@ -1,0 +1,31 @@
+/* FundLex V1 Listbox 集成件样式（FL-D991 预制件，2026-11-01）
+ * 与 V2 .ui-listbox*（frontend/src/styles/app.css）同契约的 V1 映射：
+ * 按钮复用 --ctl-* 控件令牌矩阵，面板走 --paper/--line-strong/--accent* 令牌。
+ * 类名前缀 fx- 与 V2 ui- 区分来源；V2 视觉回读基准见 docs/frontend/LISTBOX_COMPONENT_API_20261101.md。
+ */
+
+/* 按钮：与 V1 控件令牌矩阵（app.css §表单控件唯一状态矩阵）同态 */
+.fx-listbox-button { display: inline-flex; align-items: center; gap: 8px; min-width: 132px; max-width: 100%; min-height: var(--ctl-height); border: 1px solid var(--ctl-border); border-radius: var(--ctl-radius); padding: var(--ctl-pad-y) var(--ctl-pad-x); background: #fff; color: var(--ink); outline: none; text-align: left; font: inherit; transition: border-color var(--dur-fast) var(--ease-standard), box-shadow var(--dur-fast) var(--ease-standard), background var(--dur-fast) var(--ease-standard); }
+.fx-listbox-button:hover:not(:disabled) { border-color: var(--ctl-border-hover); }
+.fx-listbox-button:focus-visible { border-color: var(--ctl-border-focus); box-shadow: var(--ctl-focus-ring); }
+.fx-listbox-button:disabled { background: var(--ctl-disabled-bg); color: var(--muted); cursor: not-allowed; }
+.fx-listbox-button .fx-listbox-value { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.fx-listbox-chevron { flex-shrink: 0; width: 7px; height: 7px; border-right: 1.5px solid #707b86; border-bottom: 1.5px solid #707b86; transform: translateY(-2px) rotate(45deg); transition: transform var(--dur-fast) var(--ease-standard); }
+.fx-listbox-button[aria-expanded="true"] .fx-listbox-chevron { transform: translateY(1px) rotate(225deg); }
+
+/* 被增强的原生 select：sr-only 保留为值源/事件源（见 listbox.js 注释） */
+/* FL-D1019 (X-1)：sr-only 必须定住——absolute+left:0/top:0 收敛定位参考系（否则移动端
+   `.guide-diff-selects select{min-width:100%}` 的百分比参照漂移为初始包含块=视口宽，
+   加 left:auto 静态偏移会顶破文档宽 28px，AX2 捕获）；min-width:0!important 抵消全站
+   select 的 min-width 媒体规则；clip-path 辅助不留命中区。 */
+select.fx-listbox-source { position: absolute; left: 0; top: 0; width: 1px; min-width: 0 !important; height: 1px; margin: 0; padding: 0; border: 0; opacity: 0; pointer-events: none; overflow: hidden; clip-path: inset(50%); }
+
+/* 面板：fixed 定位挂 body，z-index 高于 toast(120) */
+.fx-listbox-panel { position: fixed; z-index: 130; max-height: 280px; overflow-y: auto; padding: 4px; background: var(--paper, #fff); border: 1px solid var(--line-strong); border-radius: var(--radius-sm); box-shadow: 0 10px 28px rgba(34, 40, 48, .13); outline: none; }
+.fx-listbox-option { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 7px 10px; border-radius: 5px; color: var(--ink); font-size: 13px; cursor: pointer; user-select: none; }
+.fx-listbox-option[data-focus] { background: var(--surface-soft); }
+.fx-listbox-option[data-selected] { color: var(--accent-dark); font-weight: 650; }
+.fx-listbox-option[data-disabled] { color: var(--muted); cursor: not-allowed; }
+.fx-listbox-check { display: none; flex-shrink: 0; width: 6px; height: 10px; margin-top: -3px; border-right: 2px solid var(--accent); border-bottom: 2px solid var(--accent); transform: rotate(45deg); }
+.fx-listbox-option[data-selected] .fx-listbox-check { display: block; }
