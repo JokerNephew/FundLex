@@ -12,11 +12,13 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from ...upload_validation import (MAX_BATCH_BYTES, UploadValidationError,
-                                  has_tracked_revisions, validate_docx_upload)
+from ...upload_validation import (LEGACY_DOC_MAGIC, MAX_BATCH_BYTES, MAX_UPLOAD_BYTES,
+                                  UploadValidationError, has_tracked_revisions,
+                                  validate_docx_upload)
 from ...compare.ingest import prepare_compare_upload
 from ...guide_generation.service import MAX_REGULATION_BYTES, create_run as create_guide_run
 from ..store import IntegrationConflict, IntegrationStore
+from .client import FeishuFileTooLarge
 from .cards import (active_draft_card, compare_prompt_card, compare_status_card,
                     diagnosis_prompt_card, diagnosis_result_card, draft_card,
                     friendly_error, guide_confirm_card, guide_prompt_card, guide_status_card,
@@ -29,6 +31,19 @@ from .events import MessageEvent, parse_message_event, _get
 log = logging.getLogger(__name__)
 _ACTIVE: "FeishuService | None" = None
 _BINDING = re.compile(r"^(?:绑定|bind)\s*[:：]?\s*([A-Za-z0-9_-]{6,64})$", re.I)
+_BIND_FAILURE_TEXTS = {
+    "FEISHU_BINDING_CODE_INVALID": "绑定码不存在或输错了，请回到 FundLex 工作台「设置」重新生成绑定码。",
+    "FEISHU_BINDING_CODE_CONSUMED": "该绑定码已用过一次，请在工作台设置重新生成一条新的绑定码。",
+    "FEISHU_BINDING_CODE_EXPIRED": "绑定码已过期，请在工作台「设置」生成新的绑定码后重试。",
+    "FEISHU_IDENTITY_ALREADY_BOUND": "这个飞书账号已绑定到其他 FundLex 账号，请先在原账号解除绑定。",
+    "FEISHU_USER_ALREADY_BOUND": "当前 FundLex 账号已绑定其他飞书账号，请先在设置页解除绑定后重新扫码。",
+    "FEISHU_REBIND_CONFLICT": "当前存在历史绑定记录，无法自动换绑，请联系管理员处理。",
+}
+
+
+def _binding_failure_text(code: str) -> str:
+    """FL-D1095：机读错误码→人话；未知原文同口径不动（不冒称/不泄漏机码）。"""
+    return _BIND_FAILURE_TEXTS.get(code) or "绑定出错了，请稍后在工作台设置页重新生成二维码重试。"
 _CONFIRM = {"确认", "确认创建", "创建任务", "confirm"}
 _CANCEL = {"取消", "cancel"}
 _MENU = {"菜单", "任务中心", "help", "帮助", "/menu"}
@@ -164,7 +179,12 @@ class FeishuService:
             try:
                 owner = self.integrations.consume_binding_code(self.provider, event.tenant_key, event.open_id, match.group(1))
             except IntegrationConflict as exc:
-                self._send(event, text_card("绑定失败", str(exc)))
+                # FL-D1095：机读错误码不直接透给用户；与上传任务各界的
+                # code→人话 reason 风格对齐。
+                # FL-D1095：机读错误码不直接透给用户；与上传任务各界的
+                # code→人话 reason 风格对齐。异常无 .code 属性的按原文兜底。
+                self._send(event, text_card("绑定失败",
+                                            _binding_failure_text(getattr(exc, "code", None) or str(exc))))
                 return
             self._send(event, text_card("绑定成功", f"已绑定 FundLex 账号。现在可以发送 DOCX 创建任务。账号：{owner[:8]}…"))
             menu_id = self._send(event, menu_card(None, note="本卡片已自动置顶；以后可直接从会话置顶区打开，不用再发“菜单”。"))
@@ -637,12 +657,36 @@ class FeishuService:
             return
         try:
             data, remote_name = self._client(event.tenant_key).download_message_resource(event.message_id, file_key, "file")
+        except FeishuFileTooLarge:
+            # FL-D1097：超上限即拒收，并把原因说人话，不在后台先把字节全读入。
+            self._send(event, text_card("文件过大",
+                                        f"该文件超过单件上限 {MAX_UPLOAD_BYTES // (1024 * 1024)} MB，"
+                                        "请改从 FundLex 工作台网页上传。"))
+            return
         except Exception as exc:
             log.warning("Feishu file download failed draft=%s error=%s", draft["id"], type(exc).__name__)
             self._send(event, text_card("文件下载失败", "飞书没有返回该文件内容，请重新发送文件消息。"))
             self._send_card_for_draft(event, draft)
             return
-        name = Path(remote_name or name).name
+        original_name = Path(remote_name or name).name
+        # FL-D1096：二进制 CDF .doc 与工作台 LEGACY 口径同轨——经 doc_convert
+        # 转换后再入 DOCX 包安全链，失败/超时一律人话，不冒称不拒收人话。
+        if original_name.lower().endswith(".doc") or data.startswith(LEGACY_DOC_MAGIC):
+            try:
+                from ...doc_convert import DocConvertError, convert_doc_to_docx
+                converted = convert_doc_to_docx(data)
+            except DocConvertError as exc:
+                reason = exc.user_message
+                if exc.code == "LEGACY_DOC_CONVERT_TIMEOUT":
+                    reason = ("转换超时：这份 .doc 太长或结构复杂，转换没有在规定时间内完成，"
+                              "请另存为 DOCX 后重发，或从工作台网页上传")
+                self._send(event, text_card("文件暂时无法使用", reason))
+                self._send_card_for_draft(event, draft)
+                return
+            data = converted
+            validate_name = str(Path(original_name).with_suffix(".docx").name)
+        else:
+            validate_name = original_name
         digest = hashlib.sha256(data).hexdigest()
         accepted = self._accepted_files(draft["id"])
         if any(item.get("sha256") == digest for item in accepted):
@@ -650,14 +694,15 @@ class FeishuService:
             self._send_card_for_draft(event, draft)
             return
         try:
-            validate_docx_upload(name, data)
+            validate_docx_upload(validate_name, data)
             # Tracked changes from another department are accepted; FundLex
             # overlays its own revisions with a distinct author.
         except UploadValidationError as exc:
-            self.integrations.add_draft_file(draft["id"], event.message_id, file_key, name, len(data),
+            self.integrations.add_draft_file(draft["id"], event.message_id, file_key, original_name, len(data),
                                              digest, "", "rejected", exc.code)
             self._send_card_for_draft(event, draft)
             return
+        name = original_name
         if sum(int(item["size"]) for item in accepted) + len(data) > MAX_BATCH_BYTES:
             self.integrations.add_draft_file(draft["id"], event.message_id, file_key, name, len(data),
                                              digest, "", "rejected", "UPLOAD_REQUEST_SIZE_LIMIT")

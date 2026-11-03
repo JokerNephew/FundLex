@@ -6,6 +6,14 @@ closed when production configuration is incomplete.
 """
 from __future__ import annotations
 
+
+class FeishuFileTooLarge(RuntimeError):
+    """附件超过单人件接收上限（FEISHU_FILE_TOO_LARGE）."""
+
+    def __init__(self, message: str = ""):
+        super().__init__(message)
+        self.code = "FEISHU_FILE_TOO_LARGE"
+
 import io
 import json
 import os
@@ -89,7 +97,14 @@ class FeishuOpenApiClient:
         if error:
             raise error
 
-    def download_message_resource(self, message_id: str, file_key: str, resource_type: str = "file") -> tuple[bytes, str | None]:
+    def download_message_resource(self, message_id: str, file_key: str, resource_type: str = "file",
+                                   *, max_bytes: int | None = None) -> tuple[bytes, str | None]:
+        """流式收料+单位件上限（与工作台 max_file_bytes 同量级）。
+
+        超出 ``max_bytes``（缺省 = ``MAX_UPLOAD_BYTES``）报
+        ``FeishuFileTooLarge``（FEISHU_FILE_TOO_LARGE），而不是把全部字节读完
+        才拒绝。
+        """
         from lark_oapi.api.im.v1 import GetMessageResourceRequest
         request = (GetMessageResourceRequest.builder().message_id(message_id).file_key(file_key)
                    .type(resource_type).build())
@@ -100,7 +115,20 @@ class FeishuOpenApiClient:
         stream = getattr(response, "file", None)
         if stream is None:
             raise RuntimeError("FEISHU_FILE_EMPTY")
-        return stream.read(), getattr(response, "file_name", None)
+        if max_bytes is None:
+            from ..upload_validation import MAX_UPLOAD_BYTES
+            max_bytes = MAX_UPLOAD_BYTES
+        chunks: list[bytes] = []
+        received = 0
+        while True:
+            chunk = stream.read(1024 * 1024)
+            if not chunk:
+                break
+            received += len(chunk)
+            chunks.append(chunk)
+            if received > max_bytes:
+                raise FeishuFileTooLarge(f"received {received} bytes > limit {max_bytes}")
+        return b"".join(chunks), getattr(response, "file_name", None)
 
     def send_file(self, receive_id: str, filename: str, data: bytes) -> str:
         from lark_oapi.api.im.v1 import (CreateFileRequest, CreateFileRequestBody,
