@@ -9790,3 +9790,8 @@ H＝E×…
 - **顺藤新发现(独立立案待办)**：qa-base/frontend **工作树**与封版 510f17c 差 5 文件 364+/202- 未提交修改（app.css/app.js/compare.html/compare.js/sectionnav.js）——canonical 工作树有未封手的在制改动,存被误当基线发布之险。请接班/master 裁:这批改动是未完成手修(提交)还是丢弃(还原)。
 - 后端不受回退影响（admin API 全家桶仍在产可用,仅看板页面回到此波前样式）。
 - 后续：用户具体缺失点清单一来,按清单定点修复后重做 admin 前端上产（新的基底=届时 qa-base 现状/或 510f17c+落地手修,由裁决定）。
+
+## FL-D1102 生产前端二度回退校正：目标=主线上次上产态 cdb45a4（2026-11-03 ~21:5x，已执行·已验证）
+- 经过：集成波携旧前端把生产覆盖 → 另一线先回退到 510f17c（昨日封版，仍早于今午波）→ 用户拍「回退到主线上次上线态」。
+- 处置：备份 /tmp/opencode/frontend-pre-rollback-fd1102 后，/opt/frontend 五件（app.js/app.css/compare.html/compare.js/sectionnav.js）换回 cdb45a4 字节（今午主线最后上产态：指引弹窗/章节栏目录闸/卡表列宽/修改人全链等全在）；StaticFiles 热读零重启；浏览器实测登录页正常、console 零错；JS 三 node --check 过。
+- 边界：只动前端五静件，后端（f38a275 admin 全家桶引擎）一寸未碰；admin 前端波仍按他们的笔录押二波。
