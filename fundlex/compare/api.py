@@ -1,6 +1,7 @@
 """FastAPI routes for the independent contract comparison feature."""
 from __future__ import annotations
 import gzip
+import logging
 import hashlib
 import json
 from collections import OrderedDict
@@ -246,7 +247,28 @@ def register_compare_routes(application, compare_store: CompareStore, user_depen
                     "revisions_accepted": prepared["revisions_accepted"] if prepared and error is None else 0,
                     "error_code": error,
                 })
-            return call(compare_store.upload, user, task_id, uploads)
+            # FL-D1093（FL-D1084 体检缺陷③）：上传完成落结构化 INFO——
+            # 名称列表+status/error_code 摘要，不含内容/正文/哈希，事后可用于
+            # 还原「花了多少秒+收了/拒了哪几份+错码是什么」的产线实例
+            #（prod 16:47 .doc 上传 200 但 receipt 无迹可查了的事）。
+            result = call(compare_store.upload, user, task_id, uploads)
+            try:
+                receipts = result.get("receipts", []) if isinstance(result, dict) else []
+                logging.getLogger("fundlex.compare").info(
+                    "compare uploads task=%s files=%d receipts=%s",
+                    task_id, len(uploads),
+                    json.dumps([
+                        {"client_id": u["client_id"], "name": u["name"],
+                         "status": (next((r.get("status") for r in receipts
+                                          if r.get("client_id") == u["client_id"]), None)
+                                    or ("rejected" if u["error_code"] else "accepted")),
+                         "error_code": (u["error_code"]
+                                        or next((r.get("error_code") for r in receipts
+                                                 if r.get("client_id") == u["client_id"]), None))}
+                        for u in uploads], ensure_ascii=False))
+            except Exception:  # 日志失败绝不影响上传响应
+                logging.getLogger("fundlex.compare").warning("compare receipts log capture failed")
+            return result
         finally:
             for upload in files:
                 await upload.close()

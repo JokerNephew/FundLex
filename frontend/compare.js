@@ -711,6 +711,8 @@
           key: 'fundlex-compare-sectionnav-collapsed',
           gridContainer: $('compare-view-body'),
           stateClass: 'is-sectionnav-collapsed',
+          // FL-D1092：折叠切宽后重排虚拟块（FL-D1084 缺陷②，大文档防错位/卡排）。
+          onToggle: () => { refreshVirtualLayouts(); drawLines(); },
         },
         onSelect: (section, jump) => {
           // 虚拟文档路径总是换方案：直接用虚拟块 ID 跳，别基于 DOM rect（用着三 als 空间拼接会进假象错位线）。
@@ -774,7 +776,9 @@
     const toggle = $('compare-show-sources'); if (toggle) toggle.checked = show;
     if (show && state.view && !state.wordSourcesRendered) renderWordSources();
     if (persist) { try { localStorage.setItem('fundlex-compare-show-sources', show ? '1' : '0'); } catch {} }
-    requestAnimationFrame(() => { if(show){const merged=$('compare-word-merged-pane');if(merged)syncPaneScroll(merged);} drawLines(); });
+    // FL-D1092：切宽后必须重测虚拟块（FL-D1084 缺陷②）——is-sources-hidden 改变
+    // merged pane 分配宽，仅 drawLines 时 spacer 沿旧高度排=大文档错位/卡排。
+    requestAnimationFrame(() => { if(show){const merged=$('compare-word-merged-pane');if(merged)syncPaneScroll(merged);} refreshVirtualLayouts(); drawLines(); });
   }
   function setMarkupMode(mode, persist=true) {
     const layout = $('compare-word-layout'); if (!layout) return;
@@ -1208,7 +1212,9 @@
     state.docs={merged:parseVirtualDocument(payload.merged?.html||payload.right?.html)};
     virtualize($('compare-word-merged-pane'),state.docs.merged,{merged:true,charsPerLine:48,onChange:onVirtualChange});
     refreshDiffMarks(); $('compare-diff-counter').textContent='0 / 0'; renderDiffList();
-    if(!d.length)$('compare-diff-list').innerHTML=`<p class="empty">${incomplete?'已覆盖范围内没有发现文字差异。':'两份合同没有文字差异。'}</p>`;
+    // FL-D1091：空差异文案按压制开关分口径——FL-D1045 压制下不得再出「已覆盖范围内」
+    //（上前检修 FL-D1084 缺陷①证据位：压制意图下仍露覆盖口径措辞）。
+    if(!d.length)$('compare-diff-list').innerHTML=`<p class="empty">${COMPARE_COVERAGE_CHECKS&&incomplete?'已覆盖范围内没有发现文字差异。':'两份合同没有文字差异。'}</p>`;
     setMobilePane('merged',false);
     drawLines();
     if(state.viewMode==='classic')renderClassicView();
@@ -1305,8 +1311,10 @@
       {
         const railBtn = $('compare-rail-collapse'), bodyGrid = $('compare-view-body');
         if (railBtn && bodyGrid && window.FundLexSectionNav) {
+          // FL-D1092：修订栏折叠切宽后同样重排虚拟块。
           window.FundLexSectionNav.attachCollapse(
-            railBtn, bodyGrid, 'is-rail-collapsed', 'fundlex-compare-rail-collapsed');
+            railBtn, bodyGrid, 'is-rail-collapsed', 'fundlex-compare-rail-collapsed',
+            false, () => { refreshVirtualLayouts(); drawLines(); });
         }
       }
       $('compare-close-viewer')?.addEventListener('click',closeViewer);

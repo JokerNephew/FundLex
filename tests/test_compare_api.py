@@ -73,6 +73,39 @@ def test_compare_legacy_view_reconstructs_alignment(tmp_path):
     assert any(group['left'] and group['right'] for group in alignment)
 
 
+def test_compare_upload_receipts_log_structured_summary(tmp_path, caplog):
+    """FL-D1093：上传完成落一行结构化 INFO——名称列表+status/error_code，
+    不含内容/哈希；日志失败绝不拖垮上传响应（内层 except 兜底）。"""
+    import logging
+    revised = revised_docx()
+    normalized = prepare_compare_input(revised).data
+    client = TestClient(create_app(tmp_path / 'store'))
+    headers = {'X-FundLex-User': 'alice'}
+    payload = {'name': 'cmp', 'pairs': [{'client_pair_id': 'p', 'label': 'P',
+        'left': {'client_id': 'l', 'name': 'audit-a.docx', 'size': len(revised)},
+        'right': {'client_id': 'r', 'name': 'audit-b.docx', 'size': len(normalized)}}]}
+    created = client.post('/api/compare/tasks', headers=headers, json=payload)
+    assert created.status_code == 201
+    task_id = created.json()['id']
+    with caplog.at_level(logging.INFO, logger='fundlex.compare'):
+        uploaded = client.post(f'/api/compare/tasks/{task_id}/uploads', headers=headers,
+                               data={'client_ids': '["l","r"]'},
+                               files=[('files', ('audit-a.docx', revised)),
+                                      ('files', ('audit-b.docx', normalized))])
+    assert uploaded.status_code == 200, uploaded.text
+    hits = [r for r in caplog.records if r.name == 'fundlex.compare'
+            and r.levelno == logging.INFO and 'compare uploads' in r.getMessage()]
+    assert hits, '结构化 INFO 行缺失'
+    message = hits[-1].getMessage()
+    assert f'task={task_id}' in message and 'files=2' in message
+    assert 'audit-a.docx' in message and 'audit-b.docx' in message
+    # 内容/哈希不得入日志——只名称+status/error_code 摘要（FL-D1093 口径）。
+    assert 'normalized_sha256' not in message
+    import hashlib as _hashlib
+    assert _hashlib.sha256(revised).hexdigest()[:16] not in message
+    assert 'receipts=' in message and '"status": "accepted"' in message
+
+
 def test_compare_upload_accepts_revisions_and_returns_audit_metadata(tmp_path):
     revised = revised_docx()
     normalized = prepare_compare_input(revised).data

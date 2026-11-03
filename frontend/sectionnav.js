@@ -237,7 +237,8 @@
         cbtn.setAttribute('aria-expanded', 'true');
         cbtn.setAttribute('aria-label', '折叠或展开章节栏');
         head.appendChild(cbtn);
-        window.FundLexSectionNav.attachCollapse(cbtn, collapse.gridContainer, collapse.stateClass, collapse.key);
+        window.FundLexSectionNav.attachCollapse(cbtn, collapse.gridContainer, collapse.stateClass, collapse.key,
+                                                false, collapse.onToggle || null);
       }
       const list = document.createElement('ol');
       list.className = 'section-nav-list';
@@ -365,57 +366,24 @@
     return { handle: sp, instance };
   }
 
-  /* FL-D1059（用户原话）：章节栏/修订栏可折叠隐藏。
-   * 交互：外缘 = ☰ 把手（rail）+ 「»」复位钮于收起后露出重区；收起=细条仅留把手 + 打开键；
-   * component classes： is-collapsed, ensureExpanded chevys used locally for each edge.»,  **/
-  function attachCollapse({ host, container, edgeClass, key, defaultCollapsed = false }) {
-    if (!host || !container) return null;
-    let collapsed = defaultCollapsed;
-    try {
-      const saved = localStorage.getItem(key || (edgeClass + '-collapsed'));
-      if (saved !== null) collapsed = saved === '1';
-    } catch {}
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'section-collapse-toggle';
-    btn.setAttribute('aria-label', container.getAttribute('aria-label-toggle') || '折叠/展开');
-    btn.setAttribute('aria-expanded', String(!collapsed));
-    btn.setAttribute('aria-controls', host.id || '');
-    btn.title = collapsed ? '展开章节栏' : '折叠章节栏';
-
-    const setState = (next) => {
-      collapsed = !!next;
-      container.classList.toggle('is-collapsed', collapsed);
-      btn.classList.toggle('is-collapsed', collapsed);
-      btn.setAttribute('aria-expanded', String(!collapsed));
-      btn.title = collapsed ? '展开章节栏' : '折叠章节栏';
-      btn.textContent = collapsed ? '»' : '«';
-      try { localStorage.setItem(key || (edgeClass + '-collapsed'), collapsed ? '1' : '0'); } catch {}
-    };
-    btn.addEventListener('click', (e) => { e.preventDefault(); setState(!collapsed); });
-    btn.addEventListener('keydown', (e) => {
-      if ((e.key === 'Enter' || e.key === ' ') && !e.altKey && !e.ctrlKey) {
-        e.preventDefault(); setState(!collapsed);
-      }
-    });
-    host.append(btn);
-    setState(collapsed);
-    return { toggle: btn, setState, get collapsed() { return collapsed; } };
-  }
 
   /* FL-D1059：折叠通用钮——调用方先提供 DOM 的钮 `role=button` / class section-collapse，
    * 调 helper 接其上（hind 支持不更改 DOM 位置内容的方式更冷我享面试官吧）：
-   * attachCollapse(btn, gridContainer, stateClass, key_persistence)
+   * attachCollapse(btn, gridContainer, stateClass, key_persistence, onToggle)
    * 每次 toggle：gridContainer.classList.toggle(stateClass, next)、btn aria-expanded 同步、
-   * localStorage key 记住（视图独立键）。 */
-  function attachCollapse(btn, gridContainer, stateClass, key, defaultCollapsed = false) {
+   * localStorage key 记住（视图独立键）。
+   * FL-D1092：onToggle(collapsed) 可选回调——折叠切宽后由调用方触发宿主重排
+   *（比对视图=refreshVirtualLayouts+drawLines，防止大文档虚拟块沿旧宽错位）。 */
+  function attachCollapse(btn, gridContainer, stateClass, key, defaultCollapsed = false, onToggle = null) {
     if (!btn || !gridContainer || !stateClass) return null;
     let collapsed = defaultCollapsed;
     try {
       const saved = localStorage.getItem(key);
       if (saved !== null) collapsed = saved === '1';
     } catch {}
-    const apply = (next) => {
+    let fromUser = false;
+    const apply = (next, user = false) => {
+      fromUser = !!user;
       collapsed = !!next;
       gridContainer.classList.toggle(stateClass, collapsed);
       btn.classList.toggle('is-active', collapsed);
@@ -427,10 +395,12 @@
         btn.textContent = collapsed ? (btn.dataset.textExpand || '»') : (btn.dataset.textCollapse || '«');
       }
       try { localStorage.setItem(key, collapsed ? '1' : '0'); } catch {}
+      // FL-D1092：切宽后重排通知（初始化 apply 不触发——避免首帧双排版）。
+      if (onToggle && fromUser) requestAnimationFrame(() => onToggle(collapsed));
     };
-    btn.addEventListener('click', e => { e.preventDefault(); apply(!collapsed); });
+    btn.addEventListener('click', e => { e.preventDefault(); apply(!collapsed, true); });
     btn.addEventListener('keydown', e => {
-      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); apply(!collapsed); }
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); apply(!collapsed, true); }
     });
     apply(collapsed);
     return { apply, get collapsed() { return collapsed; } };

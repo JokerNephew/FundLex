@@ -339,3 +339,141 @@ def test_compare_scroll_perf_baseline(browser, live_dev):
         out.write_text(json.dumps(results, ensure_ascii=False, indent=2))
         context.close()
     assert page_errors == []
+
+
+def test_compare_fold_and_source_toggles_relayout_virtual_blocks(browser, live_dev):
+    """FL-D1092（FL-D1084 体检缺陷②）：折叠钮/源文档开关切宽后虚拟块必须重排，
+    实证=scrollHeight 实测随宽度变化（未修补时代码仅 drawLines→spacer 沿旧高卡排），
+    把手真拖后滚动泵依旧活跃、内容可视不卡。"""
+    base = live_dev
+    context = browser.new_context(viewport={"width": 1440, "height": 1000})
+    context.add_init_script("localStorage.setItem('fundlex-dev-user','compare-relayout')")
+    page = context.new_page()
+    page_errors: list[str] = []
+    page.on("pageerror", lambda error: page_errors.append(str(error)))
+    install_api(page, scenario)
+    try:
+        page.goto(base + "/#compare?mode=detail&id=T5&pair=P5", wait_until="networkidle")
+        page.locator("#compare-word-merged-pane .compare-block").first.wait_for(state="visible")
+        page.wait_for_timeout(500)
+
+        def probe():
+            return page.evaluate(
+                "() => ({sh: document.getElementById('compare-word-merged-pane').scrollHeight,"
+                "       w: document.getElementById('compare-word-merged-pane').getBoundingClientRect().width})")
+
+        p0 = probe()
+        assert p0["sh"] > 5000, "大文档虚拟块未生效（scrollHeight 过低）"
+
+        # 折叠章节栏 → pane 变宽 → 同文重排应变矮
+        page.locator(".section-nav .section-collapse-toggle").click()
+        page.wait_for_timeout(600)
+        p1 = probe()
+        assert p1["w"] > p0["w"], "章节栏折叠未释放宽度"
+        assert p1["sh"] < p0["sh"], f"切宽未重测：{p0} -> {p1}"
+
+        # 折叠修订栏 → 更宽 → 更矮
+        page.locator("#compare-rail-collapse").click()
+        page.wait_for_timeout(600)
+        p2 = probe()
+        assert p2["w"] > p1["w"]
+        assert p2["sh"] < p1["sh"], f"修订栏折叠未重测：{p1} -> {p2}"
+
+        # 双双恢复 → 宽度与高都回原样（±3% 容忍滚动锚定位移）
+        page.locator("#compare-rail-collapse").click()
+        page.locator(".section-nav .section-collapse-toggle").click()
+        page.wait_for_timeout(700)
+        p3 = probe()
+        assert abs(p3["w"] - p0["w"]) <= 2, f"恢复态宽度不齐：{p0} vs {p3}"
+        assert abs(p3["sh"] - p0["sh"]) / p0["sh"] <= 0.03, f"恢复态高回不来：{p0} vs {p3}"
+
+        # 把手真拖（修订栏 splitter 左移 150px：rail 变宽同列反递进）→必须重排
+        splitter = page.locator("#compare-rail-splitter")
+        box = splitter.bounding_box()
+        assert box, "rail splitter 缺失"
+        x, y = box["x"] + box["width"] / 2, box["y"] + min(240, box["height"] / 2)
+        page.mouse.move(x, y)
+        page.mouse.down()
+        for step in range(1, 16):
+            page.mouse.move(x - step * 10, y)
+            page.wait_for_timeout(30)
+        page.mouse.up()
+        page.wait_for_timeout(700)
+        p4 = probe()
+        assert p4["w"] != p3["w"], "把手拖动未改变布局"
+        # 把手链早有 onEnd 重测（非本缺目标）——宽度变化即可，重测差幅受
+        # chunk 整数取整支配，不作 sh 断言；紧盯“不卡”是靠后续滚动泵段。
+
+        # 源文档照开切回宽度路径——开着前后各测一次
+        page.locator("#compare-show-sources").check()
+        page.wait_for_timeout(700)
+        p5 = probe()
+        assert p5["w"] < p4["w"], "源文档开启未分栏"
+        assert p5["sh"] > p4["sh"], "源文档开启后 merged 未按新窄度重测"
+
+        # 内容“不卡”：滚动泵到位——首可视块推进且润度可控
+        run_scroll_scenario(page, "compare-word-merged-pane")
+        assert page.locator("#compare-word-merged-pane").evaluate("e => e.scrollTop") > 0
+        assert visible_number(page, "compare-word-merged-pane") is not None
+    finally:
+        context.close()
+    assert page_errors == []
+
+
+def test_compare_empty_diff_copy_gated(browser, live_dev):
+    """FL-D1091：空差异文案按 COMPARE_COVERAGE_CHECKS 门——build 口径（门=false）
+    一律「两份合同没有文字差异。」，不得再出「已覆盖范围内」（即便 coverage=incomplete）。"""
+    base = live_dev
+    context = browser.new_context(viewport={"width": 1440, "height": 1000})
+    context.add_init_script("localStorage.setItem('fundlex-dev-user','compare-empty-copy')")
+    page = context.new_page()
+    page_errors: list[str] = []
+    page.on("pageerror", lambda error: page_errors.append(str(error)))
+
+    try:
+        # 手造 diff=0 的 pair 视图：覆盖 status 为 incomplete 也不过门
+        def scenario_empty(path, query, route):
+            handled_prefixes = ("/api/compare/tasks/T5", "/api/compare/tasks",
+                                "/api/compare/pairs/P5/view", "/api/compare/pairs/P5/selection")
+            if not any(path == p for p in handled_prefixes):
+                return scenario(path, query, route)
+            if path == "/api/compare/tasks/T5":
+                return respond(route, {"id": "T5", "name": "empty", "status": "succeeded", "total": 1,
+                                       "pairs": [{"id": "P5", "label": "空差异", "status": "succeeded",
+                                                  "left": {"name": "a.docx"}, "right": {"name": "b.docx"},
+                                                  "summary": {"total": 0}}]})
+            if path == "/api/compare/tasks":
+                return respond(route, {"items": [{"id": "T5", "name": "empty", "status": "succeeded", "total": 1,
+                                                  "pairs": [{"id": "P5", "label": "空差异", "status": "succeeded",
+                                                             "left": {"name": "a.docx"}, "right": {"name": "b.docx"},
+                                                             "summary": {"total": 0}}]}],
+                                                  "total": 1, "page": 1, "page_size": 20})
+            if path == "/api/compare/pairs/P5/view":
+                html = '<div class="compare-document compare-merged-document"><p class="compare-block" data-block-id="R1">共同条款</p></div>'
+                return respond(route, {"pair": {"id": "P5", "label": "空差异"}, "result_sha256": "a" * 64,
+                                       "left": {"name": "a.docx", "html": '<p data-block-id="L1">共同条款</p>'},
+                                       "right": {"name": "b.docx", "html": '<p data-block-id="R1">共同条款</p>'},
+                                       "merged": {"name": "b.docx", "html": html},
+                                       "summary": {"total": 0, "modify": 0, "insert": 0, "delete": 0},
+                                       "coverage": {"status": "incomplete",
+                                                    "warnings": ["UNSUPPORTED_VISIBLE_CONTENT:header"]},
+                                       "diffs": []})
+            if path == "/api/compare/pairs/P5/selection":
+                return respond(route, {"pair_id": "P5", "result_sha256": "a" * 64,
+                                       "left_source_sha256": "b" * 64, "right_source_sha256": "c" * 64,
+                                       "selection_epoch": 0,
+                                       "draft": {"selection_epoch": 0, "decisions": {}, "decision_hash": "d" * 64},
+                                       "decisions": {},
+                                       "assessment": {"pending_ids": [], "issues": [], "can_generate": False},
+                                       "diffs": [], "artifacts": []})
+            return respond(route, {})
+
+        install_api(page, scenario_empty)
+        page.goto(base + "/#compare?mode=detail&id=T5&pair=P5", wait_until="networkidle")
+        page.locator("#compare-word-merged-pane .compare-block").first.wait_for(state="visible")
+        message = page.locator("#compare-diff-list .empty").inner_text()
+        assert message == "两份合同没有文字差异。", f"FL-D1091 门漏泄：{message!r}"
+        assert "已覆盖范围内" not in message
+    finally:
+        context.close()
+    assert page_errors == []
