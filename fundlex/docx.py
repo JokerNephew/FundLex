@@ -304,7 +304,12 @@ def _validate_package(parts: Mapping[str, bytes], limits: ZipLimits, *, full: bo
                             and local in REVISION_TAGS):
                         raise DocxError("EXISTING_REVISION_UNSUPPORTED", name)
                     if element.tag == Q("documentProtection"):
-                        raise DocxError("DOCUMENT_PROTECTED")
+                        # FL-D1114（恒裕/稳信评测误拒实锤）：仅 enforcement 生效才拒。
+                        # w:edit="trackedChanges" w:enforcement="0" 是 Word 曾开过修订模式
+                        # 的历史痕迹（广发系修订件通病），并非真保护；enforcement 缺省保守拒。
+                        _enf = (element.get(Q("enforcement")) or "").strip().lower()
+                        if _enf in ("1", "true", "on", "yes"):
+                            raise DocxError("DOCUMENT_PROTECTED")
             for element in root.iter():
                 if not isinstance(element.tag, str):
                     continue

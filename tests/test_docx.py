@@ -9,6 +9,7 @@ from zipfile import ZipFile, ZIP_DEFLATED
 import pytest
 from docx import Document
 from docx.oxml import OxmlElement
+from docx.oxml.ns import qn
 from lxml import etree
 
 from fundlex.docx import (
@@ -205,7 +206,11 @@ def test_merged_table_and_protection_fail_closed(tmp_path: Path) -> None:
     with ZipFile(source) as archive:
         parts = {name: archive.read(name) for name in archive.namelist()}
     settings = etree.fromstring(parts["word/settings.xml"])
-    settings.append(OxmlElement("w:documentProtection"))
+    protection = OxmlElement("w:documentProtection")
+    # FL-D1114：仅 enforcement 生效才拒（真加密）；常态修订痕迹件 enforcement=0 必过。
+    protection.set(qn("w:edit"), "readOnly")
+    protection.set(qn("w:enforcement"), "1")
+    settings.append(protection)
     parts["word/settings.xml"] = etree.tostring(settings)
     protected = tmp_path / "protected.docx"
     with ZipFile(protected, "w", ZIP_DEFLATED) as archive:
@@ -214,6 +219,20 @@ def test_merged_table_and_protection_fail_closed(tmp_path: Path) -> None:
     with pytest.raises(DocxError) as error:
         inspect_docx(protected, full=True)
     assert error.value.code == "DOCUMENT_PROTECTED"
+
+    # 反例：w:edit="trackedChanges" w:enforcement="0"（Word 曾开修订模式的历史痕迹）不得误拒。
+    settings2 = etree.fromstring(parts["word/settings.xml"])
+    settings2.remove(settings2.find(qn("w:documentProtection")))
+    benign = OxmlElement("w:documentProtection")
+    benign.set(qn("w:edit"), "trackedChanges")
+    benign.set(qn("w:enforcement"), "0")
+    settings2.append(benign)
+    parts["word/settings.xml"] = etree.tostring(settings2)
+    benign_path = tmp_path / "tracked-mode-history.docx"
+    with ZipFile(benign_path, "w", ZIP_DEFLATED) as archive:
+        for name, data in parts.items():
+            archive.writestr(name, data)
+    inspect_docx(benign_path, full=True)  # 应无 DOCUMENT_PROTECTED
 
 
 def test_pdf_and_traversal_entry_rejected(tmp_path: Path) -> None:
