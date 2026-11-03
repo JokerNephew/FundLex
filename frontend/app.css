@@ -1111,3 +1111,6 @@ body .ss-content .ss-list .ss-optgroup .ss-optgroup-label{color:var(--muted);fon
 .review-layout.is-rail-collapsed .review-splitter{display:none}
 
 .guide-diff-selects .control-select{max-width:none}
+
+.model-role-form label,.model-role-form .meta-line,.model-roles-grid label{font-weight:400;line-height:1.9}
+.model-deprecated-hint{line-height:1.9}

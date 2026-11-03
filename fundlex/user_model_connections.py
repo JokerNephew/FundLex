@@ -28,22 +28,22 @@ from .models.config import ModelRoleConfig
 # 智谱 docs.bigmodel.cn model-overview; OpenAI platform docs+退役公告（快照
 # 2027-01-14 计划以官方公告为准）; siliconflow api-docs release notes。
 PROVIDERS = {
-    "openai": {"label": "OpenAI（兼容接口）", "base_url": "https://api.openai.com/v1",
+    "openai": {"label": "OpenAI", "base_url": "https://api.openai.com/v1",
                "models": ["gpt-5.5", "gpt-5.2", "gpt-5-mini"],
                "deprecated_models": [
                    {"id": "gpt-4.1", "note": "官方列入快照退役计划（2027-01-14 起），建议切 GPT-5 系列"},
                    {"id": "gpt-4.1-mini", "note": "官方列入快照退役计划（2027-01-14 起），建议切 GPT-5 mini"}]},
-    "deepseek": {"label": "DeepSeek（兼容接口）", "base_url": "https://api.deepseek.com/v1",
+    "deepseek": {"label": "DeepSeek", "base_url": "https://api.deepseek.com/v1",
                  "models": ["deepseek-v4-pro", "deepseek-flash"],
                  "deprecated_models": [
                      {"id": "deepseek-chat", "note": "2026-07-24 官方停用，现由 deepseek-flash 接任"},
                      {"id": "deepseek-reasoner", "note": "2026-07-24 官方停用，现由 deepseek-flash（思考模式）接任"}]},
-    "alibaba": {"label": "阿里云百炼（兼容接口）",
+    "alibaba": {"label": "阿里云百炼",
                 "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
                 "models": ["qwen-max", "qwen-plus", "qwen-flash"],
                 "deprecated_models": [
                     {"id": "qwen-turbo", "note": "现售目录未列（高速线由 qwen-flash 接任），仅供参考名灰置"}]},
-    "moonshot": {"label": "月之暗面 Kimi（兼容接口）", "base_url": "https://api.moonshot.cn/v1",
+    "moonshot": {"label": "月之暗面 Kimi", "base_url": "https://api.moonshot.cn/v1",
                  "models": ["kimi-k3.1-pro", "kimi-k3.1-pro-highspeed", "kimi-k3"],
                  "deprecated_models": [
                      {"id": "moonshot-v1-8k", "note": "2026-08-31 官方下线，建议切 kimi-k3.1-pro"},
