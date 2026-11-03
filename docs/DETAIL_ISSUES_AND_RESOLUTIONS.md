@@ -9730,3 +9730,10 @@ H＝E×…
 
 ### 2026-11-03 审计线收官注记
 - admin-board 走查残留已自清(029ee6d),树工作区干净；历史 UI 实施件(11aba42/6bda30d 系 line5 树史实)归统派线已评估(6bda30d 即为 line5 正式交付,无需再取舍)。审计线任务池清空待派。
+
+
+## 2026-11-03 放行波装配实录
+- 用户令「已经可以交付的可以都部署上线了」→ FL-D1082 逐项放行制执行，验证未过者(.doc 异步 F1/F2)不放行。
+- 发现实锤：3006cc3/774b6fe 为**补丁束文本态**而非合入代码——ESG 同病原地复发铁证(rc-esg 仍 WRITER_SOURCE_MISMATCH)；我方 git apply 两补丁入集成树（D1076-OK/K1K2-OK/check通过，测试51绿），登记「补丁入树≠补丁生效」教训进 PACKAGING 清单待补。
+- accept2 半档：rc-a50 written6(D1 厂家判定待rep细判)/rc-dj2 written7(15→14 UNAUTH 证文本态)；rc-yl(D4)在途。
+- 集成树本体复检(accept3:v-esg/v-dj)跑批中：ESG 必活+DJ 冤杀归零方可 publish。
