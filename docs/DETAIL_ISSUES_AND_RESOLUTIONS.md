@@ -9530,3 +9530,9 @@ H＝E×…
 - 处置：弹窗两下拉打 data-fl-selectvend="off" 退出 SS 托管（原生 select）；refreshGuideDiffCard 加 700ms 程序态窗（d.prog），change 监听窗内忽略回声。
 - 同源坑记二：compare.css 的 `.compare-view-body[data-view-mode="classic"] .compare-word-view{display:none}` 对真比对页成立；本弹窗双栏复用 word-view 容器，body 恒置 data-view-mode="word" 防整体误隐。
   - 2026-11-03 追评处置（FL-D1074 补记）：①顶部块太高挤文档——工具栏/摘要行/面板头三层padding全压（123px达成）；②Word 视图缺右侧两块——照抄合同比对补「原文档/修订的文档」上下堆叠源文档栏（.compare-word-sources 壳+「显示源文档」勾选,默认显示）；双栏对照经 display:contents 回两大栏。实证：Word 三栏 818/339×2、勾选关掉源文档、classic 579×2 大栏、classic 跳定位高亮全绿。
+
+## FL-D1076 指引对比弹窗抄漏件三连修（2026-11-03 ~16:0x，已实施·已验证）
+- ①字号根因：弹窗缺 #id 域字体规则，合并稿吃了全局 .compare-word-pane 小字号；补齐 #gd-diff-viewer 版 14px/1.95 Songti 合并稿规则+源文档 .8 zoom（实测 fs=14px/lh=27.3）。
+- ②块宽不可拖：补两个 compare-column-splitter（修订栏把手+源文档把手），FundLexColumnSplitter 同款契约（localStorage 记宽）；实证拖 300→450 / 320→443。
+- ③关「显示源文档」后合并稿不铺满：#gd-diff-word-layout 自写规则特异度压过 .is-sources-hidden 基础规则，补 #id 版 sources-hidden 单栏规则；实证关掉后合并稿 1002px 铺满、把手消失。
+- ④顶块三轮压至 126px（视图切换并进摘要行+下拉 260）。
