@@ -9831,3 +9831,8 @@ H＝E×…
 - 处置：清 17 棵退役施工树（qa-engine×5/qa-feat-recall/fullsite/gg-audit/audit-engine2/recall-miss/wave2-labels2/frontend×3/overseer-2/compare-ux/corpus-b）+pip/playwright 缓存+journal 真空 → 5.5G 回（86%）；双服务重启全活：cap 200 0s、login 401 0s（健康即时）。
 - 教训（入册）：磁盘巡线阈值从 2G 抬到 3G 干预点；故障时 df -h 作为第一条命令（今晚先被 shell 空包误导了几轮）。
 - 持存验证：cdb45a4 前端 app.js 字节数 234790 持存；后端五件回补（action_text/bsd/qtd收修订/兼容接口/html_view）经事故验证均在产。
+
+## FL-D1108 集成线 locate 波四度前端覆盖事故（2026-11-03 ~23:2x，已回补·已验证）
+- 经：locate 波放行（engine fd114c84/service 58906d3988）文案写「前端零变更（=510f17c)」——但产线前端在该点已在 cdb45a4（主线当日最后上产态），其波把五静件再次冲回 510f17c。为 FL-D1099 教训后 3 小时内的二度同类事故（总第四次）。
+- 处置：主线立即回补（同 FL-D1102 刀路）：五件恢 cdb45a4、JS 语法过、gd-diff-viewer/rev-author 指纹重现在产；其包备份 /tmp/opencode/frontend-pre-fd1108-locate-wave。
+- 根因（屡犯本相）：发布线把 qa-base 当真理面（自信他们树基底=产线面），对缝名单缺 frontend 五件实测——已二度纠偏令（另发）并将发出前端 sha 真名单表作唯一验签表。
