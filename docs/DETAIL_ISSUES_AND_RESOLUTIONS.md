@@ -9720,3 +9720,9 @@ H＝E×…
 ## 2026-11-03 晚三线交付核验注记
 - c2784a6 admin全家桶后端：tree核实5文件+admin full测试9/9我方复跑绿；a5a578a FL-D1085生成域冰封闸：默认off域404+upload_guard免除+存量套件79绿零变，冻结测试3例我方复跑绿。部署步需在产env开立 FUNDLEX_GUIDE_GENERATION_ENABLED 管理口径（默认off,不要经发布误开）。
 - 指引审计线(admin-board)UI残留一行：裁=丢弃,admin前端由line5统一交付,防双线撞集成;FL-D1086/1087下波处理。FL-D1084-1089全部闭环归档化。
+
+
+## 2026-11-03 line5 三单核验（af4560e）+admin 前端交付确认
+- FL-D1086/1087/1089 三单闭环：generation kind tab 与四处静态入口**物理删除**（grep=0 我复核）；go() cap 早退→dispatchViewLoads 集中分发+就绪重放（3 处在码）,回落守卫保留属冻结兜底。
+- 6bda30d admin 前端全家桶四区交付（整单 mock 联调,如实标注不冒充后端已交付）；真实后端联调等放行波候选栈总装 E2E。
+- 审计线残留 UI 已按处置丢弃,无双线冲突。
