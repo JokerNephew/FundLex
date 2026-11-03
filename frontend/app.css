@@ -869,9 +869,9 @@ body:has(.detail-overlay.inline-contract-detail:not([hidden]) .review-layout){ov
   .task-guide-meta{align-items:flex-start;flex-direction:column;gap:2px}
 }
 /* ── 指引版本对比（规则差异 + 原文比对）────────────────────────── */
-.guide-diff-selects{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:10px}
+.guide-diff-selects{display:flex;gap:40px;flex-wrap:wrap;margin-bottom:10px}
 .guide-diff-selects label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted)}
-.guide-diff-selects select{min-width:260px}
+.guide-diff-selects select{min-width:340px;max-width:none}
 .guide-diff-tabs{display:flex;gap:4px;border-bottom:1px solid var(--line-soft);margin-bottom:12px}
 .guide-page-tabs{margin-bottom:16px}
 .guide-diff-tabs button{border:0;background:none;padding:8px 14px;font:inherit;font-size:13px;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px}
@@ -1109,3 +1109,5 @@ body .ss-content .ss-list .ss-optgroup .ss-optgroup-label{color:var(--muted);fon
 .review-layout.is-rail-collapsed .review-list .review-kbd{display:none}
 .review-layout.is-rail-collapsed .review-list h3{display:flex;justify-content:center;padding-top:12px}
 .review-layout.is-rail-collapsed .review-splitter{display:none}
+
+.guide-diff-selects .control-select{max-width:none}
