@@ -378,12 +378,20 @@ def test_contract_result_compact_summary_actions_and_folded_evidence(ui, width, 
     page.set_viewport_size({'width': width, 'height': 1000})
     presentation(ui, delivery=delivery, execution_mode='evaluation' if delivery.startswith('evaluation') else '')
     expect(page.locator('.result-summary')).to_be_visible()
-    expect(page.locator('.result-status-grid>div')).to_have_count(1)
+    # FL-D1094（24红簇治理）：现行非 direct 场景为 hero 分支——状态网格由
+    # `.result-hero-head`（徽标+标题一行）替代旧 `.result-status-grid>div`。
+    expect(page.locator('.result-hero-head')).to_have_count(1)
+    expect(page.locator('.result-status-grid>div')).to_have_count(0)
     expect(page.locator('.result-evidence')).to_have_count(0)
     
     assert page.locator('.result-summary').bounding_box()['height'] < (320 if width == 390 else 230)
-    boxes = [node.bounding_box() for node in page.locator('.result-status-grid>div').all()]
-    assert max(box['y'] for box in boxes) - min(box['y'] for box in boxes) < 2
+    # hero-head：宽视口(≥768)必须单行（高度 <64）；390 窄视口允许徽标换行两行
+    # （长「改完 x/x 处 · 待人工核 x 处」自然折行属合理响应式，紧凑性由 summary 高度门承担）
+    head_box = page.locator('.result-hero-head').bounding_box()
+    if width >= 768:
+        assert head_box['height'] < 64, f"hero-head 疑似折行: height={head_box['height']}"
+    else:
+        assert head_box['height'] < 128, f"hero-head 高度失控: height={head_box['height']}"
     if delivery == 'complete_with_exceptions':
         expect(page.locator('[data-download="final"]')).to_be_visible()
         expect(page.locator('.result-summary')).to_contain_text('待人工核')
@@ -487,7 +495,9 @@ def test_guide_model_settings_are_editable(ui, monkeypatch):
     page = open_page(ui, 'guide')
 
     page.locator('.sidebar [data-nav="models"]').click()
-    expect(page.locator('#model-settings-card')).to_be_visible()
+    # FL-D1094（24红簇治理）：页面容器已由视图段锚定——#model-settings-card 不复存在，
+    # 页面可见性按视图段 #view-models / #view-feishu 判定。
+    expect(page.locator('#view-models')).to_be_visible()
     expect(page.locator('#feishu-connect-card')).to_be_hidden()
     expect(page.locator('#model-settings-body')).to_contain_text('修改模型')
     expect(page.locator('#model-settings-body')).to_contain_text('复核模型')
@@ -512,7 +522,10 @@ def test_guide_model_settings_are_editable(ui, monkeypatch):
     with page.expect_response(lambda r: '/api/settings/model' in r.url and r.request.method == 'PUT') as saved_review:
         page.locator('[data-action="model-settings-save"][data-model-save="review"]').click()
     assert saved_review.value.status == 200
-    expect(page.locator('#model-settings-source')).to_have_text('我的模型配置')
+    # FL-D1094：来源徽标改由角色卡承载（#model-settings-source 已下线）；
+    # 自定义态的卡徽标=自定义·未验证，摘要有供应商/模型/密钥三要素。
+    expect(page.locator('.model-role-card[data-model-role="primary"] .model-role-badge')).to_contain_text('自定义')
+    expect(page.locator('.model-role-card[data-model-role="review"] .model-role-badge')).to_contain_text('自定义')
     expect(page.locator('#model-settings-body')).to_contain_text('personal-browser-model')
     expect(page.locator('#model-settings-body')).to_contain_text('different-check-model')
     page.reload()
@@ -534,7 +547,8 @@ def test_guide_model_settings_are_editable(ui, monkeypatch):
     page.locator('[data-action="model-settings-reset"][data-model-reset="primary"]').click()
     page.once('dialog', lambda dialog: dialog.accept())
     page.locator('[data-action="model-settings-reset"][data-model-reset="review"]').click()
-    expect(page.locator('#model-settings-source')).to_have_text('系统默认')
+    expect(page.locator('.model-role-card[data-model-role="primary"] .model-role-badge')).to_contain_text('系统默认')
+    expect(page.locator('.model-role-card[data-model-role="review"] .model-role-badge')).to_contain_text('系统默认')
 
 
 def test_model_and_feishu_pages_are_separate(ui):
@@ -543,19 +557,19 @@ def test_model_and_feishu_pages_are_separate(ui):
     requests = []
     page.on('request', lambda request: requests.append(request.url))
     open_page(ui, 'models')
-    # 读取态为角色卡，无表单（FL-D750）；卡容器即模型页标识
-    expect(page.locator('#model-settings-card')).to_be_visible()
+    # 读取态为角色卡，无表单（FL-D750）；视图段即模型页标识（见 FL-D1094 注记）
+    expect(page.locator('#view-models')).to_be_visible()
     expect(page.locator('#model-settings-body')).to_contain_text('修改模型')
     expect(page.locator('#feishu-connect-card')).to_be_hidden()
     assert not any('/api/integrations/feishu/binding' in url for url in requests)
     page.reload()
-    expect(page.locator('#model-settings-card')).to_be_visible()
+    expect(page.locator('#view-models')).to_be_visible()
     expect(page.locator('#feishu-connect-card')).to_be_hidden()
     requests.clear()
     # FL-D989：飞书绑定已拆为独立页（ACCEPT-FL-D989），绑定卡移驻 #feishu 页
     page.locator('.sidebar [data-nav="feishu"]').click()
     expect(page.locator('#feishu-connect-card')).to_be_visible()
-    expect(page.locator('#model-settings-card')).to_be_hidden()
+    expect(page.locator('#view-models')).to_be_hidden()
     assert not any('/api/settings/model' in url for url in requests)
 
 

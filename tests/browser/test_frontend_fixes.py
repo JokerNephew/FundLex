@@ -184,11 +184,14 @@ def test_paused_task_shows_paused_rows_download_hint_and_verdict(browser, live_d
 
         page.locator("#doc-rows [data-detail]").first.click()
         page.locator("#detail-body .result-summary").wait_for()
-        assert page.locator(".result-verdict strong").inner_text() == "已暂停"
-        # 批4 FL-D818：status-grid 收敛为单徽章（交付），「已暂停」由上方 verdict 断言承担
-        grid = page.locator(".result-status-grid")
-        assert grid.locator("> div").count() == 1
-        assert "交付" in grid.inner_text()
+        # FL-D1094（24红簇治理）：现行非 direct 场景走 hero 分支（app.js:1350-1405），
+        # 无 .result-verdict/.result-status-grid；按 hero 语义重写判据。
+        assert page.locator("#detail-body .result-hero-line").inner_text() == "已暂停"
+        assert "已暂停" in page.locator("#detail-body .result-hero-status").inner_text()
+        hero_heads = page.locator("#detail-body .result-summary .result-hero-head")
+        assert hero_heads.count() == 1
+        assert page.locator("#detail-body .result-status-grid").count() == 0, \
+            "hero 分支不应再渲染旧 status-grid（双渲染面防回归）"
         assert not errors, errors
     finally:
         context.close()
