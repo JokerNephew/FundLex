@@ -9764,3 +9764,12 @@ H＝E×…
 - **admin 端点首火**：FL-D1077 六份 att=3 耗尽件（品质优选/恒裕/恒鑫/恒昌/道琼斯/景和）经 POST /api/admin/documents/{id}/retry 全部 202 回队，admin_audit_log 落账 6 条。
 - 留二波：admin 前端+前端清洁包（三缝已修，等 line5 真后端对齐验收）。.doc 异步转换（F1/F2）仍未入包。
   - 2026-11-03 20:4x FL-D1099 上产+主线冒烟核验闭环：终端指纹 engine fd114c84/service 3043dde8/commit f38a275；首发遭 schema 初始化双 MySQL 方言 DDL 故障（AUTOINCREMENT/key 保留字）产库复现修后重发成功（过程已入他们实录）；主线核验：冰封 404/admin 401/主链 200/零 traceback 全对上；附注 FL-D1100=feishu/health 探测器 404 疑条件挂载，二波联调时核实，不判坏。二波=admin 前端+清洁包（等 line5 联调）。
+
+
+## 2026-11-03 晚·admin 前端波与冒烟修复 Saga（终态）
+- model_settings 冒烟缺陷实锤：base_url 已含 /v1 时仍拼 /v1/models → 任何模型都存不进系统默认（不只 glm；line4 交付时未发现）。集成树热修 + 终验：PUT glm-5.3 冒烟过、saved:true、GET 回显当前默认——**系统默认模型设置功能在产正式可用**（resolution 用户>系统默认>env 无行为变化,默认=env 同值 glm-5.3)。
+- 线5 前端基底血泪：6bda30d 系=510f17c 非祖先(我 diff 实证)+626758b 同病——机械 cherry-pick 三 commit 冲突集中 app.js/hand-fix 域,回退交还线5 自 rebase(机械配方已给,fe-wave2=510f17c 起分支逐个 pick,手修块不动增量叠加)。
+- 第二次冒烟 publish 翻车是 transient(migrate 同二发 Succeeded,第三次全绿服务验证前)——发布终态 engine fd114c84/service f661aceb 在产。
+- model-usage 500 系线5 本地栈 ledger 文件缺失的降噪现象,产线账本端点健康(4 万+条请求聚合返回)。
+- 三缝第二佐证(admin 前端波):line5 authedFetch 修八处裸 fetch,PUT/DELETE 契约对齐,浏览器走查全过见我方内容层核验前。
+- 当前产线盘点：引擎审查层+K1K2+ESG净化+admin 后端(含冒烟修复后 system-model 可用)+生成域 404 冰封闸。前端=510f17c 零变更。admin 前端待线5 自 rebase 正确的次日首波。
