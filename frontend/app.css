@@ -1012,7 +1012,8 @@ body .ss-content .ss-list .ss-optgroup .ss-optgroup-label{color:var(--muted);fon
 .section-nav-toggle{display:inline-flex;align-items:center;justify-content:center;padding:3px 10px;border:0;background:transparent;color:var(--accent-dark);font:inherit;font-weight:650;font-size:12px;cursor:pointer;border-radius:6px}
 .section-nav-toggle:hover{background:var(--accent-soft)}
 .section-nav-list{margin:0;padding:6px 4px;list-style:none;overflow-y:auto;overscroll-behavior:contain;max-height:calc(100vh - 200px)}
-.section-nav-list li[data-level="2"]{padding-left:12px}
+.section-nav-list li[data-level="2"]{padding-left:26px}
+.section-nav-list li[data-level="3"]{padding-left:40px}
 .section-nav-item{display:block;width:100%;padding:5px 10px 5px; border:0;background:transparent;color:var(--ink);font:inherit;font-size:12.5px;text-align:left;border-radius:6px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .section-nav-item:hover{background:var(--surface-soft)}
 .section-nav-item:focus-visible{outline:3px solid #f3a56f;outline-offset:2px}

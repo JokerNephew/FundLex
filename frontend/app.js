@@ -1147,7 +1147,7 @@
           { key: 'fundlex-review-sectionnav-width', variable: '--review-sectionnav-width',
             min: 200, max: 420, fallback: 200, ariaLabel: '调整章节导航宽度' });
         state.sectionNavSplitter = navHost._navSplitter?.instance || null;
-        body._sectionNav.render(window.FundLexSectionNav.collect(navRoot, { selector: '.doc-heading, p', levels: [1] }));
+        body._sectionNav.render(window.FundLexSectionNav.collect(navRoot, { selector: '.doc-heading, p', levels: [1, 2] }));
         body._sectionNav.refresh();
       }
     }

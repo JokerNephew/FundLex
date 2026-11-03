@@ -13,8 +13,8 @@
    * 一级=第X部分/篇/编 或 styled .doc-heading 或「一、二、三、」直缀；二级=第X条 或 （一）（二）…；三级=1. 2. …
    * 各级只允许原生段落/块级，trim ≤120 字；表格 td/global selector 不用（绝对粘身。
    */
-  const HEADING_L1_RE = /^(第[一二三四五六七八九十百千万0-9〇零]+(部分|篇|编)|[一二三四五六七八九十]{1,4}、)/;
-  const HEADING_L2_RE = /^(第[一二三四五六七八九十百千万0-9〇零]+(条|款)|（[一二三四五六七八九十]{1,4}）)/;
+  const HEADING_L1_RE = /^(第[一二三四五六七八九十百千万0-9〇零]+(部分|篇|编|章)|[一二三四五六七八九十]{1,4}、)/;
+  const HEADING_L2_RE = /^(第[一二三四五六七八九十百千万0-9〇零]+(节|条|款)|（[一二三四五六七八九十]{1,4}）)/;
   const HEADING_L3_RE = /^\d+[\./、]/;
   const HEADING_RE = new RegExp(`^(?:${HEADING_L1_RE.source}|${HEADING_L2_RE.source}|${HEADING_L3_RE.source})`);
 
@@ -29,8 +29,36 @@
    */
   const TOC_ANCHOR_RE = /^目\s*录$/;
   const TOC_LEADER_RE = /^\.{2,}\s*[\d０-９]{1,4}$/;
-  const TOC_TAIL_RE = /[\s\t]+[\d０-９]{1,4}$/;
+  const TOC_TAIL_RE = /[\s\t…‥︙·.]+[\d０-９]{1,4}\s*$/;
   const TOC_MIN = 3;   // 少于 3 个标题就不渲染侧栏
+
+
+  /* FL-D1077（用户实测返刺「目录里的章节还在」）：样式/正则/虚拟三路共用目录闸——
+   * 目录行与正文章名文本完全一样（「第一部分  前言」出现两次），单行无 distinguishing，
+   * 靠区域记名：锚段「目 录」开区后，区域内标题一律记名不入；同一文本第二次出现必为正文首章，收区放行。 */
+  function makeTocGate() {
+    let inRegion = false;
+    const tocSet = new Set();
+    return function gate(text, level) {
+      if (TOC_ANCHOR_RE.test(text)) { inRegion = true; return false; }
+      if (inRegion) {
+        // 目录行带页码、正文章名不带——剥页码记名，否则正文首章永不与目录相认（区域不收，全章被吞）。
+        const base = text.replace(TOC_TAIL_RE, '').trim();
+        if (level > 0 && tocSet.has(base)) { inRegion = false; return true; }
+        if (level > 0) tocSet.add(base);
+        return false;
+      }
+      if (TOC_LEADER_RE.test(text) || TOC_TAIL_RE.test(text)) return false;
+      return true;
+    };
+  }
+  function levelOfText(text, fallback) {
+    if (!text) return fallback;
+    if (HEADING_L1_RE.test(text)) return 1;
+    if (HEADING_L2_RE.test(text)) return 2;
+    if (HEADING_L3_RE.test(text)) return 3;
+    return fallback;
+  }
 
   function shortLabel(text) {
     return (text || '').trim().replace(/\s+/g, ' ').slice(0, 40);
@@ -39,15 +67,20 @@
   /** 样式优先（后端 pipeline 的 doc-heading 类）；尾部页码/领导符同样入剔除（偶发封面·页面试。） */
   function fromStyledHeadings(root) {
     if (!root) return [];
+    const gate = makeTocGate();
     return Array.from(root.querySelectorAll('.doc-heading')).filter(el => {
-      const text = (el.textContent || '').trim();
-      return text && !TOC_TAIL_RE.test(text) && !TOC_LEADER_RE.test(text);
-    }).map((el, i) => ({
-      key: `h${i}`,
-      text: shortLabel(el.textContent) || `节 ${i + 1}`,
-      level: 1,
-      anchor: () => el,
-    }));
+      const text = (el.textContent || '').trim().replace(/\s+/g, ' ');
+      if (!text) return false;
+      return gate(text, levelOfText(text, 1));
+    }).map((el, i) => {
+      const text = (el.textContent || '').trim().replace(/\s+/g, ' ');
+      return {
+        key: `h${i}`,
+        text: shortLabel(text) || `节 ${i + 1}`,
+        level: levelOfText(text, 1),
+        anchor: () => el,
+      };
+    });
   }
 
   /** 正则分级兜底（FL-D1053 + 目录区剔除）：块级修剪 ≤120 字、同层去重、伪命中剔除。 */
@@ -57,30 +90,18 @@
       : Array.from(root.querySelectorAll(selector));
     const items = [];
     const seen = new Set();
-    let inTocRegion = false;
-    const accept = (el, text) => {
-      // 目录区（含跨页）一律不入——首个正文一级结束区域（此条目本身是首一级、保留）。
-      if (inTocRegion) {
-        if (HEADING_L1_RE.test(text) && !TOC_TAIL_RE.test(text) && !TOC_LEADER_RE.test(text)) {
-          inTocRegion = false;
-        } else if (!HEADING_L1_RE.test(text)) {
-          return false;
-        }
-      }
-      // 目录区特征值观察：点线领导符 / 尾部页码一律不入。
-      if (TOC_LEADER_RE.test(text) || TOC_TAIL_RE.test(text)) return false;
-      return true;
-    };
+    const gate = makeTocGate();
+    const accept = (el, text) => gate(text, levelOfText(text, 0));
     for (const el of nodes) {
       if (el.closest('table')) continue;
       const text = (el.textContent || '').trim().replace(/\s+/g, ' ');
-      if (TOC_ANCHOR_RE.test(text)) { inTocRegion = true; continue; }
+      // 锚段由 makeTocGate 内部开区（FL-D1077 统一闸）——这里交给 accept 判定。
       if (!text || text.length > 120) continue;
       let level = 0;
       if (HEADING_L1_RE.test(text)) level = 1;
       else if (HEADING_L2_RE.test(text)) level = 2;
       else if (HEADING_L3_RE.test(text)) level = 3;
-      if (!level) continue;
+      if (!level) { gate(text, 0); continue; }   // 锚段（level0）也须过闸开区
       if (!accept(el, text)) continue;
       const key = `${level}|${text}`;
       if (seen.has(key)) continue;
@@ -103,11 +124,10 @@
     const template = document.createElement('template');
     const items = [];
     const seen = new Set();
-    let inTocRegion = false;
+    const gate = makeTocGate();
     for (const block of vd.blocks) {
       const opt = { text: sectionTextFromBlock(block.html, template).trim().replace(/\s+/g, ' ') };
       const blockId = block.blockId;
-      if (TOC_ANCHOR_RE.test(opt.text)) { inTocRegion = true; continue; }
       if (!opt.text || opt.text.length > 120) continue;
       // 表格内的 capture 通过 html 上下文查生（compare-table-paragraph / table 的 extension
       const htmlTemplate = template;
@@ -117,13 +137,8 @@
       if (HEADING_L1_RE.test(opt.text)) level = 1;
       else if (HEADING_L2_RE.test(opt.text)) level = 2;
       else if (HEADING_L3_RE.test(opt.text)) level = 3;
-      if (!level) continue;
-      // 目录区规则（独立锚段起至首节 L1 止）+ 尾部页码/领导符剔除
-      if (inTocRegion) {
-        if (level === 1 && ! TOC_TAIL_RE.test(opt.text) && !TOC_LEADER_RE.test(opt.text)) inTocRegion = false;
-        else if (level !== 1) continue;
-      }
-      if (TOC_LEADER_RE.test(opt.text) || TOC_TAIL_RE.test(opt.text)) continue;
+      if (!level) { gate(opt.text, 0); continue; }   // 锚段（level0）也须过闸开区
+      if (!gate(opt.text, level)) continue;
       const key = `${level}|${opt.text}`;
       if (seen.has(key)) continue;
       seen.add(key);
@@ -142,10 +157,9 @@
   }
 
   function collect(root, options = {}) {
-    // 用户 2026-11-03 加令：「章节栏只需要识别出章，不需要识别节」——默认只要一级项
-    // （第X部分/篇/编 与 一二三四 形一级标题），二级/三级一律不入件。目录区剔除照旧。
-    const levels = options.levels || [1, 2, 3];
-    const keepLevelFilter = (items) => options.levels ? items.filter(item => (item.level ?? 1) === 1 || Number(item.level) === 1) : items;
+    // FL-D1077：章+节都出（节深度缩进），目录区三路共用闸剔除。
+    const levels = (Array.isArray(options.levels) && options.levels.length ? options.levels : [1, 2]).map(Number);
+    const keepLevelFilter = (items) => items.filter(item => levels.includes(Number(item.level ?? 1)));
 
     // 虚拟文档（虚拟化窗格）优先以全量 blocks 为数据源——DOM 可见部分仅是子集
     if (root && root._virtualDoc) {

@@ -739,7 +739,7 @@
     const items = window.FundLexSectionNav.collect(rootEl, {
       selector: '[data-block-id], .doc-heading',
       tocMin: 1,                      // 对比视图即使只有一个真甄别位也有价值
-      levels: [1],                    // 用户 2026-11-03 加令：只出一级（第X部分+一二三四）无二级/三级
+      levels: [1, 2],                 // FL-D1077：章+节都出（节深度缩进），目录区三路共用闸剔除
     });
     host._sectionNav.render(items);
     host._sectionNav.refresh();
