@@ -752,7 +752,7 @@
 </div>
       <div class="card card-pad u-mt-4">
 <div class="section-title">
-<h2>我的指引</h2><button class="btn btn-mid" type="button" data-action="guide-diff-open">版本对比</button>
+<h2>我的指引</h2>
 <small>每个账号独立维护，不能访问他人指引</small>
 </div>
 <div class="table-wrap">
@@ -775,27 +775,6 @@
 <p class="subnote" id="guide-list-state" aria-live="polite">
 </p>
 </div>
-</div>
-      <!-- FL-D10xx 页内版本对比专区：与合同比对页同形（选版→开始对比→本地结果），细看只读 -->
-      <div class="card card-pad u-mt-4" id="guide-diff-card">
-<div class="section-title">
-<h2>版本对比</h2>
-<small>选两个版本点「开始对比」，看规则改了哪几条、原文哪里动了；对比完全在服务器本地计算，不调用模型</small>
-</div>
-<div class="guide-diff-selects guide-diff-selects--page">
-<label>基准版本（旧）
-<select id="guide-diff-from" class="control-select guide-diff-select" aria-label="基准版本（旧）"></select>
-</label>
-<label>对比版本（新）
-<select id="guide-diff-to" class="control-select guide-diff-select" aria-label="对比版本（新）"></select>
-</label>
-<button class="btn btn-primary" type="button" id="guide-diff-start" data-action="guide-diff-start">开始对比</button>
-</div>
-<div class="guide-diff-tabs" role="tablist" aria-label="对比内容">
-<button type="button" role="tab" id="guide-diff-tab-rules" data-guide-diff-tab="rules" aria-selected="true">规则差异</button>
-<button type="button" role="tab" id="guide-diff-tab-text" data-guide-diff-tab="text" aria-selected="false">原文比对</button>
-</div>
-<div id="guide-diff-body" aria-live="polite"><p class="subnote">选好两个版本后点「开始对比」，结果直接显示在这里。</p></div>
 </div>
       <div class="card card-pad u-mt-4">
 <div class="section-title">
@@ -1053,6 +1032,104 @@
 <button class="btn btn-sm" id="guide-overlay-close" aria-label="关闭指引详情">✕</button>
 </div>
 <div class="detail-body" id="guide-overlay-body">
+</div>
+</div>
+</div>
+<!-- 指引版本对比弹窗：照抄合同比对查看器形态（只读，无「采用 A/B」） -->
+<div class="compare-viewer-backdrop" id="gd-diff-backdrop" hidden></div>
+<div class="card compare-viewer" id="gd-diff-viewer" role="dialog" aria-modal="true" aria-labelledby="gd-diff-title" tabindex="-1" hidden>
+<div class="compare-viewer-toolbar">
+<div class="compare-viewer-title">
+<div>
+<strong id="gd-diff-title">指引版本对比</strong>
+</div>
+<div class="head-actions">
+<button class="btn btn-sm compare-viewer-close" id="gd-diff-close" type="button" aria-label="关闭版本对比">× 关闭</button>
+</div>
+</div>
+<div class="compare-summary-row">
+<div class="compare-summary-stat">
+<span>基准版本（旧）→ 对比版本（新）</span>
+<strong id="gd-diff-summary">选好两个版本后点「开始对比」</strong>
+</div>
+<div class="guide-diff-selects guide-diff-selects--page">
+<label>基准版本（旧）
+<select id="gd-diff-from" class="control-select guide-diff-select" aria-label="基准版本（旧）"></select>
+</label>
+<label>对比版本（新）
+<select id="gd-diff-to" class="control-select guide-diff-select" aria-label="对比版本（新）"></select>
+</label>
+<button class="btn btn-primary" type="button" id="gd-diff-start">开始对比</button>
+</div>
+</div>
+</div>
+<div class="compare-word-toolbar" role="toolbar" aria-label="对比显示设置">
+<div class="compare-word-toolbar-main">
+<div class="compare-view-mode" role="group" aria-label="对比视图">
+<button class="btn btn-sm is-active" id="gd-diff-view-word" type="button" data-gd-view-mode="word">Word 视图</button>
+<button class="btn btn-sm" id="gd-diff-view-classic" type="button" data-gd-view-mode="classic">双栏对照</button>
+</div>
+</div>
+</div>
+<p class="compare-viewer-empty" id="gd-diff-empty" role="status">选好两个版本后点「开始对比」，结果会显示在这里；对比完全在服务器本地计算，不调用模型。</p>
+<div class="compare-view-body" id="gd-diff-body" hidden>
+<aside class="compare-diff-rail compare-word-revisions" aria-labelledby="gd-diff-rail-title">
+<div class="compare-word-pane-head compare-word-revisions-head">
+<div>
+<span class="compare-word-pane-kicker">修订</span>
+<strong id="gd-diff-rail-title"><span id="gd-diff-count-rail">0</span> 处修订</strong>
+</div>
+<div class="compare-diff-nav">
+<button class="btn btn-sm" id="gd-diff-prev" type="button" title="上一处修订">↑ 上一处</button>
+<strong id="gd-diff-counter" aria-live="polite">0 / 0</strong>
+<button class="btn btn-sm" id="gd-diff-next" type="button" title="下一处修订">下一处 ↓</button>
+</div>
+</div>
+<div class="compare-diff-toolbar">
+<label for="gd-diff-filter">筛选</label>
+<select id="gd-diff-filter" class="control-select">
+<option value="">全部差异</option>
+<option value="modify">修改</option>
+<option value="insert">新增</option>
+<option value="delete">删除</option>
+</select>
+</div>
+<div class="compare-diff-list" id="gd-diff-list" aria-label="修订列表" tabindex="0"></div>
+</aside>
+<div class="compare-word-view" id="gd-diff-word-view">
+<div class="compare-word-layout" id="gd-diff-word-layout" data-markup="all">
+<section class="compare-word-document" id="gd-diff-sec-merged" aria-labelledby="gd-diff-merged-title">
+<div class="compare-word-pane-head">
+<div>
+<span class="compare-word-pane-kicker">比较的文档</span>
+<strong id="gd-diff-merged-title">比较结果</strong>
+<small id="gd-diff-merged-name"></small>
+</div>
+<span class="compare-word-legend" aria-label="修订标记说明"><i class="compare-legend-ins">插入</i><i class="compare-legend-del">删除</i></span>
+</div>
+<div class="compare-word-pane compare-merged-pane" id="gd-diff-merged-pane" aria-label="比较的文档，含插入与删除修订痕迹" tabindex="0"></div>
+</section>
+<section class="compare-word-document" id="gd-diff-sec-left" aria-labelledby="gd-diff-left-title" hidden>
+<div class="compare-word-pane-head">
+<div>
+<span class="compare-word-pane-kicker">原文档</span>
+<strong id="gd-diff-left-title">基准版本（旧）</strong>
+<small id="gd-diff-left-name"></small>
+</div>
+</div>
+<div class="compare-word-pane compare-pane" id="gd-diff-left-pane" aria-label="基准版本原文" tabindex="0"></div>
+</section>
+<section class="compare-word-document" id="gd-diff-sec-right" aria-labelledby="gd-diff-right-title" hidden>
+<div class="compare-word-pane-head">
+<div>
+<span class="compare-word-pane-kicker">修订的文档</span>
+<strong id="gd-diff-right-title">对比版本（新）</strong>
+<small id="gd-diff-right-name"></small>
+</div>
+</div>
+<div class="compare-word-pane compare-pane" id="gd-diff-right-pane" aria-label="对比版本原文" tabindex="0"></div>
+</section>
+</div>
 </div>
 </div>
 </div>

@@ -1112,3 +1112,12 @@ body .ss-content .ss-list .ss-optgroup .ss-optgroup-label{color:var(--muted);fon
 
 .model-role-form label,.model-role-form .meta-line,.model-roles-grid label{font-weight:400;line-height:1.9}
 .model-deprecated-hint{line-height:1.9}
+
+/* 指引版本对比弹窗（照抄合同比对查看器；msite栅格自定位，无章节导航/采用A-B） */
+#gd-diff-body{display:grid;grid-template-columns:300px minmax(0,1fr);grid-template-rows:minmax(0,1fr)}
+#gd-diff-body .compare-diff-rail{grid-column:1;grid-row:1}
+#gd-diff-body .compare-word-view{grid-column:2;grid-row:1}
+#gd-diff-word-layout{grid-template-columns:minmax(0,1fr)}
+#gd-diff-word-layout.gd-classic{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+#gd-diff-viewer .guide-diff-selects--page{margin-bottom:0;align-items:center}
+@media(max-width:760px){#gd-diff-body{display:block;overflow:auto}#gd-diff-word-layout.gd-classic{grid-template-columns:minmax(0,1fr)}}
