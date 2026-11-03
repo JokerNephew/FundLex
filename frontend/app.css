@@ -268,7 +268,7 @@ button.footer-link:hover{color:var(--accent-dark);text-decoration:underline}
 /* V1 three-business workspace: one shell, task-oriented subpages. */
 .business-page-heading{display:flex;align-items:center;justify-content:space-between;gap:20px;margin:4px 0 24px}
 .business-page-heading h1{margin:4px 0 8px;font-size:26px;letter-spacing:-.03em}.business-page-heading p{margin:0;color:var(--muted);font-size:13px;line-height:1.7}
-.workspace-launchers{display:grid;grid-template-columns:minmax(0,1.35fr) repeat(2,minmax(0,1fr));gap:16px;margin-bottom:20px}
+.workspace-launchers{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-bottom:20px}
 .workspace-launcher{position:relative;min-width:0;padding:24px;display:flex;flex-direction:column;align-items:flex-start}
 .workspace-launcher.is-primary{border-color:#e4c2ae;background:linear-gradient(130deg,#fff7f0,#fff 85%)}
 .workspace-launcher-icon{display:grid;place-items:center;width:36px;height:36px;border-radius:10px;background:#f2f5f8;color:#607386;margin-bottom:16px}
