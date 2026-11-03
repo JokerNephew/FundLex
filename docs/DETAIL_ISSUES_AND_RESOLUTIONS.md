@@ -9742,3 +9742,9 @@ H＝E×…
 - 包内容（集成线 HEAD 报账，逐项发布说明点名）：45f1d8a 提案层/审查层、c2784a6 admin 全家桶后端、a5a578a 生成域冰封闸（FUNDLEX_GUIDE_GENERATION_ENABLED 默认 off→生成域 API 默认 404，冰封预期）、af4560e line5 前端（admin 四区 UI+generation 入口物理删+cap 就绪重放）、774b6fe ESG 净化+K1K2 补丁（集成树 51 测试绿）；新 env 旋钮 FUNDLEX_DOC_CONVERT_TIMEOUT_S/FUNDLEX_GUIDE_GENERATION_ENABLED 默认均不动作。
 - 不含项（如实登记）：.doc 异步转换 F1/F2 未消→线上 .doc 继续走旧同步转换路径（行为不变）。
 - 前置闸：ESG 集成树本体复检（ESG必活/DJ15 冤杀归零）+rc-yl D4 实证；绿后即 publish；主线事后产线冒烟核验（动线 zero-touch）。
+
+
+## 2026-11-03 放行复检-D4 悬疑件（裁决前持有）
+- accept2/rc-yl(glm+审查层): p1177「法律法规要求增加的基金费用的收取」整项 delete 放行,exceptions=0——与 regress1 kimi 波 D4 同款。两可能:①regress1 D4 定性错(该删)；②审查层对「整段超卡范围」类 veto 存在模型方差漏网。已发 line2 仲裁，放行裁决挂此项。
+- accept2 他项: rc-a50 written6 未见重复 insert 表象(D1 复核待细则), rc-dj2 written7(K1K2 文本态下 UNAUTH 仍 14,证未生效), rc-esg 文本态复发(已引出补丁应用+accept3 复检)。
+- 注明: yl skipped 中 UNAUTHORIZED 同病(补丁未生效果然延续)。"
