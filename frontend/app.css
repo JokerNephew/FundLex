@@ -1164,3 +1164,9 @@ body .ss-content .ss-list .ss-optgroup .ss-optgroup-label{color:var(--muted);fon
 .review-author-filter{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);margin-left:10px}
 .review-author-filter .control-select{min-width:120px;max-width:200px;padding:3px 8px;font-size:12px}
 .review-author-filter{white-space:nowrap}
+/* FL-D1083：卡号窄定宽，中间三列中位，操作内容吃余量 */
+[data-testid="guide-cards-table"] th:nth-child(1),[data-testid="guide-cards-table"] td:nth-child(1){width:80px}
+[data-testid="guide-cards-table"] th:nth-child(2),[data-testid="guide-cards-table"] td:nth-child(2),
+[data-testid="guide-cards-table"] th:nth-child(3),[data-testid="guide-cards-table"] td:nth-child(3),
+[data-testid="guide-cards-table"] th:nth-child(4),[data-testid="guide-cards-table"] td:nth-child(4){width:14%}
+[data-testid="guide-cards-table"] th:nth-child(5),[data-testid="guide-cards-table"] td:nth-child(5){width:auto}
