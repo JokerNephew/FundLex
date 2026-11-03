@@ -9781,3 +9781,12 @@ H＝E×…
 - 发布：单点 publish done，engine fd114c84/service f661aceb 复指纹无变（只动前端域）；产线核验=五活、/opt app.js admin 22 标记、generation kind tab=0、首页 200。
 - 旁注：line5 交代的两忧皆非产线病（model-usage 500=其本地栈 ledger 缺文件；PUT 409=双 v1 修复前旧闻）。
 - 未决排队：.doc 异步 F1/F2、mf 重放实证、FL-D1071 三模型对照（满 24h 有数据基础,账本 API 已在产）、FL-D1077 调度侧中断 attempt 不计额度修复。
+
+
+## 2026-11-03 深夜·admin 前端波回退（用户令）
+
+- 用户体感「前端多处像回退」→三查机械证否（线上字节=发版版、函数级零丢失、内容哈希 ?v= 无缓存坑）→ 用户裁决：回退到我本次上产前。
+- 执行：/opt/frontend 热换为 **510f17c 字节**（StaticFiles 热读无需重启，零打扰；admin 波完整备份 /tmp/fe-admin-wave-backup 暂存）；集成树提交 88c2f81 revert=同款回退；版本参数已轮换 8b409df… 证效力。
+- **顺藤新发现(独立立案待办)**：qa-base/frontend **工作树**与封版 510f17c 差 5 文件 364+/202- 未提交修改（app.css/app.js/compare.html/compare.js/sectionnav.js）——canonical 工作树有未封手的在制改动,存被误当基线发布之险。请接班/master 裁:这批改动是未完成手修(提交)还是丢弃(还原)。
+- 后端不受回退影响（admin API 全家桶仍在产可用,仅看板页面回到此波前样式）。
+- 后续：用户具体缺失点清单一来,按清单定点修复后重做 admin 前端上产（新的基底=届时 qa-base 现状/或 510f17c+落地手修,由裁决定）。
