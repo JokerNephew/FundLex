@@ -1060,16 +1060,12 @@
 <select id="gd-diff-to" class="control-select guide-diff-select" aria-label="对比版本（新）" data-fl-selectvend="off"></select>
 </label>
 <button class="btn btn-primary" type="button" id="gd-diff-start">开始对比</button>
-</div>
-</div>
-</div>
-<div class="compare-word-toolbar" role="toolbar" aria-label="对比显示设置">
-<div class="compare-word-toolbar-main">
 <div class="compare-view-mode" role="group" aria-label="对比视图">
 <button class="btn btn-sm is-active" id="gd-diff-view-word" type="button" data-gd-view-mode="word">Word 视图</button>
 <button class="btn btn-sm" id="gd-diff-view-classic" type="button" data-gd-view-mode="classic">双栏对照</button>
 </div>
 <label class="compare-word-toggle" id="gd-diff-src-wrap"><input type="checkbox" id="gd-diff-show-sources" checked> 显示源文档</label>
+</div>
 </div>
 </div>
 <p class="compare-viewer-empty" id="gd-diff-empty" role="status">选好两个版本后点「开始对比」，结果会显示在这里；对比完全在服务器本地计算，不调用模型。</p>
@@ -1097,6 +1093,7 @@
 </div>
 <div class="compare-diff-list" id="gd-diff-list" aria-label="修订列表" tabindex="0"></div>
 </aside>
+<div class="compare-column-splitter" id="gd-rail-splitter" role="separator" aria-label="调整修订栏宽度" aria-orientation="vertical" tabindex="0" title="拖动调整修订栏宽度，双击恢复默认"></div>
 <div class="compare-word-view" id="gd-diff-word-view">
 <div class="compare-word-layout" id="gd-diff-word-layout" data-markup="all">
 <section class="compare-word-document" id="gd-diff-sec-merged" aria-labelledby="gd-diff-merged-title">
@@ -1108,8 +1105,9 @@
 </div>
 <span class="compare-word-legend" aria-label="修订标记说明"><i class="compare-legend-ins">插入</i><i class="compare-legend-del">删除</i></span>
 </div>
-<div class="compare-word-pane compare-merged-pane" id="gd-diff-merged-pane" aria-label="比较的文档，含插入与删除修订痕迹" tabindex="0"></div>
+<div class="compare-word-pane compare-merged-pane compare-pane" id="gd-diff-merged-pane" aria-label="比较的文档，含插入与删除修订痕迹" tabindex="0"></div>
 </section>
+<div class="compare-column-splitter" id="gd-src-splitter" role="separator" aria-label="调整源文档宽度" aria-orientation="vertical" tabindex="0" title="拖动调整源文档宽度，双击恢复默认"></div>
 <div class="compare-word-sources" id="gd-diff-sources">
 <section class="compare-word-document" id="gd-diff-sec-left" aria-labelledby="gd-diff-left-title">
 <div class="compare-word-pane-head">

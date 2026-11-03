@@ -1470,7 +1470,15 @@
     from.value=d.from;to.value=d.to;
     // 两个选择器原生渲染（data-fl-selectvend=off 退出 SlimSelect 托管——回声写脏下拉值的前科，FL-D1071）。
   }
+  function gdBindSplittersOnce(){if(state._gdSplitBound||!window.FundLexColumnSplitter)return;state._gdSplitBound=true;
+    window.FundLexColumnSplitter($('gd-rail-splitter'),$('gd-diff-body'),document.querySelector('#gd-diff-body .compare-diff-rail'),{
+      key:'fundlex-gd-diff-revisions-width',variable:'--gd-rail-w',min:220,max:660,minOther:480,fallback:300,side:'left',
+      disabled:()=>matchMedia('(max-width: 760px)').matches});
+    window.FundLexColumnSplitter($('gd-src-splitter'),$('gd-diff-word-layout'),$('gd-diff-sources'),{
+      key:'fundlex-gd-diff-sources-width',variable:'--gd-src-w',min:240,max:720,minOther:480,fallback:320,side:'right',
+      disabled:()=>matchMedia('(max-width: 760px)').matches||!state.guideDiff||state.guideDiff.view==='classic'||state.guideDiff.showSources===false});}
   function openGuideDiffModal(toId){const viewer=$('gd-diff-viewer');if(!viewer)return;const d=state.guideDiff||=({from:'',to:'',view:'word',filter:'',td:null,items:[],cursor:-1});
+    gdBindSplittersOnce();
     if(toId){const uploaded=gdUploaded();if(uploaded.some(item=>item.id===toId)){d.to=toId;const base=uploaded.find(item=>item.id!==toId);d.from=base?base.id:'';}}
     refreshGuideDiffCard();
     d.td=null;d.items=[];d.cursor=-1;d.filter='';const filterSel=$('gd-diff-filter');if(filterSel)filterSel.value='';
@@ -1506,7 +1514,8 @@
     gdSetPane('gd-diff-merged-pane',td.merged_html);
     // 源文档两块：Word 视图右侧上下堆叠（默认显示,『显示源文档』可勾掉）；双栏对照撑满左右两大栏。
     if(!word||d.showSources!==false){gdSetPane('gd-diff-left-pane',td.left_html);gdSetPane('gd-diff-right-pane',td.right_html);}
-    if(!word)bindGuideDiffScrollSync($('gd-diff-word-layout'));}
+    // 用户 2026-11-03：Word 视图三页一起滑——合并稿也入联动圈（ratio 闸刀同双栏）。
+    if(!word||d.showSources!==false)bindGuideDiffScrollSync($('gd-diff-word-layout'));}
   function gdActivePane(d){return $(d.view==='classic'?'gd-diff-left-pane':'gd-diff-merged-pane');}
   function gdJump(d,item,index){if(!item)return;const items=gdFilteredItems(d);d.cursor=(typeof index==='number'&&index>=0)?index:items.indexOf(item);
     const pane=gdActivePane(d);
