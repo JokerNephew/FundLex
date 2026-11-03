@@ -429,7 +429,7 @@
     const st=$(`model-${prefix}-status`);st.dataset.tone='';st.textContent='配置已更改，尚未验证。';
   });
   document.addEventListener('change',e=>{
-    if(e.target.id==='gd-diff-from'||e.target.id==='gd-diff-to'){const d=state.guideDiff||=({from:'',to:'',view:'word',filter:'',td:null,items:[],cursor:-1});if(e.target.id==='gd-diff-from')d.from=e.target.value;else d.to=e.target.value;return;}if(e.target.id==='gd-diff-filter'){const d=state.guideDiff;if(d){d.filter=e.target.value||'';d.cursor=-1;gdRenderRail(d);}return;}
+    if(e.target.id==='gd-diff-from'||e.target.id==='gd-diff-to'){const d=state.guideDiff;if(!d||d.prog)return;if(e.target.id==='gd-diff-from')d.from=e.target.value;else d.to=e.target.value;return;}if(e.target.id==='gd-diff-filter'){const d=state.guideDiff;if(d){d.filter=e.target.value||'';d.cursor=-1;gdRenderRail(d);}return;}
     const card=e.target.closest('.model-edit-form');if(!card)return;
     const prefix=card.closest('[data-model-role]')?.dataset.modelRole;if(!prefix)return;
     if(['provider','base_url'].includes(e.target.id.replace(`model-${prefix}-`,''))){$(`model-${prefix}-connection_id`).value='';$(`model-${prefix}-api_key`).value='';}
@@ -1458,6 +1458,7 @@
   function guideDiffLabel(item){return `${item.filename} · ${esc(guideTime(item.created_at))}${item.current?'（当前）':''}${item.built_in?'（内置）':''}`;}
   function gdUploaded(){return [...(state.guides||[])].filter(item=>!item.built_in).sort((a,b)=>(b.created_at||0)-(a.created_at||0));}
   function refreshGuideDiffCard(){const from=$('gd-diff-from'),to=$('gd-diff-to'),start=$('gd-diff-start');if(!from||!to)return;const d=state.guideDiff||=({from:'',to:'',view:'word',filter:'',td:null,items:[],cursor:-1});
+    d.prog=true;setTimeout(()=>{if(state.guideDiff===d)d.prog=false;},700);
     const uploaded=gdUploaded();
     if(uploaded.length<2){from.innerHTML='';to.innerHTML='';from.disabled=to.disabled=true;if(start)start.disabled=true;d.from=d.to='';return;}
     from.disabled=to.disabled=false;if(start)start.disabled=false;
@@ -1467,7 +1468,8 @@
     const options=sel=>uploaded.map(item=>`<option value="${esc(item.id)}" ${item.id===d[sel]?'selected':''}>${guideDiffLabel(item)}</option>`).join('');
     from.innerHTML=options('from');to.innerHTML=options('to');
     from.value=d.from;to.value=d.to;
-    window.FundLexSelectKit?.feed(from);window.FundLexSelectKit?.feed(to);}
+    // 两个选择器原生渲染（data-fl-selectvend=off 退出 SlimSelect 托管——回声写脏下拉值的前科，FL-D1071）。
+  }
   function openGuideDiffModal(toId){const viewer=$('gd-diff-viewer');if(!viewer)return;const d=state.guideDiff||=({from:'',to:'',view:'word',filter:'',td:null,items:[],cursor:-1});
     if(toId){const uploaded=gdUploaded();if(uploaded.some(item=>item.id===toId)){d.to=toId;const base=uploaded.find(item=>item.id!==toId);d.from=base?base.id:'';}}
     refreshGuideDiffCard();
@@ -1495,7 +1497,8 @@
   function gdRenderPanes(d){const td=d.td;if(!td)return;const word=d.view!=='classic';
     $('gd-diff-sec-merged').hidden=!word;$('gd-diff-sec-left').hidden=word;$('gd-diff-sec-right').hidden=word;
     $('gd-diff-word-layout').classList.toggle('gd-classic',!word);
-    $('gd-diff-body').dataset.viewMode=word?'word':'classic';
+    // compare.css 的 data-view-mode=classic 会整体隐藏 .compare-word-view（真比对页用经典视图另件）——本弹窗双栏也走 word-view 容器，恒置 word。
+    $('gd-diff-body').dataset.viewMode='word';
     document.querySelectorAll('[data-gd-view-mode]').forEach(btn=>btn.classList.toggle('is-active',(btn.dataset.gdViewMode==='word')===word));
     gdSetPane('gd-diff-merged-pane',td.merged_html);
     if(!word){gdSetPane('gd-diff-left-pane',td.left_html);gdSetPane('gd-diff-right-pane',td.right_html);
@@ -1503,7 +1506,7 @@
   function gdActivePane(d){return $(d.view==='classic'?'gd-diff-left-pane':'gd-diff-merged-pane');}
   function gdJump(d,item,index){if(!item)return;const items=gdFilteredItems(d);d.cursor=(typeof index==='number'&&index>=0)?index:items.indexOf(item);
     const pane=gdActivePane(d);
-    pane?.querySelectorAll('.compare-diff.is-active,.compare-diff-anchor.is-active').forEach(el=>el.classList.remove('is-active'));
+    pane?.querySelectorAll('.is-active').forEach(el=>el.classList.remove('is-active'));
     const mark=pane?pane.querySelector(`[data-diff-id="${CSS.escape(item.id)}"]`):null;
     if(mark){mark.classList.add('is-active');mark.scrollIntoView({block:'center'});}
     gdRenderRail(d);

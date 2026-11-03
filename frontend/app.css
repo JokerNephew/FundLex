@@ -1121,3 +1121,4 @@ body .ss-content .ss-list .ss-optgroup .ss-optgroup-label{color:var(--muted);fon
 #gd-diff-word-layout.gd-classic{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
 #gd-diff-viewer .guide-diff-selects--page{margin-bottom:0;align-items:center}
 @media(max-width:760px){#gd-diff-body{display:block;overflow:auto}#gd-diff-word-layout.gd-classic{grid-template-columns:minmax(0,1fr)}}
+#gd-diff-viewer .compare-ins.is-active,#gd-diff-viewer .compare-del.is-active{box-shadow:0 0 0 2px #b5471e;position:relative;z-index:1}
