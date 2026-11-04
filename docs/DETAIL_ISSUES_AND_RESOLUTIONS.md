@@ -10059,3 +10059,10 @@ H＝E×…
 - 灰度（用户真实件 06c48755 副本演练）：王悦棋 19 条+FundLex 2 条并列恢复，受理后可见文字逐字一致，10 段盖回/1 段（被动刀处）如实跳过；测试 4/4 绿。
 - 选择语义保持老版：页面看得到原修订但**不可勾选决定**（manifest 只认我方编号，外来 id 决定=422，与 08:49 之前完全相同）；原修订可决=FL-D1133 二期，待用户点单。
 - 上产：新件 revision_restore.py + direct_pipeline.py（5f0e97ec/4c3d82c7,frontend=否），worker 重启零错;release 54345a6 已推。注意：只影响**此后新跑**的任务；存量任务的旧红线不回溯（要历史件也补需另下指令批量重演）。
+
+## FL-D1133 事故① 回补写早了一位、哈希复核误判杀单（2026-11-04 16:05，已热修·已补偿）
+- 现场：用户 15:54 广发安颐-修订版单被打死 DIRECT_WRITER_HASH_MISMATCH;报告 prep/rr 全空。
+- 根因（我埋的雷）：1133 回补钩点放在 pipeline 写回哈希复核**之前**——回补改写 redline.docx 后，复核拿到的文件 sha 与写回器自报 sha 不一致→误杀。**单点一文件顺序事故,非算法问题**。
+- 处置：钩点移到 doc_edit 复核全部通过之后;回补有实效时同步刷新 report.direct_edit.artifacts 的 redline_sha256/size 并打 restored 标记(文件不留口径差);仿真全链 complete+qualified+指纹一致;热修 release 364d26a 在产(restarted worker 15:1x zero错)。
+- 补偿：受害文档(cce0433a)已 admin_requeue 通道回队(admin_requeue_count+1,by=opencode-fd1133-hotfix),由 worker 自动重跑;跑成后我在巡检里核回补署名并回报。
+- 教训入法:凡「产线写文件」的钩子,必须自觉排在**该文件所有消费方的指纹/完整性复核之后**;以后凡动 pipeline 产物的补丁,必须过「ra>0 全链仿真」门(本次补在测试之外,已补目录)。
