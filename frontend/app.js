@@ -429,7 +429,7 @@
     const st=$(`model-${prefix}-status`);st.dataset.tone='';st.textContent='配置已更改，尚未验证。';
   });
   document.addEventListener('change',e=>{
-    if(e.target.id==='gd-diff-from'||e.target.id==='gd-diff-to'){const d=state.guideDiff;if(!d||d.prog)return;if(e.target.id==='gd-diff-from')d.from=e.target.value;else d.to=e.target.value;return;}if(e.target.id==='review-author-filter'){const v=e.target.value||'';state.reviewAuthorFilter=v;const isSrcOnly=v&&(state.review?.source_revisions||[]).some(s=>String(s.author||'').trim()===v)&&!(state.review?.revisions||[]).some(r=>String(r.author||'').trim()===v);document.querySelectorAll('.rev-item[data-rev-item]').forEach(li=>{li.hidden=!!v&&li.dataset.revAuthor!==v;});const visible=[...document.querySelectorAll('.rev-item[data-rev-item]')].filter(li=>!li.hidden).length;const t=document.querySelector('.review-list-title');if(t)t.textContent=isSrcOnly?`${v}的修订来自原文件，已并入正文`:`改动清单 · ${visible} / ${state.review?.revisions?.length||0} 条`;return;}
+    if(e.target.id==='gd-diff-from'||e.target.id==='gd-diff-to'){const d=state.guideDiff;if(!d||d.prog)return;if(e.target.id==='gd-diff-from')d.from=e.target.value;else d.to=e.target.value;return;}if(e.target.id==='review-author-filter'){const v=e.target.value||'';state.reviewAuthorFilter=v;document.querySelectorAll('.rev-item').forEach(li=>{const isSrc=li.dataset.revSrc==='1';li.hidden=isSrc?(!v||li.dataset.revAuthor!==v):(!!v&&li.dataset.revAuthor!==v);});const visible=[...document.querySelectorAll('.rev-item')].filter(li=>!li.hidden).length;const isSrcOnly=v&&![...document.querySelectorAll('.rev-item[data-rev-item]')].some(li=>li.dataset.revAuthor===v);const t=document.querySelector('.review-list-title');if(t)t.textContent=(v&&isSrcOnly)?`${v}的修订 · ${visible} 条（来自原文件，已并入正文）`:`改动清单 · ${visible} / ${state.review?.revisions?.length||0} 条`;return;}
 if(e.target.id==='gd-diff-filter'){const d=state.guideDiff;if(d){d.filter=e.target.value||'';d.cursor=-1;gdRenderRail(d);}return;}if(e.target.id==='gd-diff-show-sources'){const d=state.guideDiff;if(d){d.showSources=e.target.checked;if(d.td&&d.view!=='classic')gdRenderPanes(d);}return;}
     const card=e.target.closest('.model-edit-form');if(!card)return;
     const prefix=card.closest('[data-model-role]')?.dataset.modelRole;if(!prefix)return;
@@ -1091,6 +1091,16 @@ if(e.target.id==='gd-diff-filter'){const d=state.guideDiff;if(d){d.filter=e.targ
         ${r.section?`<p class="rev-sec">${esc(r.section)}</p>`:''}
         <div class="clause-compare">${before}${after}</div></li>`;
     }).join('');
+    // FL-D1132 定稿口径②（用户令 ~15:1x）：原修改人的修订=可筛选的真实条目——
+    // 进主清单但默认隐藏,选中其名字时显示;惰性条目(不可接受/拒绝、不可跳转)。
+    const srcItems=(review.source_revisions||[]).map(s=>{
+      const before=s.before?quoteBox('原文',s.before,'quote-before'):'';
+      const after=s.after?quoteBox('修改为',s.after,'quote-after'):'';
+      const ops={insert:'新增',delete:'删除',replace:'替换'};
+      return `<li class="rev-item rev-item-source" data-rev-src="1" data-rev-author="${esc(s.author||'')}" hidden>
+        <div class="rev-head"><span class="rid">#${s.index}</span>${s.author?`<span class="rev-author" title="修改人">${esc(s.author)}</span>`:''}<span class="rev-op">${ops[s.kind]||'修改'}</span><span class="rule">原文修订（已并入正文）</span></div>
+        <div class="clause-compare">${before}${after}</div></li>`;
+    }).join('');
     body.innerHTML=`<div class="review-layout">
         <div class="review-doc-wrap">
         <div id="review-section-nav" class="section-nav-wrap" role="navigation" aria-label="章节导航"></div>
@@ -1107,7 +1117,7 @@ if(e.target.id==='gd-diff-filter'){const d=state.guideDiff;if(d){d.filter=e.targ
           <div class="review-doc" id="review-doc">${review.html}</div></div>
         <div class="review-splitter" id="review-splitter" role="separator" aria-label="调整改动清单宽度" aria-orientation="vertical" aria-valuemin="280" aria-valuemax="680" aria-valuenow="360" tabindex="0" title="拖动调整修订清单宽度，双击恢复默认"></div>
         <aside class="review-list" id="review-rail"><h3><span class="review-list-title">改动清单 · ${review.revisions.length} 条</span> ${authorFilterHtml}<span class="review-kbd">A 接受 · R 拒绝</span><button class="section-collapse-toggle" id="review-rail-collapse" type="button" aria-expanded="true" aria-controls="review-rail" aria-label="折叠或展开改动清单栏" title="折叠改动清单栏" data-title-expand="展开改动清单栏" data-title-collapse="折叠改动清单栏" data-text-expand="«" data-text-collapse="»">»</button></h3>
-          <ol class="rev-list">${items||'<li class="subnote">本合同没有可选择的修订。</li>'}</ol></aside>
+          <ol class="rev-list">${items||'<li class="subnote">本合同没有可选择的修订。</li>'}${srcItems}</ol></aside>
       </div>
       <div class="review-actions"><button class="btn btn-primary" data-action="generate-selected">生成选择版合同</button>
         <button class="btn" data-action="review-close">返回报告</button>
