@@ -21,6 +21,7 @@ from lxml import etree
 
 from ..docx import (DOCUMENT, OFFICE_REL, Q, R, W, CT, REVISION_TAGS, DocxError, ZipLimits,
                     _read_parts, _validate_package, _xml)
+from .revisions import _strip_attached_template_links
 from .models import CompareBlock, CompareDocument, Coverage
 from .normalize import normalize_diff, normalize_match
 from .presentation import Presentation
@@ -100,6 +101,10 @@ def _block(block_id: str, ordinal: int, location: str, kind: str, raw: str,
 def _parse_parts(parts: Mapping[str, bytes], *, filename: str = "", side: str = "B",
                  limits: ZipLimits | None = None, source_sha256: str = "") -> CompareDocument:
     limits = limits or ZipLimits()
+    # FL-D1131：解析入口同样剔除 Word 惰性 attachedTemplate 外链——与修订归一
+    # （revisions.prepare_compare_input）口径对齐；否则「接受修订后仍可解析」的包
+    # 在解析步被 EXTERNAL_RELATIONSHIP_UNSUPPORTED 误拒（12:33 广发ESG 实证）。
+    parts = _strip_attached_template_links(dict(parts), limits)
     _validate_package(parts, limits, full=False)
     root = _xml(parts[DOCUMENT], limits)
     if root.tag != Q("document"):
