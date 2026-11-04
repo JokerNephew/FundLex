@@ -63,6 +63,37 @@ def _accepted_paragraph_text(path: Path) -> list[str]:
 
 
 @requires_real
+def test_revisions_endpoint_discloses_source_revisions(seeded, tmp_path):
+    """FL-D1132：原合同自带修订与作者在审查载荷中补列（惰性披露项）。"""
+    client, batch, doc = seeded
+    # 把输入源改写为带原作者修订痕迹的合同：一条 王悦棋 的插入。
+    app_store = client.app.state.store
+    src_path = app_store.object_path(app_store.document_source_key("dev", batch["id"], doc))
+    parts = _read_parts(str(src_path), ZipLimits())
+    root = etree.fromstring(parts[DOCUMENT])
+    first_p = next(root.iter(Q("p")))
+    ins = etree.SubElement(first_p, Q("ins"))
+    ins.set(Q("id"), "9001")
+    ins.set(Q("author"), "测试原作者")
+    r = etree.SubElement(ins, Q("r"))
+    t = etree.SubElement(r, Q("t"))
+    t.text = "原作者补写的句子"
+    parts[DOCUMENT] = etree.tostring(root, encoding="UTF-8", xml_declaration=True)
+    import zipfile as _zf
+    with _zf.ZipFile(str(src_path), "w", _zf.ZIP_DEFLATED) as z:
+        for name, data in parts.items():
+            z.writestr(name, data)
+    response = client.get(f"/api/batches/{batch['id']}/documents/{doc}/revisions",
+                          headers=_headers())
+    assert response.status_code == 200, response.text
+    src = response.json()["source_revisions"]
+    assert any(item["author"] == "测试原作者" and "原作者补写的句子" in item["after"]
+               for item in src), src
+    main_ids = {item.get("del_id") for item in response.json()["revisions"]}
+    assert all("del_id" not in item or item.get("del_id") not in main_ids for item in src)
+
+
+@requires_real
 def test_revisions_endpoint_returns_html_and_mapping(seeded):
     client, batch, doc = seeded
     response = client.get(f"/api/batches/{batch['id']}/documents/{doc}/revisions",
