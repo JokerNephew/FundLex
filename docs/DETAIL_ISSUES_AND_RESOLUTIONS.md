@@ -9965,3 +9965,4 @@ H＝E×…
 - 检查:专项 243/243;publish success engine=1ee4e742/service=c37afbce;字节核验五项全绿;2h 巡逻哨在跑(采样 /tmp/patrol-fd1115.log)。
 - 720a1d8 裁:产线 FL-D1121 已带热读生效是家主的件,我剥出只留 reflog,方向已收敛。
 - 新令:逢表先产 sha→候选 sha→差意,不再单向名单。
+  - 2026-11-04 ~10:1x FL-D1115 上产：指纹 engine=1ee4e742/service=c37afbce；字节核验五项全绿（prepare 归一=3/FL-D1093 logging=2/D1114 缺省=拒=1/admin 域=3）；近 5min worker 零错；2h 巡到 /tmp/opencode/batch-run/results/patrol-fd1115.log，14:2x 出结论后主线闭环呈你。720a1d8 域外件=主线家件，照旧 reflog 保留不再追移。
