@@ -37,6 +37,9 @@ BUILTIN_GUIDE_SOURCE_DOCX_PATH = (
     Path(__file__).resolve().parent.parent / "guides" / "builtin_guide_v1_source.docx")
 BUILTIN_CARDS_V2_SOURCE_DOCX_PATH = (
     Path(__file__).resolve().parent.parent / "guides" / "builtin_cards_v2_source.docx")
+# FL-D1128：6046eb6c（现行默认，bf4991 的接任者）的 canonical 原文档案。
+BUILTIN_CARDS_V2R2_SOURCE_DOCX_PATH = (
+    Path(__file__).resolve().parent.parent / "guides" / "builtin_cards_v2r2_source.docx")
 # 内置版本 → canonical 原文档案。内置族扩容时按 id 注册；未注册的内置视为
 # 「本部署没有 canonical 档案」（StoreError→500，不静默串档）。
 # 每次调用现组（monkeypatch PATH 变量或档案挪位都能生效）。
@@ -44,8 +47,9 @@ def _builtin_source_docx_files() -> dict[str, Path]:
     return {
         BUILTIN_GUIDE_ID: BUILTIN_GUIDE_SOURCE_DOCX_PATH,
         "builtin-cards-v2": BUILTIN_CARDS_V2_SOURCE_DOCX_PATH,
-        # FL-D1124：新默认（bf4991）共用 V2 原文 canonical（FL-D1123 挂档的同一份）。
-        "bf499150221c42c4967e81f220c64987": BUILTIN_CARDS_V2_SOURCE_DOCX_PATH,
+        # FL-D1128：现行默认 6046eb6c 的 canonical=用户 10:39 原件（sha ff95dfdb）；
+        # 前任 bf4991 已退回普通用户版本（不再注册，走 _source_path 自解析）。
+        "6046eb6cb23b40518aaa0f9c49c5e1fc": BUILTIN_CARDS_V2R2_SOURCE_DOCX_PATH,
     }
 BUILTIN_CARD_V2_ID = BUILTIN_CARD_DEFAULT_ID
 BUILTIN_CARD_V2_PATH = Path(__file__).resolve().parent.parent / "guides" / "builtin_cards_v2.json"
