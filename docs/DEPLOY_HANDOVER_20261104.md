@@ -27,6 +27,11 @@ systemctl is-active fundlex-guide-parse-worker@1 fundlex-guide-parse-worker@2  #
 
 依赖位：`/etc/fundlex-recall.env`（凭据不落 Git）+ MySQL 3307 + 产线 objects 数据分区。没有就只在本地临时实例跑（`funcher's tools/deploy' 有样例 seed path）。
 
+**系统级前置（FL-D1126 实证，缺了 .doc 转换全盘超时）**：
+- CJK 字体：`/usr/share/fonts/fundlex-cjk/NotoSansSC.ttf` + `fc-cache`（本仓库的 doc 多为中文合同；系统无中文字体时 LibreOffice 逐字回退遍历，3.4s 的转换会烧到 300s+ 超时，API/worker 全部受影响）。
+- `FUNDLEX_SOFFICE_HOME=/var/lib/fundlex/soffice-home`（soffice 暖 HOME，字体/模块缓存持久化）。
+- soffice 转换全机串行锁 `/var/lib/fundlex/locks/`（自动创建；勿删目录）。
+
 ## 红线（上家留话，下家守则）
 
 1. **禁止整目录覆盖发布**（历史五连惨案、FL-D1122 已立法）：发布=逐文件 sha 对缝（产 sha → 候选 → 差意 → frontend 带否） + `frontend/*` 默认拒发（备用 `/usr/local/sbin/fundlex-publish` 硬闸）。
