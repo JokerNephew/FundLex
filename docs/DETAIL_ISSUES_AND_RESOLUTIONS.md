@@ -10037,3 +10037,9 @@ H＝E×…
 ## FL-D1130 比对任务创建即成即走(2026-11-04 用户两令,已上产·已验证)
 - 改法:创建 POST 成功后入后台上传队列(串行),立即 api.navigate 跳回任务列表,提交键秒解锁;列表顶部新增进度条(动态 #compare-bg-notice),上传/转换中提示可离页,失败条上给「继续上传」;身份切换清队列;跳转走 api.navigate 保路由同步。
 - 验证(sandbox 浏览器实演):创建后 1.2s 内面板隐藏+提示条可见+提交键解锁;第二个任务立即再建不受阻;完成后提示「已提交,正在处理」;errors 零。
+
+## FL-D1131 补丁①：compare worker 漏重启致旧解析层继续拒件（2026-11-04 13:1x，已修复·已验证）
+- 现场：用户把 .doc 转出的 docx 重传成功，文本比对阶段 COMPARE_PARSE_FAILED(DocxError)。
+- 根因：FL-D1126/1131 那波只重启了 api/recall-worker/guide-parse×2，**漏了 fundlex-compare-worker**——比对工序仍在跑 11:10 前的旧 parser，attachedTemplate 外链照旧拒。发布纪律补丁：凡动 fundlex/compare/** 或 docx.py 必同步重启 fundlex-compare-worker（已补进发布 SOP 心诀）。
+- 处置+验证：重启 compare worker(13:19:44)；用户这对原件经完整 compare 链沙箱跑通：82 处差异，coverage=incomplete——解析/比对全绿。
+- 用户行动：新建一次对比任务传同一对文件即可成（旧失败任务不可补救,前端文案原已如实指引）。
