@@ -504,6 +504,53 @@ class HtmlProjection:
         return result
 
 
+def list_source_revisions(path: str | Path, *, max_items: int = 300,
+                          preview: int = 80) -> tuple[list[dict[str, Any]], bool]:
+    """Enumerate tracked revisions carried by the ORIGINAL contract (FL-D1132).
+
+    FL-D1115's input normalization (accept-then-edit) makes the redline carry
+    only FundLex-authored marks, so the original author (e.g. 王悦棋) vanished
+    from 修订审查.  The review payload re-attaches these as inert disclosure
+    entries: no accept/reject, no anchors into the redline HTML.
+
+    Returns ``(items, truncated)``.  ``before`` = deleted text, ``after`` =
+    inserted text (both preview-capped).
+    """
+    parts = _read_parts(Path(path), ZipLimits())
+    root = _xml(parts[DOCUMENT], ZipLimits())
+    by_id: dict[str, dict[str, Any]] = {}
+    order: list[str] = []
+    for node in root.iter():
+        tag = node.tag
+        if tag not in (Q("ins"), Q("del")):
+            continue
+        rid = node.get(Q("id"), "")
+        if not rid:
+            continue
+        entry = by_id.get(rid)
+        if entry is None:
+            entry = {"author": "", "before": "", "after": ""}
+            by_id[rid] = entry
+            order.append(rid)
+        author = node.get(Q("author"), "")
+        if author and not entry["author"]:
+            entry["author"] = author
+        text = _text_content(node)
+        if tag == Q("del"):
+            entry["before"] = (entry["before"] + text)[:preview]
+        else:
+            entry["after"] = (entry["after"] + text)[:preview]
+    truncated = len(order) > max_items
+    items: list[dict[str, Any]] = []
+    for index, rid in enumerate(order[:max_items], start=1):
+        entry = by_id[rid]
+        kind = "replace" if entry["before"] and entry["after"] else (
+            "delete" if entry["before"] else "insert")
+        items.append({"index": index, "kind": kind, "author": entry["author"],
+                      "before": entry["before"], "after": entry["after"]})
+    return items, truncated
+
+
 def _edit_info(edit: Mapping[str, Any]) -> dict[str, Any]:
     """Business-facing fields shared by plan edits and manifest entries."""
     components = edit.get("components")

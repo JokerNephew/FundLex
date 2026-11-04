@@ -729,6 +729,17 @@ class RunStore:
                 raise NotFound("document not found")
             return self._document_dict(db, row)
 
+    def document_source_key(self, owner: str, batch_id: str, document_id: str) -> str:
+        """FL-D1132：审查页补列「原文自带修订」需要原文件位置——返回转换
+        归一后的工作源（converted_key，空的退回原始 input_key）。owner 作用域校验。"""
+        self.get_batch(owner, batch_id)
+        with self._connect() as db:
+            row = db.execute("SELECT input_key, converted_key FROM documents WHERE id=? AND batch_id=?",
+                             (document_id, batch_id)).fetchone()
+            if row is None:
+                raise NotFound("document not found")
+            return row["converted_key"] or row["input_key"]
+
     def get_report(self, owner: str, batch_id: str, document_id: str) -> dict[str, Any]:
         self.get_document(owner, batch_id, document_id)
         with self._connect() as db:

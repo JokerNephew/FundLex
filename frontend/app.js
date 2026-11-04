@@ -983,7 +983,7 @@ if(e.target.id==='gd-diff-filter'){const d=state.guideDiff;if(d){d.filter=e.targ
     const kinds=outcome==='complete'?['final','redline','selected_final','selected_redline']:['redline','selected_redline'];
     const buttons=kinds.filter(kind=>downloads[kind]).map(directDownloadButton).join('');
     html+=`<div class="result-action-grid">${buttons?`<section class="detail-section result-files"><h3>下载区</h3><div class="detail-actions">${buttons}</div><p class="subnote">${esc(DIRECT_FINAL_NOTE)}</p></section>`:''}${report&&outcome==='complete'?revisionSection(doc,report):''}</div>`;
-    if(report&&outcome==='complete'&&tierNote)html+=`<p class="subnote">修订审查仅列出本次按指引的修改（我方修订）；${esc(tierNote)}</p>`;
+    if(report&&outcome==='complete'&&tierNote)html+=`<p class="subnote">修订审查的「改动清单」=本次按指引的修改（我方修订）；原文件自带的修订在清单下方单独列出（原文修订，已并入正文）；${esc(tierNote)}</p>`;
     if(changes.length){
       html+=`<section class="detail-section"><h3>改了哪些条款 · ${changes.length} 处</h3>${changes.map((c,i)=>`<details class="action-evidence"><summary><span class="clause-section">${i+1}. ${esc(c.location)}</span> <span class="badge b-blue">${esc(c.action)}</span> <span class="chip">${esc(c.cardTitle)}</span></summary><div class="clause-compare">${c.before?quoteBox('改之前',c.before,'quote-before'):''}${quoteBox('改成了什么',c.after||'（删除该句）','quote-after')}</div></details>`).join('')}</section>`;
     }else if(outcome==='processing'){
@@ -1103,7 +1103,7 @@ if(e.target.id==='gd-diff-filter'){const d=state.guideDiff;if(d){d.filter=e.targ
           <div class="review-doc" id="review-doc">${review.html}</div></div>
         <div class="review-splitter" id="review-splitter" role="separator" aria-label="调整改动清单宽度" aria-orientation="vertical" aria-valuemin="280" aria-valuemax="680" aria-valuenow="360" tabindex="0" title="拖动调整修订清单宽度，双击恢复默认"></div>
         <aside class="review-list" id="review-rail"><h3><span class="review-list-title">改动清单 · ${review.revisions.length} 条</span> ${authorFilterHtml}<span class="review-kbd">A 接受 · R 拒绝</span><button class="section-collapse-toggle" id="review-rail-collapse" type="button" aria-expanded="true" aria-controls="review-rail" aria-label="折叠或展开改动清单栏" title="折叠改动清单栏" data-title-expand="展开改动清单栏" data-title-collapse="折叠改动清单栏" data-text-expand="«" data-text-collapse="»">»</button></h3>
-          <ol class="rev-list">${items||'<li class="subnote">本合同没有可选择的修订。</li>'}</ol></aside>
+          <ol class="rev-list">${items||'<li class="subnote">本合同没有可选择的修订。</li>'}</ol>${(()=>{const src=(review.source_revisions||[]);if(!src.length)return '';const rows=src.map(s=>`<li class="rev-item rev-item-source"><div class="rev-head"><span class="rid">#${s.index}</span>${s.author?`<span class="rev-author" title="原修改人">${esc(s.author)}</span>`:''}<span class="rule">${s.kind==='delete'?'原文删除':s.kind==='insert'?'原文插入':'原文修改'}</span></div><div class="rev-body">${s.before?`<del class="rev-del">${esc(s.before)}</del>`:''}${s.after?`<ins class="rev-ins">${esc(s.after)}</ins>`:''}</div></li>`).join('');return `<h3 class="rev-source-title">原文自带修订 · ${src.length} ${review.source_revisions_truncated?'+':''}条<span class="subnote">（来自原文件的修订痕迹，仅供核对，不参与接受/拒绝；已按「接受修订」并入正文）</span></h3><ol class="rev-list rev-list-source">${rows}</ol>`;})()}</aside>
       </div>
       <div class="review-actions"><button class="btn btn-primary" data-action="generate-selected">生成选择版合同</button>
         <button class="btn" data-action="review-close">返回报告</button>

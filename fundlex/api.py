@@ -10,6 +10,7 @@ import html
 import io
 import csv
 import hashlib
+import logging
 import shutil
 import tempfile
 import json
@@ -792,10 +793,24 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
         document = store.get_document(owner, batch_id, document_id)
         manifests = _manifests_from_report(report)
         view = _project_revision_view(path, report)
+        # FL-D1132：原合同自带的修订与修改人被引擎归一（接受后再改）吸收，
+        # 审查页从原文件补列「原文自带修订」作披露项（惰性引用，不参与接受/拒绝）。
+        source_revisions: list[dict[str, Any]] = []
+        source_truncated = False
+        try:
+            from .html_view import list_source_revisions
+            source_revisions, source_truncated = list_source_revisions(
+                store.object_path(store.document_source_key(owner, batch_id, document_id)))
+        except Exception:  # noqa: BLE001 - 披露项缺失不阻塞主视图
+            logging.getLogger("fundlex.review").warning(
+                "source revisions disclosure unavailable doc=%s", document_id, exc_info=True)
+            source_revisions, source_truncated = [], False
         return {
             "document_id": document_id,
             "html": view["html"],
             "revisions": view["revisions"],
+            "source_revisions": source_revisions,
+            "source_revisions_truncated": source_truncated,
             "meta": view["meta"],
             "selection_epoch": document.get("selection_epoch", 0),
             "manifest_hash": manifest_fingerprint(manifests),
