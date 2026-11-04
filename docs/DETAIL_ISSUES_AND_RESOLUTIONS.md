@@ -9982,3 +9982,7 @@ H＝E×…
 
 ## 2026-11-04 FL-D1122 处置完成
 - 产线五前端恢复 canonical 720a1d8 字节(md5 同);白名单补丁打进 publisher(root+repo 双桶+drift OK+语弃 OK);实测干跑=REJECT(86 件前端全列拒单);逢表尾=产sha/候选sha/差意/带frontend(默认=否)。stale 备份保留了底 if 需要。
+
+## FL-D1123 内置默认指引切换为用户存量指引 V2（2026-11-04 ~10:3x，用户令·已执行·已验证）
+- 处置（三刀一留）：①guide_versions bf4991 转内置+全局(owner=''，built_in=1，frozen,released)；②guide_config 全三账户现行默认指向 bf4991（selection_source=system）；③canonical 档案=用户 09:58 原件(builtin_cards_v2_source.docx 字节级对)；④**新账号兜底**仍为 BUILTIN_CARD_V2_ID 常量，若要新账号默认也是 V2，单行码改常量为 bf4991 即准许上线(记 FL-D1124,等用户 GO)。
+- 生效：现有账户今天起新任务即绑 V2(11 张卡,source_sha 同号);旧版本不碎(历史任务绑快照，无影响);builtin-cards-v1/v2 老件留档不冲。
