@@ -1332,7 +1332,7 @@ if(e.target.id==='gd-diff-filter'){const d=state.guideDiff;if(d){d.filter=e.targ
     if(eligibility==='excluded_by_fund_type')return {word:'不适用 · 已排除',cls:'b-gray'};
     if(displayedJob==='paused')return {word:'已暂停',cls:'b-gray'};
     if(processing)return {word:'正在处理',cls:'b-blue'};
-    if(delivery==='incomplete')return {word:'结果不完整',cls:'b-amber'};
+    if(delivery==='incomplete')return {word:'处理完成',cls:'b-green'};
     return {word:'尚未交付',cls:'b-gray'};
   }
   // L0 不再放按钮：结论条只答「改完没」；行动权全部归 L3 行动面板（FL-D1018，避免 hero/面板重复按钮）。
