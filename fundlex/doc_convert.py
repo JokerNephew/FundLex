@@ -81,6 +81,24 @@ def _kill_process_tree(proc: subprocess.Popen) -> None:
         pass
 
 
+def _global_convert_lock_path() -> Path:
+    """Machine-wide conversion lock file.
+
+    /var/lib/fundlex is shared across services (API/worker PrivateTmp would
+    give each service its own /tmp, so a tempdir lock would NOT be global);
+    fall back to tempdir only in dev where the shared root is unwritable.
+    """
+    override = os.environ.get("FUNDLEX_DOC_CONVERT_LOCK_PATH")
+    if override:
+        return Path(override)
+    default = Path("/var/lib/fundlex/locks/soffice-convert.lock")
+    try:
+        default.parent.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        return Path(tempfile.gettempdir()) / "fundlex-soffice-convert.lock"
+    return default
+
+
 def convert_doc_to_docx(data: bytes, *, timeout_s: int | None = None,
                         max_output_bytes: int = MAX_OUTPUT_BYTES) -> bytes:
     """Convert one legacy .doc byte string into DOCX bytes, or fail honestly.
@@ -97,6 +115,32 @@ def convert_doc_to_docx(data: bytes, *, timeout_s: int | None = None,
         raise DocConvertError("LEGACY_DOC_CONVERT_UNAVAILABLE", "soffice not installed")
     timeout_s = timeout_s or DEFAULT_TIMEOUT_S
     temp_root = os.environ.get("FUNDLEX_TMP_ROOT") or None
+    # FL-D1126 第三层：soffice 单实例 RSS 300-500MB；本机 7.3G 无 swap，
+    # 并发转换（线程池化后 API 可多开+孤儿残留）直接挤爆内存→集体 300s 超时
+    # （实证：同一份文件独立转换 3.4s，产线并发下 300s 跑不完）。
+    # 全机串行化转换：flock 跨服务（API/各 worker）互斥，排队代替挤兑。
+    lock_file = None
+    try:
+        lock_file = open(_global_convert_lock_path(), "a+b")
+        import fcntl
+        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+    except OSError:  # dev/受限环境拿不到锁文件时退化为无锁（旧行为）
+        if lock_file is not None:
+            try:
+                lock_file.close()
+            except OSError:
+                pass
+            lock_file = None
+    try:
+        return _convert_locked(data, soffice, timeout_s, max_output_bytes, temp_root)
+    finally:
+        if lock_file is not None:
+            lock_file.close()
+
+
+def _convert_locked(data: bytes, soffice: str, timeout_s: int,
+                    max_output_bytes: int, temp_root: str | None) -> bytes:
+    """Body of :func:`convert_doc_to_docx`, run under the global lock."""
     with tempfile.TemporaryDirectory(prefix="fundlex-docconv-", dir=temp_root) as temp_dir:
         work = Path(temp_dir)
         src = work / "input.doc"

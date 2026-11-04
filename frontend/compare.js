@@ -3,7 +3,7 @@
   const api = window.FundLexWorkbench || {};
   const $ = id => document.getElementById(id);
   const esc = api.esc || (v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])));
-  const state = { tasks: [], task: null, pairs: [], pairIndex: 0, selectedPairId: null, view: null, selection: null, selectionDraft: null, selectionDirty: false, selectionSaving: false, selectionToken: 0, selectionSaveToken: 0, poll: null, pollTaskId: null, requestToken: 0, lineFrame: null, scrollFrame: null, scrollSource: null, syncTargets: new Set(), syncSettle: null, identityToken: 0, listToken: 0, inputs: [{}], uploadDraft: null, splitRatio: .5, pendingSplitRatio: .5, splitDragging: false, splitAlignTimer: null, splitRefreshTimer: null, lineSettle: null, linesScrolling: false, leftMarks: null, rightMarks: null, mergedMarks: null, wordLeftMarks: null, wordRightMarks: null, viewMode: 'word', classicSide: 'left', classicRendered: false, wordSourcesRendered: false, diffPositions: null, docs: null, rawDocs: null, alignment: null };
+  const state = { tasks: [], task: null, pairs: [], pairIndex: 0, selectedPairId: null, view: null, selection: null, selectionDraft: null, selectionDirty: false, selectionSaving: false, selectionToken: 0, selectionSaveToken: 0, poll: null, pollTaskId: null, requestToken: 0, lineFrame: null, scrollFrame: null, scrollSource: null, syncTargets: new Set(), syncSettle: null, identityToken: 0, listToken: 0, inputs: [{}], uploadDraft: null, uploadQueue: [], uploadBusy: false, splitRatio: .5, pendingSplitRatio: .5, splitDragging: false, splitAlignTimer: null, splitRefreshTimer: null, lineSettle: null, linesScrolling: false, leftMarks: null, rightMarks: null, mergedMarks: null, wordLeftMarks: null, wordRightMarks: null, viewMode: 'word', classicSide: 'left', classicRendered: false, wordSourcesRendered: false, diffPositions: null, docs: null, rawDocs: null, alignment: null };
   const SPLIT_KEY = 'fundlex-compare-split-ratio', SPLIT_GUTTER = 28;
   const clampSplitRatio = value => { const number = Number(value); return value !== null && value !== '' && Number.isFinite(number) ? Math.min(.8, Math.max(.2, number)) : .5; };
   function storedSplitRatio() { try { return clampSplitRatio(localStorage.getItem(SPLIT_KEY)); } catch { return .5; } }
@@ -119,22 +119,50 @@
     $('compare-pair-list').innerHTML=`<div class="compare-pair-statuses">${state.pairs.map((p,i)=>`<button type="button" role="tab" aria-selected="${p.id===state.selectedPairId?'true':'false'}" class="compare-pair-status ${p.id===state.selectedPairId?'is-selected':''} ${['succeeded','incomplete'].includes(p.status)?'is-done':''} ${(COMPARE_COVERAGE_CHECKS&&p.status==='incomplete')?'is-incomplete':''} ${p.status==='failed'||p.viewError?'is-failed':''}" data-compare-pair="${i}"><span class="compare-pair-number">${String(i+1).padStart(2,'0')}</span><span class="compare-pair-main"><strong>${esc(p.label||`第 ${i+1} 组`)}</strong><small>合同A：${esc(p.left?.name||'未命名')} / 合同B：${esc(p.right?.name||'未命名')}</small></span><span class="compare-pair-state">${esc(statusLabel(p.status))}${p.summary?` · ${p.summary.total} 处`:''}</span>${p.error_code||p.viewError?`<span class="compare-pair-error" role="status">${esc(pairErrorLabel(p))}</span>`:''}</button>`).join('')}</div>`;
   }
   function markFiles(form, files, pair) { const ids=[]; for (const side of ['left','right']) { form.append('files',files[side],pair[side].name); ids.push(pair[side].client_id); } form.append('client_ids', JSON.stringify(ids)); }
-  async function continueUploads() {
-    const draft=state.uploadDraft, message=$('compare-upload-message'); if(!draft)return;
-    const identity=state.identityToken; $('compare-submit').disabled=true; $('compare-retry').hidden=true;
+  // FL-D1130（用户令 2026-11-04）：创建即成即走——上传/.doc转换转后台队列串行处理，
+  // 立即跳回任务列表,不再阻塞等待；进度走列表顶部提示条,失败给「继续上传」入口。
+  function bgNotice(text, retryDraft) {
+    let el=$('compare-bg-notice');
+    if(!el){
+      el=document.createElement('div'); el.id='compare-bg-notice'; el.className='form-note';
+      const anchor=$('compare-task-list')||$('compare-list');
+      if(anchor&&anchor.parentNode)anchor.parentNode.insertBefore(el,anchor);
+      else document.body.append(el);
+    }
+    if(!el)return;
+    el.replaceChildren();
+    if(!text){el.hidden=true;return;}
+    el.append(text);
+    if(retryDraft){
+      const btn=document.createElement('button');
+      btn.type='button'; btn.className='btn-link'; btn.textContent='继续上传';
+      btn.addEventListener('click',()=>pumpUploads());
+      el.append(' ',btn);
+    }
+    el.hidden=false;
+  }
+  async function pumpUploads() {
+    if(state.uploadBusy)return;
+    const draft=(state.uploadQueue||[])[0]; if(!draft){bgNotice('');return;}
+    state.uploadBusy=true;
+    const identity=state.identityToken, taskName=draft.task.name||'对比任务';
     try {
       for (let i=draft.next;i<draft.files.length;i++) {
-        const x=draft.files[i]; message.textContent=`正在上传第 ${i+1} / ${draft.files.length} 组…`;
+        const x=draft.files[i]; bgNotice(`「${taskName}」正在上传/转换第 ${i+1} / ${draft.files.length} 组…（旧格式 .doc 转换需 1-2 分钟，期间可继续操作或创建下一个任务）`);
         const form=new FormData(); markFiles(form,x,draft.pairs[i]); const uploaded=await json(`/api/compare/tasks/${encodeURIComponent(draft.task.id)}/uploads`,{method:'POST',body:form});
         if(identity!==state.identityToken)return; const receipts=uploaded.receipts||[],bad=['left','right'].map(side=>receipts.find(r=>r.client_id===draft.pairs[i][side].client_id)).filter(r=>!r||!['accepted','already_accepted'].includes(r.status));
         if(bad.length)throw Error(`第 ${i+1} 组上传未完成：${bad.map(r=>r?`${r.client_id}（${uploadErrorLabel(r.error_code)||r.status}）`:'缺少上传回执').join('、')}`);
         draft.acceptedRevisions=(draft.acceptedRevisions||0)+receipts.reduce((n,r)=>n+(r&&Number(r.revisions_accepted)>0?1:0),0);
         draft.next=i+1;
       }
-      message.textContent='文件已上传，正在提交对比任务…'; await json(`/api/compare/tasks/${encodeURIComponent(draft.task.id)}/seal`,{method:'POST'}); if(identity!==state.identityToken)return;
-      message.textContent='已提交，对比任务正在处理。'+(draft.acceptedRevisions>0?`其中 ${draft.acceptedRevisions} 份文件带修订痕迹，已按「接受全部修订」后的内容参与比对。`:''); state.uploadDraft=null; showCreate(false); await loadTasks(); await openTask(draft.task.id);
-    } catch(e) { if(identity===state.identityToken){message.textContent=`上传中断：${e.message}。已完成的文件已保留，可点击“继续上传”。`; $('compare-retry').hidden=false;} }
-    finally { if(identity===state.identityToken)$('compare-submit').disabled=false; }
+      bgNotice(`「${taskName}」文件已就绪，正在提交处理…`);
+      await json(`/api/compare/tasks/${encodeURIComponent(draft.task.id)}/seal`,{method:'POST'}); if(identity!==state.identityToken)return;
+      state.uploadQueue.shift();
+      bgNotice(`「${taskName}」已提交，对比任务正在处理。`+(draft.acceptedRevisions>0?`其中 ${draft.acceptedRevisions} 份文件带修订痕迹，已按「接受全部修订」后的内容参与比对。`:`旧格式文件已完成转换。`));
+      await loadTasks();
+      pumpUploads();
+    } catch(e) { if(identity===state.identityToken){bgNotice(`「${taskName}」上传中断：${e.message}。已完成的文件已保留。`, draft);} }
+    finally { state.uploadBusy=false; }
   }
   async function createTask() {
     const files=selectedFiles(), message=$('compare-upload-message');
@@ -149,7 +177,18 @@
     if (!files.length || files.some(x=>!x.left||!x.right)) { message.textContent='每组都需要同时选择合同A和合同B的 DOCX 文件。'; return; }
     const identity=state.identityToken; const name=($('compare-name').value||'').trim()||`合同比对 ${new Date().toLocaleString('zh-CN',{hour12:false})}`; const pairs=files.map((x,i)=>{const leftId=`L${i}-${crypto.randomUUID()}`,rightId=`R${i}-${crypto.randomUUID()}`;return {client_pair_id:`P${i+1}`,label:`合同 ${i+1}`,left:{client_id:leftId,name:fileName(x.left),size:x.left.size},right:{client_id:rightId,name:fileName(x.right),size:x.right.size}};});
     const key=`compare-${Date.now()}-${crypto.randomUUID()}`; message.textContent='正在创建对比任务…'; $('compare-submit').disabled=true;
-    try { const task=await json('/api/compare/tasks',{method:'POST',headers:{'Content-Type':'application/json','Idempotency-Key':key},body:JSON.stringify({name,pairs})}); if(identity!==state.identityToken)return; state.uploadDraft={task,pairs,files,next:0}; await continueUploads(); }
+    try {
+      const task=await json('/api/compare/tasks',{method:'POST',headers:{'Content-Type':'application/json','Idempotency-Key':key},body:JSON.stringify({name,pairs})});
+      if(identity!==state.identityToken)return;
+      // FL-D1130：创建即成即走——入后台上传队列,立即跳回任务列表,提交键立即解锁。
+      state.uploadQueue=state.uploadQueue||[];
+      state.uploadQueue.push({task,pairs,files,next:0});
+      message.textContent=''; $('compare-submit').disabled=false;
+      if(api.navigate)api.navigate('compare',{mode:'list'}); else showCreate(false);
+      bgNotice(`「${task.name||'对比任务'}」已创建，文件正在后台上传…`);
+      pumpUploads();
+      await loadTasks();
+    }
     catch(e) { if(identity===state.identityToken){message.textContent=`创建任务失败：${e.message}`;$('compare-submit').disabled=false;} }
   }
   function blockFor(side, id) { return document.querySelector(`#compare-${side}-pane [data-block-id="${CSS.escape(id)}"]`); }
@@ -1305,7 +1344,7 @@
     window.addEventListener('beforeunload',event=>{if(state.selectionDirty){event.preventDefault();event.returnValue='';}});
     $('compare-new')?.addEventListener('click',()=>api.navigate?api.navigate('compare',{mode:'new'}):showCreate(true)); $('compare-add-pair')?.addEventListener('click',()=>{const index=state.inputs.length;state.inputs.push({});$('compare-pair-inputs')?.insertAdjacentHTML('beforeend',pairRow({},index));syncInputIndexes();}); $('compare-submit')?.addEventListener('click',createTask); $('compare-refresh')?.addEventListener('click',loadTasks);
     document.addEventListener('click',event=>{const chip=$('compare-coverage-chip');if(chip&&chip.open&&!event.target.closest('#compare-coverage-chip'))chip.open=false;});
-    $('compare-prev-diff')?.addEventListener('click',()=>focusDiff(state.diffIndex-1)); $('compare-next-diff')?.addEventListener('click',()=>focusDiff(state.diffIndex+1)); $('compare-selection-left-all')?.addEventListener('click',()=>setAllSelections('left')); $('compare-selection-right-all')?.addEventListener('click',()=>setAllSelections('right')); $('compare-selection-pending')?.addEventListener('click',()=>{const index=visibleDiffs().findIndex(item=>selectionDecision(item.id)==='pending');if(index>=0)focusDiff(index);}); $('compare-selection-save')?.addEventListener('click',()=>saveSelectionDraft()); $('compare-selection-generate')?.addEventListener('click',generateSelection); $('compare-active-only')?.addEventListener('change',drawLines); $('compare-diff-filter')?.addEventListener('change',()=>{state.diffIndex=0;renderDiffList();focusDiff(0);}); $('compare-diff-list')?.addEventListener('scroll',onDiffListScroll,{passive:true}); $('compare-retry')?.addEventListener('click',continueUploads); document.querySelectorAll('[data-word-pane]').forEach(btn=>btn.addEventListener('click',()=>setMobilePane(btn.dataset.wordPane))); $('compare-show-sources')?.addEventListener('change',e=>setSourcesVisible(e.target.checked)); $('compare-markup-mode')?.addEventListener('change',e=>setMarkupMode(e.target.value)); document.querySelectorAll('[data-compare-sources-close]').forEach(btn=>btn.addEventListener('click',()=>setSourcesVisible(false)));
+    $('compare-prev-diff')?.addEventListener('click',()=>focusDiff(state.diffIndex-1)); $('compare-next-diff')?.addEventListener('click',()=>focusDiff(state.diffIndex+1)); $('compare-selection-left-all')?.addEventListener('click',()=>setAllSelections('left')); $('compare-selection-right-all')?.addEventListener('click',()=>setAllSelections('right')); $('compare-selection-pending')?.addEventListener('click',()=>{const index=visibleDiffs().findIndex(item=>selectionDecision(item.id)==='pending');if(index>=0)focusDiff(index);}); $('compare-selection-save')?.addEventListener('click',()=>saveSelectionDraft()); $('compare-selection-generate')?.addEventListener('click',generateSelection); $('compare-active-only')?.addEventListener('change',drawLines); $('compare-diff-filter')?.addEventListener('change',()=>{state.diffIndex=0;renderDiffList();focusDiff(0);}); $('compare-diff-list')?.addEventListener('scroll',onDiffListScroll,{passive:true}); $('compare-retry')?.addEventListener('click',pumpUploads); document.querySelectorAll('[data-word-pane]').forEach(btn=>btn.addEventListener('click',()=>setMobilePane(btn.dataset.wordPane))); $('compare-show-sources')?.addEventListener('change',e=>setSourcesVisible(e.target.checked)); $('compare-markup-mode')?.addEventListener('change',e=>setMarkupMode(e.target.value)); document.querySelectorAll('[data-compare-sources-close]').forEach(btn=>btn.addEventListener('click',()=>setSourcesVisible(false)));
       document.addEventListener('click',e=>{ const back=e.target.closest('[data-compare-back-list]');if(back){api.navigate?.('compare',{mode:'list'});return;}const task=e.target.closest('[data-compare-task]');if(task){openTask(task.dataset.compareTask);return;}const pair=e.target.closest('[data-compare-pair]');if(pair){openPair(Number(pair.dataset.comparePair));return;}const download=e.target.closest('[data-selection-download]');if(download){downloadSelection(download.dataset.selectionDownload,download.dataset.selectionFilename);return;}const diff=e.target.closest('[data-compare-diff]');if(diff&&!e.target.closest('input')){focusDiff(visibleDiffs().findIndex(x=>x.id===diff.dataset.compareDiff));return;}const mark=e.target.closest('#compare-word-merged-pane [data-diff-id],#compare-word-left-pane [data-diff-id],#compare-word-right-pane [data-diff-id],#compare-left-pane [data-diff-id],#compare-right-pane [data-diff-id]');if(mark){focusDiff(visibleDiffs().findIndex(x=>x.id===mark.dataset.diffId));return;}const remove=e.target.closest('[data-compare-remove]');if(remove){const index=Number(remove.dataset.compareRemove),row=remove.closest('.compare-pair-input');state.inputs.splice(index,1);row?.remove();if(!state.inputs.length){state.inputs=[{}];renderInputs();}else syncInputIndexes();return;} });
            // FL-D1059（用户原话）：修订栏可折叠隐藏——双视图独立 localStorage 键。
       {
@@ -1344,7 +1383,7 @@ document.addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&e.tar
       document.querySelectorAll('[data-compare-view-mode]').forEach(button=>button.addEventListener('click',()=>setViewMode(button.dataset.compareViewMode)));
       document.querySelectorAll('#compare-classic-view [data-compare-side]').forEach(button=>button.addEventListener('click',()=>setClassicSide(button.dataset.compareSide)));
       try { const storedSources=localStorage.getItem('fundlex-compare-show-sources'); setSourcesVisible(storedSources==='1',false); const storedMarkup=localStorage.getItem('fundlex-compare-markup'); if(storedMarkup)setMarkupMode(storedMarkup,false); const storedPane=localStorage.getItem('fundlex-compare-mobile-pane'); if(storedPane)setMobilePane(storedPane,false); const storedMode=localStorage.getItem('fundlex-compare-view-mode'); if(storedMode)setViewMode(storedMode,false); const storedSide=localStorage.getItem('fundlex-compare-classic-side'); if(storedSide)setClassicSide(storedSide,false); } catch {}
-      document.addEventListener('fundlex:view',e=>{if(e.detail==='compare'){drawLines();}}); document.addEventListener('fundlex:identity-reset',()=>{clearTimeout(state.poll);state.identityToken++;state.listToken++;state.tasks=[];state.task=null;state.pairs=[];state.selectedPairId=null;state.view=null;state.mergedMarks=state.wordLeftMarks=state.wordRightMarks=state.leftMarks=state.rightMarks=null;state.selection=null;state.selectionDraft=null;state.selectionDirty=false;state.uploadDraft=null;state.inputs=[{}];state.requestToken++;state.selectionToken++;resetFolders();$('compare-create').hidden=true;$('compare-submit').disabled=false;$('compare-retry').hidden=true;$('compare-upload-message').textContent='';$('compare-name').value='';$('compare-detail').hidden=true;setViewerOpen(false);for(const pane of [$('compare-word-merged-pane'),$('compare-word-left-pane'),$('compare-word-right-pane'),$('compare-left-pane'),$('compare-right-pane')]){clearVirtual(pane);if(pane)pane.innerHTML='';}$('compare-diff-list').innerHTML='';$('compare-selection-downloads').replaceChildren();selectionStatus('');$('compare-lines')?.replaceChildren();$('compare-diff-counter').textContent='0 / 0';$('compare-revision-count-rail').textContent='0';renderInputs();renderTasks();}); state.inputs=[{}];renderInputs();applyRoute(api.route?.()||{view:'compare',mode:'list'});
+      document.addEventListener('fundlex:view',e=>{if(e.detail==='compare'){drawLines();}}); document.addEventListener('fundlex:identity-reset',()=>{clearTimeout(state.poll);state.identityToken++;state.listToken++;state.tasks=[];state.task=null;state.pairs=[];state.selectedPairId=null;state.view=null;state.mergedMarks=state.wordLeftMarks=state.wordRightMarks=state.leftMarks=state.rightMarks=null;state.selection=null;state.selectionDraft=null;state.selectionDirty=false;state.uploadDraft=null;state.uploadQueue=[];state.uploadBusy=false;state.inputs=[{}];state.requestToken++;state.selectionToken++;bgNotice('');resetFolders();$('compare-create').hidden=true;$('compare-submit').disabled=false;$('compare-retry').hidden=true;$('compare-upload-message').textContent='';$('compare-name').value='';$('compare-detail').hidden=true;setViewerOpen(false);for(const pane of [$('compare-word-merged-pane'),$('compare-word-left-pane'),$('compare-word-right-pane'),$('compare-left-pane'),$('compare-right-pane')]){clearVirtual(pane);if(pane)pane.innerHTML='';}$('compare-diff-list').innerHTML='';$('compare-selection-downloads').replaceChildren();selectionStatus('');$('compare-lines')?.replaceChildren();$('compare-diff-counter').textContent='0 / 0';$('compare-revision-count-rail').textContent='0';renderInputs();renderTasks();}); state.inputs=[{}];renderInputs();applyRoute(api.route?.()||{view:'compare',mode:'list'});
   }
   if (document.readyState==='loading') document.addEventListener('DOMContentLoaded',bind); else bind();
 })();

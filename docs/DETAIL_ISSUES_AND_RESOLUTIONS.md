@@ -10022,3 +10022,18 @@ H＝E×…
 - 处置：①6046eb6c→built_in=1/owner=''/released/frozen_builtin_v2；②bf4991 退回普通用户版本（built_in=0→owner=580bbe3d，status=parsed）；③guide_config 三户全部→6046eb6c（其中 580bbe3d 上传后即被 auto 选中，另两户本次 system 切换）；④canonical=用户 10:39 原件 builtin_cards_v2r2_source.docx（25583B,sha ff95dfdb 对得上）；⑤BUILTIN_CARD_DEFAULT_ID 常量→6046eb6c（新账号兜底同步换向），发布两件对缝（d6141dff/e4cde20a,frontend=否）。
 - 验证：DEFAULT_ID/canonical/库面三户全绿，四服务 active,home=200;release 支 8f65514 已推 GitHub;库表备份 guide-tables-pre-fd1128.sql。
 - 观察项：bf4991 的 filename 在 10:0x~10:3x 间曾被改写为 'aa5edf83…be.docx'（非本次操作所致，来源待查，退回时已顺手改回中文名）;API 重启瞬断自愈重复出现（MySQL 未就绪竞态，待根治登记）。
+
+## FL-D1126 终章：.doc 转换超时的真根因=整机无中文字体（2026-11-04 ~13:1x，已修复·已验证）
+- 三层前修（线程池/900s闸/串行锁）后仍单发转换卡死→逐环境变量排查锁定：**全系统零 CJK 字体**(/usr/share/fonts 仅拉丁);唯一中文字体=opencode 私享 /home/opencode/.local/share/fonts/fundlex-validation/NotoSansSC.ttf——所以 opencode 身份转 3.4s,fundlex/root 身份 LibreOffice 逐字回退遍历烧 CPU,120s/300s 超时。昨天的 16:47 拒收、今天 10:57/12:27 两轮超时同根。
+- 处置:NotoSansSC.ttf 装系统级 /usr/share/fonts/fundlex-cjk/ + fc-cache;配 soffice 暖 HOME(FUNDLEX_SOFFICE_HOME=/var/lib/fundlex/soffice-home);串行锁保留(内存护栏,不再背锅)。
+- 验证:fundlex 身份实测同文件 4.4s 转换成功(原 300s 超时);fc-list :lang=zh 两身份均 10;对照矩阵(opencode 3.4s / root 挂 / fundlex 挂 → 装后 fundlex 4.4s)。
+- 交接:DEPLOY_HANDOVER 增系统级前置一节(字体/暖HOME/锁);新部署漏装字体=.doc 全盘超时,属必备项。
+- 用户行动:广发ESG(.doc 原样传,勿改后缀)+广发恒隆均可直接重传;改名 .docx 的那份 134K 文件=真 docx 含惰性模板外链,已由 FL-D1131 修复兼容。
+
+## FL-D1131 比对解析层缺 attachedTemplate 剔除(2026-11-04,已修复·已验证)
+- 病因:接受修订归一(revisions)有剔除,解析层(parser._parse_parts)没有——附件模板外链走到解析被 EXTERNAL_RELATIONSHIP_UNSUPPORTED 误拒(12:33 广发ESG 134K docx,整部链条在主上传/直接链早已兼容=双轨漂移)。
+- 修法:parser._parse_parts 先 _strip_attached_template_links 再校验(与归一同函数);测试 61/61 绿,用户原文件 parse 1394 块通过。产线 32a5928f 已在位。
+
+## FL-D1130 比对任务创建即成即走(2026-11-04 用户两令,已上产·已验证)
+- 改法:创建 POST 成功后入后台上传队列(串行),立即 api.navigate 跳回任务列表,提交键秒解锁;列表顶部新增进度条(动态 #compare-bg-notice),上传/转换中提示可离页,失败条上给「继续上传」;身份切换清队列;跳转走 api.navigate 保路由同步。
+- 验证(sandbox 浏览器实演):创建后 1.2s 内面板隐藏+提示条可见+提交键解锁;第二个任务立即再建不受阻;完成后提示「已提交,正在处理」;errors 零。
