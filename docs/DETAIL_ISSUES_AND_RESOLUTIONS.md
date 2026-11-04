@@ -6621,3 +6621,25 @@ H＝E×…
 - 验证：主工作区workspace浏览器1 passed；干净候选V1浏览器15 passed，入口单测3 passed。正式注册/登录→上传公开指引比对任务→回工作台，用真实API created_at核对表格显示、说明节点0、任务名无small、成功状态空、表头创建时间、页面错误0；证据`/tmp/opencode/prod-workspace-copy.json`及`prod-workspace-copy.png`。脚本首轮直接fetch未带应用鉴权401已改为受支持的FundLexWorkbench.json，不作为产品认证故障。
 - 发布范围：先合并最新生产877a980独立模型页面到原Compare发布线，保留此前对齐修复；本轮主代码a58a36b/66f1787，最终发布b5226bd，事务`/opt/.fundlex-publish-Gdn7dG`；五服务active，engine6a16258e/service8b6c9472。无模型调用，不改合同引擎和业务含义，不以UI验证宣称合同引擎整体验收。
 - 状态：**已实施、已发布、生产页面验证通过**。此前FL-D541生成文本不匹配仍待修，本轮未修改。
+
+## FL-D1115 修订盲（P0，引擎找修订中的内容当真空再插一遍）
+- 现象：输入合同含 w:ins/del 待接受修订时,引擎同区重复再插——修改后卷 55% 写回中招(31例,如 r02) 5 条全中。
+- 归属：FL-D1035 C 档 normalized_base 应在 prepare_compare_input 先定稿重行在打修订;locate 读口未见这步生效(全卷实证)。
+- 修法候选：locate/scope 输入语义=接修定稿后的文本(切勿向带 ins/del 的原文),对拍=修改后卷重复插病原井数=0。
+
+## FL-D1116 申购费家族召回缺口（P0，原始卷 29-30/32 复现）
+- C0011/12/14/15/16+C0009 授权段内含目标句仍 LOCATOR_NO_WRITABLE_TARGET，133+ 条漏改级(o01 para215/135)。
+- 修法候选：locator 回放 attribution_rejected 看部等待驳回三窄,补充 anchor cov 输闸……等待总指挥修法。
+
+## FL-D1117 适用条件门缺失（P1）
+- 浮动费卡 C0028/29 用于非浮动品 15 处;单/多类卡互错(r02 C0011、o17 C0012/13、r16 C0027)。
+- 修法候选：品种分流(FL-D1064)+份额事实消费到适窗评层硬门。
+
+## FL-D1118 OPC_URI_INVALID「_rels/」（o30 广发鑫裕,个案）
+- DocxError:包路径违法(控件源件),引擎拒收。修法待总指挥复现,预:解析路径规一放宽能识破空 rel 包。
+
+## 评测大盘结论（对照锚）
+- 走通率=修改后 33/33(含亚太 .doc 转换走通+恒裕/稳信修后复验绿)、原始 32/33。两 P0 当头。zero_written 5 件「应改未改」参照在档。
+- 报告归口:总指挥 ses_e63e3258(REVISED1_REPORT+eval ledger+qa TSV 全落盘)。
+
+
