@@ -494,6 +494,21 @@ main() {
   for name in "${FILES[@]}"; do
     if [ -f "$SRC/$name" ]; then install -o root -g root -m 0644 "$SRC/$name" "$transaction/candidate/$name"; fi
   done
+  # FL-D1122 白名单：载荷禁带 frontend/*（除非显式放行券）。扫件齐全后、拷贝前拦截。
+  rejects=$(find "$transaction/candidate" -path '*/frontend/*' -type f 2>/dev/null)
+  if [ -n "$rejects" ] && [ -z "${FUNDLEX_FRONTEND_RELEASE_TICKET:-}" ]; then
+    echo "fundlex-publish: REJECT 载荷含 frontend/*(白名单 FL-D1122,放行券=FUNDLEX_FRONTEND_RELEASE_TICKET=<item>):" >&2
+    printf '%s
+' "$rejects" | head -40 >&2
+    printf 'fail\n' > "$transaction/status"
+    echo "fundlex-publish: rejected-frontend-list files=$(printf '%s
+' "$rejects" | wc -l)" >&2
+    return 1
+  fi
+  if [ -n "$rejects" ]; then
+    echo "fundlex-publish: frontend 放行券已验(${FUNDLEX_FRONTEND_RELEASE_TICKET}),含 $(printf '%s
+' "$rejects" | wc -l) 件"
+  fi
   chown -R root:root "$transaction/candidate"
   # A root publisher's umask must not make newly created directories unreadable
   # to the service user. Preserve executable files, normalize directory access.
