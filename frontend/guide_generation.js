@@ -21,7 +21,7 @@
     fail: "未通过", pass_with_findings: "存在问题", human_review_pending: "人工修改后待审阅",
     review_execution: "独立复核未完成",
     covered: "已覆盖", disposed: "已有去向", gap: "覆盖缺口", uncovered: "未覆盖", uncertain: "尚不确定", unresolved: "尚未解决",
-    not_ready: "未就绪", incomplete: "结果不完整", complete_with_exceptions: "已交付（含例外条款）",
+    not_ready: "未就绪", incomplete: "处理完成", complete_with_exceptions: "已交付（含例外条款）",
     not_applicable: "不适用", false_positive: "非真实影响", affected: "有影响", not_affected: "无影响",
     definite: "明确影响", possible: "可能影响", unlikely: "影响可能性低", modify_contract: "需修改合同",
     no_contract_change: "无需修改合同", open: "待处理", resolved: "已解决", critical: "关键问题", high: "高风险",
