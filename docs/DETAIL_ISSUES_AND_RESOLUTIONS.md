@@ -10007,6 +10007,10 @@ H＝E×…
 - 验证：沙箱同字节跑新版——soffice 转换活跃全程(soffice=2~3,25s窗口),/api/capabilities 每秒探测延迟 0.03~0.19s 全 200(旧版此处事件循环冻结 120s 实证=10:57 事故）；用户那份广发恒隆 .doc 同字节转换 15s 成功 accepted；qa 同步防回冲(263406/cd6df4)。release 支 edfa895 已推 GitHub。
 - 事故注记：首轮 cp 因 cwd 未保持从默认目录发错字节,sha 对缝当场捞出,绝对路径重发正确——再次实证对缝表必须逐项核 sha。
 - 用户行动：10:57 被拒的广发恒隆那份 .doc 直接重传即可(同字节已实证可转换)。
+- 2026-11-04 12:2x 用户复测仍卡→挖出**第二层病灶**：upload_guard.UploadResourceMiddleware 对所有上传路径套 **request_timeout=180s** 硬闸——.doc 组(转换每份60s+且冷profile启动)必在180s整被掐(12:22:27建任务→12:25:27整180s 408 UPLOAD_TIMEOUT)。被掐后线程池里转换继续空转=孤儿soffice烧CPU,用户每重试一次堆积一台,转换越拖越慢=恶性循环。**nginx 600s/前端无超时的316秒迷雾**由此澄清。
+- 处置②：API drop-in 20-upload-timeout.conf 置 FUNDLEX_UPLOAD_TIMEOUT_SECONDS=900(2文件×300s+余量),daemon-reload+重启,systemctl show 实证生效;孤儿soffice已清空;守卫并发(每IP2/全局8/每分钟12)复明不受影响。
+- 遗留残坑(舒适度,记 FL-D1129)：请求被掐/客户端断开后,线程池里的转换线程无法取消,soffice 孤儿继续烧到300s自然死;不堵他人但吃CPU。下一步候选=前端「取消上传」钮+后端转换可被中止钩子。
+- 行动：用户请直接重传 doc+docx 组——900s道宽已开,转换期页面别刷新,完成即回执。
 
 ## FL-D1127 指引解析与合同任务同池互堵（P1，2026-11-04 用户令随同 GO，已上产·已验证）
 - 根因：guide_jobs 解析跑在 fundlex-recall-worker 同一进程的 _run_once 循环里(先指引后合同)——指引解析(模型逐条款,分钟级~十分钟级)期间该槽位停摆;合同长作业占满槽位时指引解析排队=「指引解析被其他任务阻塞」。
