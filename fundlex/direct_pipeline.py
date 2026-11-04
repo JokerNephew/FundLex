@@ -194,6 +194,7 @@ def process_direct_edit(input_path: Path, output_dir: Path, *,
     from .docx import sanitize_docx_external_links
 
     raw_bytes = Path(input_path).read_bytes()
+    original_raw_bytes = raw_bytes  # FL-D1133：回补原修订痕迹的唯一真源（归一前字节）
     prepared = prepare_compare_input(raw_bytes)
     report["preparation"] = {
         "revisions_accepted": getattr(prepared, "revisions_accepted", 0),
@@ -278,6 +279,21 @@ def process_direct_edit(input_path: Path, output_dir: Path, *,
         delivery_status = "complete"
     else:
         raise DirectPipelineError("DIRECT_WRITER_INVALID_RESULT")
+
+    # FL-D1133 基础档（用户 GO ~15:5x）：原合同带修订时,把原修改人的痕迹
+    # 盖回红线未被动刀的段落(归一治盲不动,产出观感恢复 FL-D1115 之前;
+    # 模块自带「可见文字逐字相同」硬校验,失败整单放弃=红线保持回补前)。
+    if delivery_status in ("complete", "incomplete") and \
+            int(report["preparation"].get("revisions_accepted") or 0) > 0:
+        try:
+            from .revision_restore import restore_source_revisions
+            report["revision_restore"] = restore_source_revisions(
+                redline_path, original_raw_bytes)
+        except Exception:  # noqa: BLE001 - 回补失败绝不拖累成品交付
+            import traceback as _tb
+            _tb.print_exc()
+            report["revision_restore"] = {"attempted": True, "rolled_back": True,
+                                          "reason": "unexpected exception"}
 
     actual = Path(write_result.get("final_path") or final_path)
     actual_redline = Path(write_result.get("redline_path") or redline_path)
