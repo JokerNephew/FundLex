@@ -10043,3 +10043,4 @@ H＝E×…
 - 根因：FL-D1126/1131 那波只重启了 api/recall-worker/guide-parse×2，**漏了 fundlex-compare-worker**——比对工序仍在跑 11:10 前的旧 parser，attachedTemplate 外链照旧拒。发布纪律补丁：凡动 fundlex/compare/** 或 docx.py 必同步重启 fundlex-compare-worker（已补进发布 SOP 心诀）。
 - 处置+验证：重启 compare worker(13:19:44)；用户这对原件经完整 compare 链沙箱跑通：82 处差异，coverage=incomplete——解析/比对全绿。
 - 用户行动：新建一次对比任务传同一对文件即可成（旧失败任务不可补救,前端文案原已如实指引）。
+- **产线实证闭环(13:25)**：用户新建两次对比任务同一对广发ESG文件,两单各产出 82 处差异(与沙箱预言 82 完全一致),文本比对环节全通。FL-D1126/1130/1131 终告全链稳定。
