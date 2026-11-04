@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from fastapi import Depends, File, Form, Header, HTTPException, Request, Response, UploadFile
+from starlette.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -214,6 +215,43 @@ def register_compare_routes(application, compare_store: CompareStore, user_depen
         if (not isinstance(ids, list) or len(ids) != len(files)
                 or any(not isinstance(i, str) or not 1 <= len(i) <= 128 for i in ids) or len(set(ids)) != len(ids)):
             raise HTTPException(422, "invalid client_ids")
+        # FL-D1126：校验/.doc 转换/修订归一/解析全是同步重活（soffice 可达数十秒），
+        # 在 async 端点事件循环里跑会冻结整个 uvicorn worker——一组上传卡死，
+        # 全站（含其他比对任务上传）全部排队。整段移入线程池，事件循环即刻解放。
+        def _prepare_one(name: str, data: bytes):
+            error = None
+            prepared = None
+            from ..doc_convert import is_legacy_doc
+            # 二进制 .doc：跳过旧 *格式* 闸门，真接走归一转换+包安全链，
+            # 失败如实返回转换/包安全码（不再混成 UNSUPPORTED）。
+            if is_legacy_doc(data) or name.lower().endswith(".doc"):
+                from .ingest import prepare_compare_upload
+                from ..upload_validation import UploadValidationError
+                try:
+                    prepared = prepare_compare_upload(name, data)
+                except Exception as exc:  # noqa: BLE001 - 失败如实上抛
+                    error = (exc.code if isinstance(exc, UploadValidationError)
+                             else "COMPARE_INVALID_DOCX")
+                    prepared = None
+                    _capture_ingest_reject(name, data, exc)
+            else:
+                try:
+                    validate_upload(name, data)
+                except HTTPException as exc:
+                    if exc.status_code == 415:
+                        error = _upload_rejection_code(name, data)
+                    else:
+                        error = "COMPARE_UPLOAD_REJECTED"
+                if error is None:
+                    from .ingest import prepare_compare_upload
+                    try:
+                        prepared = prepare_compare_upload(name, data)
+                    except Exception as _ingest_exc:
+                        error = "COMPARE_INVALID_DOCX"
+                        prepared = None
+                        _capture_ingest_reject(name, data, _ingest_exc)
+            return prepared, error
+
         uploads, total = [], 0
         try:
             for cid, upload in zip(ids, files):
@@ -224,37 +262,7 @@ def register_compare_routes(application, compare_store: CompareStore, user_depen
                     raise HTTPException(413, "COMPARE_UPLOAD_REJECTED")
                 total += len(data)
                 name = Path((upload.filename or "").replace("\\", "/")).name
-                error = None
-                prepared = None
-                from ..doc_convert import is_legacy_doc
-                # 二进制 .doc：跳过旧 *格式* 闸门，真接走归一转换+包安全链，
-                # 失败如实返回转换/包安全码（不再混成 UNSUPPORTED）。
-                if is_legacy_doc(data) or name.lower().endswith(".doc"):
-                    from .ingest import prepare_compare_upload
-                    from ..upload_validation import UploadValidationError
-                    try:
-                        prepared = prepare_compare_upload(name, data)
-                    except Exception as exc:  # noqa: BLE001 - 失败如实上抛
-                        error = (exc.code if isinstance(exc, UploadValidationError)
-                                 else "COMPARE_INVALID_DOCX")
-                        prepared = None
-                        _capture_ingest_reject(name, data, exc)
-                else:
-                    try:
-                        validate_upload(name, data)
-                    except HTTPException as exc:
-                        if exc.status_code == 415:
-                            error = _upload_rejection_code(name, data)
-                        else:
-                            error = "COMPARE_UPLOAD_REJECTED"
-                    if error is None:
-                        from .ingest import prepare_compare_upload
-                        try:
-                            prepared = prepare_compare_upload(name, data)
-                        except Exception as _ingest_exc:
-                            error = "COMPARE_INVALID_DOCX"
-                            prepared = None
-                            _capture_ingest_reject(name, data, _ingest_exc)
+                prepared, error = await run_in_threadpool(_prepare_one, name, data)
                 uploads.append({
                     "client_id": cid,
                     "name": name,
@@ -265,7 +273,8 @@ def register_compare_routes(application, compare_store: CompareStore, user_depen
                     "error_code": error,
                 })
             # FL-D1093：上传完成落结构化 INFO——名称+status/error_code 摘要，不含内容。
-            result = call(compare_store.upload, user, task_id, uploads)
+            # FL-D1126：DB 落库同样移出事件循环。
+            result = await run_in_threadpool(call, compare_store.upload, user, task_id, uploads)
             try:
                 receipts = result.get("receipts", []) if isinstance(result, dict) else []
                 logging.getLogger("fundlex.compare").info(
