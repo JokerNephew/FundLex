@@ -280,7 +280,7 @@
     show?el.removeAttribute('hidden'):el.setAttribute('hidden','');
   }
   function guideNameForTask(task){if(!task)return '—';if(task.legacy)return '遗留任务 · 未绑定指引';const id=task.guide_snapshot?.version_id;if(!id)return '未绑定指引';const item=(state.taskGuides||[]).find(guide=>guide.id===id);return `${item?.filename||'创建时的指引'}`;}
-  function renderTaskGuideFilter(){const select=$('task-guide-filter');if(!select)return;const current=select.value,items=state.taskGuides||[];patchHTML(select,'<option value="">全部指引</option>'+items.map(guide=>`<option value="${esc(guide.id)}">${esc(guide.filename)}${guide.built_in?'（内置）':''}</option>`).join(''));if(current&&items.some(guide=>guide.id===current))select.value=current;}
+  function renderTaskGuideFilter(){const select=$('task-guide-filter');if(!select)return;const current=select.value,items=state.taskGuides||[];patchHTML(select,'<option value="">全部指引</option>'+items.map(guide=>`<option value="${esc(guide.id)}">${esc(guideDisplayName(guide))}${guide.built_in?'（内置）':''}</option>`).join(''));if(current&&items.some(guide=>guide.id===current))select.value=current;}
   // FL-D1039：并行 loadTaskGuides 成功路径也调 renderTaskRows——首载失败语义的空态
   // 「任务暂未加载」必须尊重 state.tasksFailed 不被「当前条件下没有任务」改写，失败与空账号可分辨。
   function renderTaskRows(){const items=state.tasks||[];if(!items.length&&state.tasksLoaded&&state.tasksFailed){patchHTML($('task-rows'),emptyRow(7,'任务暂未加载，请检查连接后刷新'));return;}patchHTML($('task-rows'),items.map(taskRow).join('')||emptyRow(7,'当前条件下没有任务'));}
@@ -1436,12 +1436,14 @@ if(e.target.id==='gd-diff-filter'){const d=state.guideDiff;if(d){d.filter=e.targ
   const guideStatusLabel=value=>GUIDE_STATUSES[value] || '未确认';
   const guideTime=value=>value?new Date(value>1e12?value:value*1000).toLocaleString('zh-CN'):'—';
   const guideKind=item=>item.built_in?'<span class="badge b-gray">内置</span>':'<span class="badge b-blue">自定义</span>';
+  // FL-D1121（用户令 2026-11-04）：内置默认指引显示名=「修改指引V2」（只改展示,不写库）。
+  const guideDisplayName=item=>(item&&item.built_in)?'修改指引V2':(item&&item.filename)||'指引';
   const guideCurrentFlag=item=>item.current?'<span class="badge b-green">当前使用</span>':'';
   const guideByName=id=>(state.guides || []).find(item=>item.id===id) || null;
   const guideReady=()=>!!state.cap?.engine?.guide&&state.cap.engine.delivery_mode==='formal';
   // （旧 guide-rules-v1 的 guideOps noop 枚举渲染已随旧格式兼容展示一并物理删除）
   function renderGuideBinding() {const box=$('guide-binding');if(!box)return;const cap=state.cap,guide=cap?.engine?.guide || null;box.hidden=false;if(!cap){box.className='guide-binding';box.textContent='当前指引尚未加载，请稍后重试。';return;}
-    if(guide&&guideReady()){box.className='guide-binding';box.innerHTML=`本任务将使用指引：<strong>${esc(guide.filename)}</strong>（版本 ${esc(shortHash(guide.id))} · 指引规则 ${guide.groups || 0} 条 · ${esc(guideStatusLabel(guide.status))}）${guideKind(guide)}<br><span class="subnote">启用新指引只影响之后创建的任务；已在处理的任务仍用创建时绑定的版本。</span>`;return;}
+    if(guide&&guideReady()){box.className='guide-binding';box.innerHTML=`本任务将使用指引：<strong>${esc(guideDisplayName(guide))}</strong>（版本 ${esc(shortHash(guide.id))} · 指引规则 ${guide.groups || 0} 条 · ${esc(guideStatusLabel(guide.status))}）${guideKind(guide)}<br><span class="subnote">启用新指引只影响之后创建的任务；已在处理的任务仍用创建时绑定的版本。</span>`;return;}
     box.className='guide-binding guide-binding-warning';box.innerHTML='当前指引不可用：暂时不能创建任务。请先到 <button type="button" class="btn-link" data-nav="guide">指引配置</button> 启用可用指引，再刷新本页。';}
   function resetGuides() {state.guides=null;state.guidesFailed=false;state.guideBusy=null;state.guideUploading=false;clearTimeout(state.guideTimer);state.guideTimer=null;const input=$('guide-file');if(input)input.value='';const name=$('guide-file-name');if(name)name.textContent='尚未选择文件';const button=$('guide-upload-btn');if(button)button.disabled=true;const message=$('guide-upload-message');if(message)message.textContent='解析失败可在列表中查看问题并重新解析。';$('guide-rows').innerHTML=emptyRow(7,'正在读取指引列表');$('guide-current-body').textContent='正在读取当前指引…';$('guide-current-flags').replaceChildren();$('guide-list-state').textContent='';$('guide-reset-btn').disabled=true;$('guide-reset-btn').title='恢复内置指引并用于之后创建的任务';closeGuidePanel();}
   async function loadGuides(quiet=false) {if(state.auth.mode==='password'&&!state.auth.token)return;const t=ticket('guide'),rows=$('guide-rows');if(!quiet){rows.setAttribute('aria-busy','true');$('guide-list-state').textContent='正在读取指引列表…';}
@@ -1452,7 +1454,7 @@ if(e.target.id==='gd-diff-filter'){const d=state.guideDiff;if(d){d.filter=e.targ
     $('guide-current-flags').innerHTML=current?guideKind(current)+guideCurrentFlag(current):'';
     $('guide-current-body').innerHTML=current?`<dl class="detail-grid"><dt>文件名</dt><dd><span class="filename" title="${esc(current.filename)}">${esc(current.filename)}</span></dd><dt>状态</dt><dd>${badge(current.status, GUIDE_STATUSES[current.status])}</dd><dt>规则条数</dt><dd>${current.groups} 条</dd><dt>版本</dt><dd>${esc(shortHash(current.id))}</dd></dl>`:'<p class="subnote">尚未确定当前指引。请刷新列表，或上传并启用一个已解析的自定义指引。</p>';
     $('guide-rows').innerHTML=items.map(item=>{const enable=GUIDE_ENABLEABLE.includes(item.status),parse=!item.built_in&&GUIDE_PARSEABLE.includes(item.status);
-      return `<tr><td><span class="filename" title="${esc(item.filename)}">${esc(item.filename)}</span>${item.parent_version_id?'<span class="row-sub">由旧版本重新解析而来</span>':''}</td><td>${badge(item.status, GUIDE_STATUSES[item.status])}</td><td>${item.groups} 条</td><td>${item.issues} 项</td><td>${guideKind(item)}${guideCurrentFlag(item)}</td><td>${esc(guideTime(item.created_at))}</td><td><div class="guide-actions"><button class="btn-link" data-guide-enable="${esc(item.id)}" ${busy||item.current||!enable?'disabled':''} title="${item.current?'该指引当前正在使用':enable?'新任务改用该指引':'解析完成后才能启用'}">启用指引</button><button class="btn-link" data-guide-diff="${esc(item.id)}">版本对比</button><button class="btn-link" data-guide-issues="${esc(item.id)}" ${busy?'disabled':''}>解析详情</button></div></td></tr>`;}).join('') || emptyRow(7,'还没有可用指引');
+      return `<tr><td><span class="filename" title="${esc(item.filename)}">${esc(guideDisplayName(item))}</span>${item.parent_version_id?'<span class="row-sub">由旧版本重新解析而来</span>':''}</td><td>${badge(item.status, GUIDE_STATUSES[item.status])}</td><td>${item.groups} 条</td><td>${item.issues} 项</td><td>${guideKind(item)}${guideCurrentFlag(item)}</td><td>${esc(guideTime(item.created_at))}</td><td><div class="guide-actions"><button class="btn-link" data-guide-enable="${esc(item.id)}" ${busy||item.current||!enable?'disabled':''} title="${item.current?'该指引当前正在使用':enable?'新任务改用该指引':'解析完成后才能启用'}">启用指引</button><button class="btn-link" data-guide-diff="${esc(item.id)}">版本对比</button><button class="btn-link" data-guide-issues="${esc(item.id)}" ${busy?'disabled':''}>解析详情</button></div></td></tr>`;}).join('') || emptyRow(7,'还没有可用指引');
     $('guide-list-state').textContent=items.length?`共 ${items.length} 个版本 · 解析成功并形成可执行指引卡后即成为之后任务的默认指引；手动启用其他版本只影响之后创建的任务，解析中或解析失败的版本不会被使用。`:'';
     $('guide-reset-btn').disabled=busy||!current||!!current.built_in;
     $('guide-reset-btn').title=current&&current.built_in?'当前已使用内置指引':'恢复内置指引并用于之后创建的任务';
@@ -1461,7 +1463,7 @@ if(e.target.id==='gd-diff-filter'){const d=state.guideDiff;if(d){d.filter=e.targ
   function guidePolling() {clearTimeout(state.guideTimer);state.guideTimer=null;if(state.view!=='guide')return;if(!(state.guides || []).some(item=>item.status==='uploaded'||item.status==='parsing'))return;const epoch=state.epoch;state.guideTimer=setTimeout(()=>{if(identityCurrent(epoch)&&state.view==='guide')loadGuides(true);},4000);}
   // ── 指引版本对比（规则差异 + 原文比对；全确定性，不调模型）──────────────────
   // ── 指引版本对比（弹窗式，照抄合同比对查看器；只读、无「采用 A/B」；仅原文比对）──
-  function guideDiffLabel(item){return `${item.filename} · ${esc(guideTime(item.created_at))}${item.current?'（当前）':''}${item.built_in?'（内置）':''}`;}
+  function guideDiffLabel(item){return `${guideDisplayName(item)} · ${esc(guideTime(item.created_at))}${item.current?'（当前）':''}${item.built_in?'（内置）':''}`;}
   // FL-D1087（用户令「内置要进下拉」）：自定义在前、内置殿后；内置以服务端 canonical 参与比对。
   function gdUploaded(){const items=[...(state.guides||[])];
     const customs=items.filter(item=>!item.built_in).sort((a,b)=>(b.created_at||0)-(a.created_at||0));
