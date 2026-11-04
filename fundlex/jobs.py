@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import tempfile
 import time
 import traceback
@@ -124,6 +125,10 @@ class Worker:
     def __init__(self, store: RunStore, processor: Processor | None = None, *, lease_seconds: int = 900):
         self.store = store
         self._guide_lock = threading.Lock()
+        # FL-D1127：域开关——专职指引解析进程=GUIDE=1/CONTRACTS=0；
+        # 合同主力进程=GUIDE=0/CONTRACTS=1；默认全开保持单进程旧行为。
+        self._guide_enabled = os.environ.get("FUNDLEX_WORKFLOW_GUIDE", "1") != "0"
+        self._contracts_enabled = os.environ.get("FUNDLEX_WORKFLOW_CONTRACTS", "1") != "0"
         # FL-D1047：真实提速不降质——flock 只包 claim/finish/retry/reap 等
         # 秒级临界区，模型定位/改写/DOCX 写回（耗时主体）在锁外并行。
         self._critical = threading.Lock()
@@ -288,10 +293,15 @@ class Worker:
         with self._critical_section():
             # R2：stale workspace 重扫与存储清理只能在临界区内（含自锁语义），
             # 保留 retention fail-closed 语义不变。
-            self._reap_stale_workspaces()
-            self._prune_storage(time.time())
-        if self._run_guide_job():
+            # FL-D1127：housekeeping 只由合同域进程执行，指引解析专职进程不重复做。
+            if self._contracts_enabled:
+                self._reap_stale_workspaces()
+                self._prune_storage(time.time())
+        # FL-D1127：指引解析与合同任务分进程互不阻塞；域开关默认全开=旧行为不变。
+        if self._guide_enabled and self._run_guide_job():
             return True
+        if not self._contracts_enabled:
+            return False
         with self._critical_section():
             job = self.store.claim(lease_seconds=self.lease_seconds)
         if job is None:

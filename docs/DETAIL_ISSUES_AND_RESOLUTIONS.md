@@ -10002,4 +10002,13 @@ H＝E×…
 - 根因（后端主凶）：`compare/api.py upload_compare_task` 是 async def 端点，却在事件循环里做重活——`.doc` 走 soffice 子进程转换（秒级~十秒级）、`prepare_compare_input` 接受修订、`parse_compare_document` 全量解析、DB 落库全部同步内联。async 端点同步干活=冻结整个 uvicorn worker 事件循环；产线仅 2 workers，1-2 组并发阻塞上传=整站假死。
 - 伴生（前端次因）：`continueUploads()` 逐组串行 await 且禁用提交钮，单组卡死时用户自身流程也被串住（设计上为保幂等，但放大体感）。
 - 拟修（最小）：上传处理整段移入线程池（starlette run_in_threadpool 包 validate/prepare/store 调用），事件循环即刻解放；soffice 转换并发行保持现状由线程池天然限流。前端串行暂不动（保幂等语义）。
-- 状态：等用户 GO 后上产（FL-D1119 最严档）。
+- 状态：✅已上产已验证（用户 2026-11-04 GO）。
+- 实施（~11:1x）：compare/api.py 上传循环内 validate/prepare(_doc 转换/修订归一/解析)+store.upload 全部 run_in_threadpool；发布走两件对缝（产 b782aafe/6eeb2902 → 263406cf/cd6df425,frontend=否）；伴生 API drop-in FUNDLEX_DOC_CONVERT_TIMEOUT_S=300（转换不再堵循环,大 .doc 不再被 120s 误拒）；备份 .bak-fd1126/.bak-fd1127。
+- 验证：沙箱同字节跑新版——soffice 转换活跃全程(soffice=2~3,25s窗口),/api/capabilities 每秒探测延迟 0.03~0.19s 全 200(旧版此处事件循环冻结 120s 实证=10:57 事故）；用户那份广发恒隆 .doc 同字节转换 15s 成功 accepted；qa 同步防回冲(263406/cd6df4)。release 支 edfa895 已推 GitHub。
+- 事故注记：首轮 cp 因 cwd 未保持从默认目录发错字节,sha 对缝当场捞出,绝对路径重发正确——再次实证对缝表必须逐项核 sha。
+- 用户行动：10:57 被拒的广发恒隆那份 .doc 直接重传即可(同字节已实证可转换)。
+
+## FL-D1127 指引解析与合同任务同池互堵（P1，2026-11-04 用户令随同 GO，已上产·已验证）
+- 根因：guide_jobs 解析跑在 fundlex-recall-worker 同一进程的 _run_once 循环里(先指引后合同)——指引解析(模型逐条款,分钟级~十分钟级)期间该槽位停摆;合同长作业占满槽位时指引解析排队=「指引解析被其他任务阻塞」。
+- 修法：jobs.py 加域开关 FUNDLEX_WORKFLOW_GUIDE/FUNDLEX_WORKFLOW_CONTRACTS(默认全开=旧行为,hausekeeping 只随合同域);产线 recall-worker 置 GUIDE=0;新建模板服务 fundlex-guide-parse-worker@.service(CONTRACTS=0)开 2 实例——指引解析专职池互不阻塞,claim 按 owner 串行设计原生支持多实例。
+- 验证:四服务 active(guide-parse@1/@2 NRestarts=0);Worker 单测 guide-only/contracts-only/默认三态断言过；产线 home=200;boot 期一条 MySQL 未就绪瞬断 uvicorn 父进程自愈(标记观察)。
