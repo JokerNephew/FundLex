@@ -9986,3 +9986,7 @@ H＝E×…
 ## FL-D1123 内置默认指引切换为用户存量指引 V2（2026-11-04 ~10:3x，用户令·已执行·已验证）
 - 处置（三刀一留）：①guide_versions bf4991 转内置+全局(owner=''，built_in=1，frozen,released)；②guide_config 全三账户现行默认指向 bf4991（selection_source=system）；③canonical 档案=用户 09:58 原件(builtin_cards_v2_source.docx 字节级对)；④**新账号兜底**仍为 BUILTIN_CARD_V2_ID 常量，若要新账号默认也是 V2，单行码改常量为 bf4991 即准许上线(记 FL-D1124,等用户 GO)。
 - 生效：现有账户今天起新任务即绑 V2(11 张卡,source_sha 同号);旧版本不碎(历史任务绑快照，无影响);builtin-cards-v1/v2 老件留档不冲。
+
+## FL-D1124 新账号兜底默认=用户存量指引 V2（2026-11-04 ~10:4x，用户 GO·已上线·已验证）
+- 处置：builtin_cards.BUILTIN_CARD_DEFAULT_ID → bf499150221c42c4967e81f220c64987；guide_store._builtin_source_docx_files 注册该 id 到 V2 canonical（sha bd75d1eb 与用户原件一致）。
+- 验证：重启后 `BUILTIN_CARD_DEFAULT_ID=bf4991…` + builtin_source_docx 出 29824B 原件；现有三账户现行默认从 FL-D1123 已指向 V2。full新征程和老任务相互不串。
