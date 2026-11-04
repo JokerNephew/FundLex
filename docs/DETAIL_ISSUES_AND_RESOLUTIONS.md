@@ -9990,3 +9990,9 @@ H＝E×…
 ## FL-D1124 新账号兜底默认=用户存量指引 V2（2026-11-04 ~10:4x，用户 GO·已上线·已验证）
 - 处置：builtin_cards.BUILTIN_CARD_DEFAULT_ID → bf499150221c42c4967e81f220c64987；guide_store._builtin_source_docx_files 注册该 id 到 V2 canonical（sha bd75d1eb 与用户原件一致）。
 - 验证：重启后 `BUILTIN_CARD_DEFAULT_ID=bf4991…` + builtin_source_docx 出 29824B 原件；现有三账户现行默认从 FL-D1123 已指向 V2。full新征程和老任务相互不串。
+
+## FL-D1125 产线快照分支（2026-11-04 ~10:5x，已落地·已验证）
+- 用户诉求（交接）:下家接手需要一条能部署的分支,两条主线硬伤不合——以「产线快照」成支代替整树合并（零风险评估）。
+- 内容:release/prod-current-20261104=后端 fundlex+guides=产线当下字节冷合并(与 /opt 零差)+frontend=qa-base@466029f+交接执照【docs/DEPLOY_HANDOVER_20261104.md】+推 GitHub 同步。
+- 验证:沙箱冒烟首页 200、api 口径 401、产线无扰;快照差分产线=0。
+- 后续法之身:后续发布一律向该分支做 3-way 对缝;上家守则已定格(禁整目录、报错成全、白名单 frontend)。
