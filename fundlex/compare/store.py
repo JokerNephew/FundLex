@@ -199,7 +199,8 @@ class CompareStore:
                 filename = str(entry.get("name") or "")
                 size = entry.get("size")
                 if (not client_id or client_id in seen_client or not _safe_filename(filename)
-                        or not filename.lower().endswith(".docx") or not isinstance(size, int) or size <= 0):
+                        or filename.lower().rsplit(".", 1)[-1] not in {"docx", "doc"}
+                        or not isinstance(size, int) or size <= 0):
                     raise ValueError("invalid file manifest")
                 seen_client.add(client_id)
                 sides.append({"side": side, "client_id": client_id, "filename": filename, "size": size})

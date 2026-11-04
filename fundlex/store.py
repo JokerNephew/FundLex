@@ -55,8 +55,6 @@ _ENGINE_BUILD_MODULES = (
     "fundlex/guide.py",
     "fundlex/model.py",
     "fundlex/model_budget.py",
-    "fundlex/model_settings.py",
-    "fundlex/user_model_connections.py",
     "fundlex/obligations.py",
     "fundlex/pipeline.py",
     "fundlex/qualification.py",
@@ -68,7 +66,6 @@ _ENGINE_BUILD_MODULES = (
     "fundlex/rules.py",
     "fundlex/rules_v2.py",
     "fundlex/selective.py",
-    "fundlex/semantic_contract.py",
     "fundlex/semantic_evidence.py",
     "fundlex/stage_replay.py",
     "fundlex/targeting.py",
@@ -203,6 +200,11 @@ EVALUATION_ARTIFACT_HASHES = {"evaluation_redline": "redline_sha256", "evaluatio
 
 
 def _requires_actual_review(report: dict[str, Any]) -> bool:
+    if is_direct_report(report):
+        # Direct reports bind their writer evidence inside ``direct_edit`` and
+        # use a non-numeric assembly version; the numeric-review contract is a
+        # legacy engine concept.
+        return False
     try:
         return tuple(int(part) for part in report.get("engine_version", "0.0.0").split(".")) >= (0, 3, 0)
     except (ValueError, AttributeError):
@@ -214,6 +216,55 @@ def is_recall_report(report: dict[str, Any]) -> bool:
     return report.get("engine_id") == "recall_first" or str(report.get("schema_version") or "") == "3"
 
 
+DIRECT_REPORT_CONTRACT = "direct_edit_v1"
+
+
+def is_direct_report(report: dict[str, Any]) -> bool:
+    """True for the direct-through engine report (explicit contract marker)."""
+    return report.get("report_contract") == DIRECT_REPORT_CONTRACT
+
+
+def _validate_direct_delivery(report: dict[str, Any], artifacts: dict[str, Path]) -> None:
+    """Delivery gate for the direct-through engine.
+
+    ``complete`` requires at least one reopen-verified substantive write and a
+    final/redline pair from the same generation (pair token) whose persisted
+    bytes match the report's recorded hashes.  ``incomplete`` requires zero
+    actual writes and no published contract files: an unmodified source file
+    must never masquerade as a delivered result.
+    """
+    block = report.get("direct_edit")
+    if not isinstance(block, dict):
+        raise ValueError("MISSING_VERIFIED_ARTIFACTS")
+    status = report.get("delivery_status")
+    count = block.get("actual_written_count")
+    contract_kinds = {"final", "redline"}
+    if status == "incomplete":
+        if count not in (0, None) or contract_kinds & set(artifacts):
+            raise ValueError("MISSING_VERIFIED_ARTIFACTS")
+        return
+    if status != "complete":
+        raise ValueError("MISSING_VERIFIED_ARTIFACTS")
+    artifact_refs = block.get("artifacts")
+    if (not isinstance(count, int) or count < 1 or block.get("reopen_verified") is not True
+            or not (block.get("pair_token") or "").strip()
+            or not isinstance(artifact_refs, dict)
+            or not isinstance(block.get("changes"), list) or not block["changes"]
+            or not isinstance(block.get("revision_manifest"), list) or not block["revision_manifest"]):
+        raise ValueError("MISSING_VERIFIED_ARTIFACTS")
+    write_result = block.get("write_result")
+    source_sha = report.get("source_sha256")
+    if isinstance(write_result, dict) and write_result.get("source_sha256") and source_sha \
+            and write_result["source_sha256"] != source_sha:
+        raise ValueError("ARTIFACT_VERIFICATION_MISMATCH")
+    for kind in ("final", "redline"):
+        expected = artifact_refs.get(f"{kind}_sha256")
+        path = artifacts.get(kind)
+        if (not isinstance(expected, str) or len(expected) != 64
+                or path is None or not path.is_file() or sha256_file(path) != expected):
+            raise ValueError("ARTIFACT_VERIFICATION_MISMATCH")
+
+
 _RECALL_EDIT_CHECKS = {"package", "revisions", "final_equivalence", "non_target",
                        "content_verification", "actual_content_verification"}
 _RECALL_UNCHANGED_CHECKS = {"package", "zero_edit", "byte_identity"}
@@ -223,7 +274,8 @@ _RECALL_ARTIFACT_HASHES = {"final": "final_sha256", "redline": "redline_sha256",
 # alongside delivery artifacts but are not part of delivery validation.
 SELECTED_KINDS = {"selected_final", "selected_redline"}
 
-EVALUATION_KINDS = {"evaluation_final", "evaluation_redline"}
+
+EVALUATION_KINDS = set(EVALUATION_ARTIFACT_HASHES)
 
 
 def servable_artifact_kinds(kinds, execution_mode: Any) -> list[str]:
@@ -251,30 +303,17 @@ def _manifests_available(report: dict[str, Any]) -> bool:
     return isinstance(edits, list) and bool(edits)
 
 
-def _artifact_digest(path: Path, verified_hashes: dict[str, str] | None, kind: str) -> str:
-    """Digest of one artifact file, reusing an already-verified value when given.
-
-    A download call that has just hashed the bytes it is about to serve passes
-    that digest in so the pair validation does not rescan the same file.  The
-    comparison contract is unchanged: the supplied digest was itself checked
-    against the registered row hash in the same call.
-    """
-    verified = (verified_hashes or {}).get(kind)
-    return verified if verified is not None else sha256_file(path)
-
-
 def _require_recall_pair(artifacts: dict[str, Path], validation: dict[str, Any],
-                         kinds: tuple[str, str], verified_hashes: dict[str, str] | None = None) -> None:
+                         kinds: tuple[str, str]) -> None:
     if not set(kinds).issubset(artifacts):
         raise ValueError("MISSING_VERIFIED_ARTIFACTS")
     for kind in kinds:
         path = artifacts[kind]
-        if not path.is_file() or validation.get(_RECALL_ARTIFACT_HASHES[kind]) != _artifact_digest(path, verified_hashes, kind):
+        if not path.is_file() or validation.get(_RECALL_ARTIFACT_HASHES[kind]) != sha256_file(path):
             raise ValueError("ARTIFACT_VERIFICATION_MISMATCH")
 
 
-def _validate_recall_delivery(report: dict[str, Any], artifacts: dict[str, Path],
-                              verified_hashes: dict[str, str] | None = None) -> None:
+def _validate_recall_delivery(report: dict[str, Any], artifacts: dict[str, Path]) -> None:
     """Delivery gate for the recall-first engine (schema 3).
 
     ``recall_validated_edits``/``recall_validated_unchanged`` publish the final
@@ -291,25 +330,15 @@ def _validate_recall_delivery(report: dict[str, Any], artifacts: dict[str, Path]
     checks = set(checks) if isinstance(checks, (list, tuple)) else set()
     if status in {"excluded", "not_generated"}:
         return
-    complete_status = status == "complete"
-    if status == "complete_with_exceptions":
-        disabled = report.get("disabled_rules")
-        guide_ids = (report.get("guide") or {}).get("disabled_rule_ids")
-        complete_status = (isinstance(disabled, list) and bool(disabled)
-                           and all(isinstance(item, dict) and item.get("rule_id")
-                                   and item.get("reason") == "USER_DISABLED" for item in disabled)
-                           and isinstance(guide_ids, list)
-                           and sorted(item["rule_id"] for item in disabled) == sorted(guide_ids))
     if kind == "recall_validated_edits":
-        if not complete_status or not _RECALL_EDIT_CHECKS.issubset(checks):
+        if status != "complete" or not _RECALL_EDIT_CHECKS.issubset(checks):
             raise ValueError("MISSING_VERIFIED_ARTIFACTS")
-        _require_recall_pair(artifacts, validation, ("final", "redline"), verified_hashes)
-        _validate_manifest_plan_binding(report)
+        _require_recall_pair(artifacts, validation, ("final", "redline"))
         return
     if kind == "recall_validated_unchanged":
-        if not complete_status or not _RECALL_UNCHANGED_CHECKS.issubset(checks):
+        if status != "complete" or not _RECALL_UNCHANGED_CHECKS.issubset(checks):
             raise ValueError("MISSING_VERIFIED_ARTIFACTS")
-        _require_recall_pair(artifacts, validation, ("final", "redline"), verified_hashes)
+        _require_recall_pair(artifacts, validation, ("final", "redline"))
         return
     if kind == "recall_working_edits":
         unresolved = report.get("unresolved")
@@ -317,37 +346,9 @@ def _validate_recall_delivery(report: dict[str, Any], artifacts: dict[str, Path]
             raise ValueError("MISSING_VERIFIED_ARTIFACTS")
         if {"final", "redline"} & set(artifacts):
             raise ValueError("MISSING_VERIFIED_ARTIFACTS")
-        _require_recall_pair(artifacts, validation, ("working_final", "working_redline"), verified_hashes)
-        _validate_manifest_plan_binding(report)
+        _require_recall_pair(artifacts, validation, ("working_final", "working_redline"))
         return
     raise ValueError("MISSING_VERIFIED_ARTIFACTS")
-
-
-def _validate_manifest_plan_binding(report: dict[str, Any]) -> None:
-    """Every embedded revision must trace back to a planned edit (FL-D555 A3-F5).
-
-    The plan ledger may legitimately hold edits the DOCX writer skipped (an
-    insert without an anchor text), so the binding is one-directional: a
-    manifest entry whose edit_id matches no plan edit means the modification
-    report and the redline have drifted apart, and delivery fails closed.
-    """
-    manifest = report.get("revision_manifest")
-    if not isinstance(manifest, list) or not manifest:
-        return
-    plan = report.get("plan")
-    edits = plan.get("edits") if isinstance(plan, dict) else None
-    known: set[str] = set()
-    if isinstance(edits, list):
-        for edit in edits:
-            if not isinstance(edit, dict):
-                continue
-            if edit.get("edit_id"):
-                known.add(str(edit["edit_id"]))
-            if edit.get("rule_id") is not None or edit.get("target_id") is not None:
-                known.add(f"{edit.get('rule_id')}:{edit.get('target_id')}")
-    for entry in manifest:
-        if not isinstance(entry, dict) or str(entry.get("edit_id") or "") not in known:
-            raise ValueError("REVISION_MANIFEST_PLAN_MISMATCH")
 
 
 def _review_rejected_report_only(report: dict[str, Any], artifacts: dict[str, Path]) -> bool:
@@ -426,8 +427,7 @@ def _validate_actual_review(report: dict[str, Any], validation: dict[str, Any]) 
         raise ValueError("ACTUAL_CONTENT_REVIEW_COVERAGE_MISSING")
 
 
-def validate_delivery(report: dict[str, Any], artifacts: dict[str, Path],
-                      verified_hashes: dict[str, str] | None = None) -> None:
+def validate_delivery(report: dict[str, Any], artifacts: dict[str, Path]) -> None:
     if (report.get("verification_status") == "verification_blocked"
             and (report.get("delivery_status") in {"complete", "complete_with_exceptions"}
                  or {"final", "redline"} & set(artifacts))):
@@ -436,6 +436,9 @@ def validate_delivery(report: dict[str, Any], artifacts: dict[str, Path],
         if {"final", "redline", "working_final", "working_redline",
             "evaluation_final", "evaluation_redline"} & set(artifacts):
             raise ValueError("DIAGNOSIS_MUST_NOT_PUBLISH_CONTRACTS")
+        return
+    if is_direct_report(report):
+        _validate_direct_delivery(report, artifacts)
         return
     if is_recall_report(report):
         if report.get("execution_mode") == "evaluation":
@@ -454,10 +457,10 @@ def validate_delivery(report: dict[str, Any], artifacts: dict[str, Path],
                 probe = dict(report)
                 probe["delivery_status"] = "complete"
                 probe["execution_mode"] = "delivery"
-                _validate_recall_delivery(probe, mapped, verified_hashes)  # type: ignore[arg-type]
+                _validate_recall_delivery(probe, mapped)  # type: ignore[arg-type]
                 return
             raise ValueError("MISSING_VERIFIED_ARTIFACTS")
-        _validate_recall_delivery(report, artifacts, verified_hashes)
+        _validate_recall_delivery(report, artifacts)
         return
     if report.get("execution_mode") == "evaluation":
         if _review_rejected_report_only(report, artifacts):
@@ -479,7 +482,7 @@ def validate_delivery(report: dict[str, Any], artifacts: dict[str, Path],
             raise ValueError("MISSING_VERIFIED_ARTIFACTS")
         for kind, hash_key in EVALUATION_ARTIFACT_HASHES.items():
             if kind not in artifacts or not artifacts[kind].is_file() \
-                    or validation.get(hash_key) != _artifact_digest(artifacts[kind], verified_hashes, kind):
+                    or validation.get(hash_key) != sha256_file(artifacts[kind]):
                 raise ValueError("ARTIFACT_VERIFICATION_MISMATCH")
         _validate_actual_review(report, validation)
         return
@@ -499,7 +502,7 @@ def validate_delivery(report: dict[str, Any], artifacts: dict[str, Path],
     if validation["kind"] == "validated_edits" and not ({"template_text", "content_verification"} & present):
         raise ValueError("MISSING_VERIFIED_ARTIFACTS")
     for kind in ("final", "redline"):
-        if not artifacts[kind].is_file() or validation.get(f"{kind}_sha256") != _artifact_digest(artifacts[kind], verified_hashes, kind):
+        if not artifacts[kind].is_file() or validation.get(f"{kind}_sha256") != sha256_file(artifacts[kind]):
             raise ValueError("ARTIFACT_VERIFICATION_MISMATCH")
     _validate_actual_review(report, validation)
 
@@ -560,9 +563,11 @@ class RunStore:
                                      "engine_id": "TEXT NOT NULL DEFAULT ''",
                                      "guide_version_id": "TEXT NOT NULL DEFAULT ''",
                                      "guide_rules_sha256": "TEXT NOT NULL DEFAULT ''",
-                                     "mode": "VARCHAR(32) NOT NULL DEFAULT 'delivery'",
+                                     "guide_schema_version": "TEXT NOT NULL DEFAULT ''",
+                                     "snapshot_json": "MEDIUMTEXT NOT NULL DEFAULT ''",
                                      "disabled_rule_ids": "TEXT NOT NULL DEFAULT '[]'",
-                                     "model_preferences": "MEDIUMTEXT NOT NULL DEFAULT '{}'"}.items():
+                                     "model_preferences": "MEDIUMTEXT NOT NULL DEFAULT '{}'",
+                                     "mode": "VARCHAR(32) NOT NULL DEFAULT 'delivery'"}.items():
                 if name not in {row["name"] for row in db.execute("PRAGMA table_info(batches)")}:
                     db.execute(f"ALTER TABLE batches ADD COLUMN {name} {definition}")
             document_columns = {row["name"] for row in db.execute("PRAGMA table_info(documents)")}
@@ -575,6 +580,13 @@ class RunStore:
                 "selection_epoch": "INTEGER NOT NULL DEFAULT 0",
                 "selection_manifest_hash": "TEXT NOT NULL DEFAULT ''",
                 "selection_decision_hash": "TEXT NOT NULL DEFAULT ''",
+                "conversion_state": "TEXT NOT NULL DEFAULT ''",
+                "converted_key": "TEXT NOT NULL DEFAULT ''",
+                "converted_sha256": "TEXT NOT NULL DEFAULT ''",
+                "converted_size": "INTEGER NOT NULL DEFAULT 0",
+                "admin_requeue_count": "INTEGER NOT NULL DEFAULT 0",
+                "admin_requeued_by": "TEXT NOT NULL DEFAULT ''",
+                "admin_requeued_at": "REAL",
             }.items():
                 if name not in document_columns:
                     db.execute(f"ALTER TABLE documents ADD COLUMN {name} {definition}")
@@ -666,19 +678,10 @@ class RunStore:
                         return self.get_batch(owner, existing["id"])
             raise
 
-    # IN-clauses are chunked so document lists of any size stay well inside the
-    # host variable limits of both supported backends.
-    _IN_CHUNK = 500
-
     def list_batches(self, owner: str) -> list[dict[str, Any]]:
-        # One query per object layer, then assemble in Python.  The previous
-        # per-batch/per-document fetching made the workspace list cost grow
-        # linearly with the number of batches (B13 F4 / FL-D557).
         with self._connect() as db:
             rows = db.execute("SELECT * FROM batches WHERE owner=? ORDER BY created_at DESC", (owner,)).fetchall()
-            documents = self._documents_for(db, [row["id"] for row in rows])
-            artifacts = self._artifact_kinds_for(db, [doc["id"] for docs in documents.values() for doc in docs])
-            return [self._batch_dict_from(row, documents[row["id"]], artifacts) for row in rows]
+            return [self._batch_dict(db, row) for row in rows]
 
     def get_batch(self, owner: str, batch_id: str) -> dict[str, Any]:
         with self._connect() as db:
@@ -687,32 +690,10 @@ class RunStore:
                 raise NotFound("batch not found")
             return self._batch_dict(db, row)
 
-    def _documents_for(self, db: Connection, batch_ids: list[str]) -> dict[str, list[Any]]:
-        by_batch: dict[str, list[Any]] = {batch_id: [] for batch_id in batch_ids}
-        for index in range(0, len(batch_ids), self._IN_CHUNK):
-            chunk = batch_ids[index:index + self._IN_CHUNK]
-            placeholders = ",".join("?" * len(chunk))
-            for doc in db.execute(f"SELECT * FROM documents WHERE batch_id IN ({placeholders}) ORDER BY ordinal", chunk).fetchall():
-                by_batch[doc["batch_id"]].append(doc)
-        return by_batch
-
-    def _artifact_kinds_for(self, db: Connection, document_ids: list[str]) -> dict[str, list[str]]:
-        kinds: dict[str, list[str]] = {document_id: [] for document_id in document_ids}
-        for index in range(0, len(document_ids), self._IN_CHUNK):
-            chunk = document_ids[index:index + self._IN_CHUNK]
-            placeholders = ",".join("?" * len(chunk))
-            for item in db.execute(f"SELECT document_id,kind FROM artifacts WHERE document_id IN ({placeholders})", chunk).fetchall():
-                kinds[item["document_id"]].append(item["kind"])
-        return kinds
-
     def _batch_dict(self, db: Connection, row) -> dict[str, Any]:
         docs = db.execute("SELECT * FROM documents WHERE batch_id=? ORDER BY ordinal", (row["id"],)).fetchall()
-        artifacts = self._artifact_kinds_for(db, [doc["id"] for doc in docs])
-        return self._batch_dict_from(row, docs, artifacts)
-
-    def _batch_dict_from(self, row, docs, artifacts: dict[str, list[str]]) -> dict[str, Any]:
         result = {key: row[key] for key in ("id", "ruleset_version", "ruleset_sha256", "status", "created_at", "updated_at")}
-        result["documents"] = [self._document_dict_from(doc, artifacts[doc["id"]]) for doc in docs]
+        result["documents"] = [self._document_dict(db, doc) for doc in docs]
         result["counts"] = {
             "total": len(docs), "succeeded": sum(doc["status"] == "succeeded" for doc in docs),
             "failed": sum(doc["status"] == "failed" for doc in docs),
@@ -722,39 +703,29 @@ class RunStore:
 
     def _document_dict(self, db: Connection, row) -> dict[str, Any]:
         artifacts = db.execute("SELECT kind FROM artifacts WHERE document_id=?", (row["id"],)).fetchall()
-        return self._document_dict_from(row, [item["kind"] for item in artifacts])
-
-    def _document_dict_from(self, row, artifact_kinds: list[str]) -> dict[str, Any]:
         try:
             parse_report_json(row["report_json"])
         except ReportJsonError as exc:
             report_error = exc.code
         else:
             report_error = None
-        servable = servable_artifact_kinds(artifact_kinds, row["execution_mode"])
         return {key: row[key] for key in ("id", "batch_id", "filename", "source_sha256", "status",
                                           "qualification_status", "delivery_status", "error_code", "attempt",
                                           "execution_mode")} | {
             "selection_epoch": row["selection_epoch"] if "selection_epoch" in row.keys() else 0,
             "selection_manifest_hash": row["selection_manifest_hash"] if "selection_manifest_hash" in row.keys() else "",
             "selection_decision_hash": row["selection_decision_hash"] if "selection_decision_hash" in row.keys() else "",
-            "artifacts": list(artifact_kinds),
+            "artifacts": [item["kind"] for item in artifacts],
             "report_url": f"/api/batches/{row['batch_id']}/documents/{row['id']}/report",
-            "download_urls": {kind: f"/api/batches/{row['batch_id']}/documents/{row['id']}/download/{kind}"
-                              for kind in servable},
+            "download_urls": {item["kind"]: f"/api/batches/{row['batch_id']}/documents/{row['id']}/download/{item['kind']}" for item in artifacts},
             "report_error": report_error,
         }
 
     def get_document(self, owner: str, batch_id: str, document_id: str) -> dict[str, Any]:
-        # Single joined lookup: ownership is enforced by the batch join instead
-        # of materialising the whole batch first (B13 F4 / FL-D557).
+        self.get_batch(owner, batch_id)
         with self._connect() as db:
-            row = db.execute("""SELECT d.* FROM documents d
-                JOIN batches b ON b.id=d.batch_id AND b.owner=?
-                WHERE d.id=? AND d.batch_id=?""", (owner, document_id, batch_id)).fetchone()
+            row = db.execute("SELECT * FROM documents WHERE id=? AND batch_id=?", (document_id, batch_id)).fetchone()
             if row is None:
-                if db.execute("SELECT 1 FROM batches WHERE id=? AND owner=?", (batch_id, owner)).fetchone() is None:
-                    raise NotFound("batch not found")
                 raise NotFound("document not found")
             return self._document_dict(db, row)
 
@@ -927,9 +898,7 @@ class RunStore:
         if not _manifests_available(report):
             raise Conflict("SELECTED_SOURCE_UNAVAILABLE")
 
-    def get_artifact(self, owner: str, batch_id: str, document_id: str, kind: str, *,
-                     bytes_out: dict[str, bytes] | None = None,
-                     verified_hashes: dict[str, str] | None = None) -> tuple[Path, str]:
+    def get_artifact(self, owner: str, batch_id: str, document_id: str, kind: str) -> tuple[Path, str]:
         self.get_document(owner, batch_id, document_id)
         with self._connect() as db:
             row = db.execute("SELECT * FROM artifacts WHERE document_id=? AND kind=?", (document_id, kind)).fetchone()
@@ -943,21 +912,7 @@ class RunStore:
         if row is None:
             raise NotFound("artifact not available")
         path = self.object_path(row["object_key"])
-        known = dict(verified_hashes) if verified_hashes else None
-        if bytes_out is not None:
-            # Single-read serving path: the body is read once here, inside the
-            # gate, and its digest feeds every integrity comparison below, so
-            # one download scans the file once instead of up to three times.
-            # The comparisons are the ones the separate scans used to make.
-            try:
-                data = path.read_bytes()
-            except OSError as exc:
-                raise Conflict("artifact integrity check failed") from exc
-            if len(data) != int(row["size"]) or hashlib.sha256(data).hexdigest() != row["sha256"]:
-                raise Conflict("artifact integrity check failed")
-            bytes_out[kind] = data
-            known = {**(known or {}), kind: row["sha256"]}
-        elif not path.is_file() or path.stat().st_size != row["size"] or sha256_file(path) != row["sha256"]:
+        if not path.is_file() or path.stat().st_size != row["size"] or sha256_file(path) != row["sha256"]:
             raise Conflict("artifact integrity check failed")
         report: dict[str, Any] = {}
         if document is not None and document["report_json"]:
@@ -974,10 +929,7 @@ class RunStore:
         if kind == "report_json":
             # Re-read and parse the actual object rather than trusting the row.
             try:
-                if bytes_out is not None:
-                    parse_report_json(bytes_out[kind].decode("utf-8"))
-                else:
-                    parse_report_json(path.read_text(encoding="utf-8"))
+                parse_report_json(path.read_text(encoding="utf-8"))
             except (OSError, UnicodeError, ReportJsonError) as exc:
                 raise ReportJsonError() from exc
         if kind in SELECTED_KINDS:
@@ -994,7 +946,18 @@ class RunStore:
             with self._connect() as db:
                 pair_rows = db.execute("SELECT * FROM artifacts WHERE document_id=?", (document_id,)).fetchall()
             try:
-                if is_recall_report(report):
+                if is_direct_report(report):
+                    # A direct download is bound to the persisted delivery
+                    # state; final/redline fetch re-runs the delivery gate
+                    # against the actual stored pair.
+                    if kind not in {"final", "redline"}:
+                        raise ValueError("DELIVERY_NOT_COMPLETE")
+                    if report.get("delivery_status") != "complete":
+                        raise ValueError("DELIVERY_NOT_COMPLETE")
+                    pairs = {item["kind"]: self.object_path(item["object_key"]) for item in pair_rows
+                             if item["kind"] in {"final", "redline"}}
+                    validate_delivery(report, pairs)
+                elif is_recall_report(report):
                     # A recall download is bound to the persisted delivery state and
                     # re-validated against the actual stored pair.
                     status = report.get("delivery_status")
@@ -1010,13 +973,9 @@ class RunStore:
                                  if item["kind"] in {"evaluation_final", "evaluation_redline"}}
                         pairs = {("final" if key.endswith("final") else "redline"): path
                                  for key, path in pairs.items()}
-                        validate_delivery(probe, pairs, verified_hashes={
-                            ("final" if name.endswith("final") else "redline"): digest
-                            for name, digest in (known or {}).items()
-                            if name in {"evaluation_final", "evaluation_redline"}
-                        } or None)
+                        validate_delivery(probe, pairs)
                     else:
-                        if kind in {"final", "redline"} and status not in {"complete", "complete_with_exceptions"}:
+                        if kind in {"final", "redline"} and status != "complete":
                             raise ValueError("RECALL_DELIVERY_NOT_COMPLETE")
                         if kind in {"working_final", "working_redline"} and status != "incomplete":
                             raise ValueError("RECALL_DELIVERY_NOT_INCOMPLETE")
@@ -1024,7 +983,7 @@ class RunStore:
                                     else {"final", "redline"})
                         pairs = {item["kind"]: self.object_path(item["object_key"]) for item in pair_rows
                                  if item["kind"] in expected}
-                        validate_delivery(report, pairs, verified_hashes=known)
+                        validate_delivery(report, pairs)
                 else:
                     evaluation = report_mode == "evaluation"
                     if kind.startswith("evaluation_") and not evaluation:
@@ -1043,7 +1002,7 @@ class RunStore:
                         expected = {"final", "redline"}
                     pairs = {item["kind"]: self.object_path(item["object_key"]) for item in pair_rows
                              if item["kind"] in expected}
-                    validate_delivery(report, pairs, verified_hashes=known)
+                    validate_delivery(report, pairs)
                     if _requires_actual_review(report):
                         if report.get("source_sha256") != document["source_sha256"]:
                             raise ValueError("ACTUAL_CONTENT_REVIEW_SOURCE_MISMATCH")
@@ -1053,30 +1012,37 @@ class RunStore:
                 raise Conflict(str(exc)) from exc
         return path, row["sha256"]
 
-    def read_artifact(self, owner: str, batch_id: str, document_id: str, kind: str, *,
-                      verified_hashes: dict[str, str] | None = None) -> tuple[bytes, str]:
+    def read_artifact(self, owner: str, batch_id: str, document_id: str, kind: str,
+                      verified_hashes: dict | None = None) -> tuple[bytes, str]:
         """Return bytes only after the full gate and an actual-byte re-check.
 
-        The body is read exactly once, inside the ``get_artifact`` gate, and the
-        digest of those very bytes feeds every integrity comparison there, so
-        the bytes handed to an HTTP or Feishu consumer are the bytes that were
-        verified (B13 F3: this replaces read-scan-hash-per-layer).  A row
-        re-pointed between gate and answer still fails the final size/hash
-        check, and ``verified_hashes`` lets one download-all request reuse the
-        digests it just verified for the pair checks of sibling kinds.
+        ``verified_hashes`` (optional, caller-owned dict) records the verified
+        digest per kind within one request so sibling-kind callers can pair and
+        compare; every read is still fully re-validated here.
+
+        ``get_artifact`` validates ownership, mode, the paired artifacts and the
+        report before returning a path. Reading that path afterwards can still
+        race an external file replacement, so the bytes handed to an HTTP or
+        Feishu consumer are hashed again against the registered size/hash.
         """
-        served: dict[str, bytes] = {}
-        _path, digest = self.get_artifact(owner, batch_id, document_id, kind,
-                                          bytes_out=served, verified_hashes=verified_hashes)
-        data = served[kind]
+        path, digest = self.get_artifact(owner, batch_id, document_id, kind)
         with self._connect() as db:
             row = db.execute("SELECT size,sha256 FROM artifacts WHERE document_id=? AND kind=?",
                              (document_id, kind)).fetchone()
         if row is None:
             raise NotFound("artifact not available")
+        try:
+            data = path.read_bytes()
+        except OSError as exc:
+            raise Conflict("ARTIFACT_INTEGRITY_FAILED") from exc
         if (len(data) != int(row["size"]) or hashlib.sha256(data).hexdigest() != row["sha256"]
                 or row["sha256"] != digest):
             raise Conflict("ARTIFACT_INTEGRITY_FAILED")
+        if verified_hashes is not None:
+            prior = verified_hashes.get(kind)
+            if prior is not None and prior != digest:
+                raise Conflict("ARTIFACT_INTEGRITY_FAILED")
+            verified_hashes[kind] = digest
         return data, digest
 
     def claim(self, *, lease_seconds: int = 300, max_attempts: int = 3) -> dict[str, Any] | None:
@@ -1113,16 +1079,18 @@ class RunStore:
                      expired["id"], expired["fencing_token"], now, max_attempts)).rowcount
                 if changed == 1:
                     self._refresh_batch(db, expired["batch_id"], now)
-            self._heal_task_pause(db, now)
             active_scope = "active.batch_id=d.batch_id"
             if db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='task_batches'").fetchone():
                 active_scope = """COALESCE((SELECT task_id FROM task_batches WHERE batch_id=active.batch_id),active.batch_id)
                     = COALESCE((SELECT task_id FROM task_batches WHERE batch_id=d.batch_id),d.batch_id)"""
+            # attempt 上限对自然重试；admin 强制救回（admin_requeue_count>0，
+            # 记单列不重置）的可再 claim 一次以上——连通 worker 把 att=3 救活。
             candidate = f"""SELECT d.*, b.ruleset_version, b.ruleset_sha256, b.engine_build, b.schema_version,
-                b.engine_id, b.guide_version_id, b.guide_rules_sha256, b.disabled_rule_ids,
-                b.model_preferences, b.mode, b.owner
+                b.engine_id, b.guide_version_id, b.guide_rules_sha256, b.mode, b.owner,
+                b.guide_schema_version, b.snapshot_json
                 FROM documents d JOIN batches b ON b.id=d.batch_id
-                WHERE b.status IN ('queued','running') AND d.attempt < ? AND
+                WHERE b.status IN ('queued','running')
+                AND (d.attempt < ? OR d.admin_requeue_count > 0) AND
                 (d.status='queued' OR (d.status='retry_wait' AND d.next_attempt_at<=?) OR
                  (d.status IN ('leased','running') AND d.lease_until<=?))
                 ORDER BY (SELECT COUNT(*) FROM documents active
@@ -1157,6 +1125,27 @@ class RunStore:
             if not changed:
                 raise Conflict("stale worker lease")
 
+    @staticmethod
+    def _heal_task_pause(db: Connection, now: float) -> None:
+        """Clear a stale ``tasks.paused`` bit once the task is fully terminal (FL-D553 B14-03).
+
+        Pausing a task whose in-flight batch then completes leaves
+        ``tasks.paused=1`` behind even though nothing can ever run again; the
+        derived task status already shows ``completed`` while the workspace
+        still reports ``paused``, and a later upload would silently start
+        paused. Tasks that still have files to upload or a non-completed batch
+        keep their pause bit — uploading to a paused task must stay queued.
+        """
+        if not db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='task_batches'").fetchone():
+            return
+        db.execute("""UPDATE tasks SET paused=0,pause_reason=NULL,updated_at=?
+            WHERE paused=1 AND NOT EXISTS (
+                SELECT 1 FROM task_batches tb JOIN batches b ON b.id=tb.batch_id
+                WHERE tb.task_id=tasks.id AND b.status!='completed')
+            AND NOT EXISTS (
+                SELECT 1 FROM task_files f
+                WHERE f.task_id=tasks.id AND f.document_id IS NULL AND f.upload_status!='rejected')""", (now,))
+
     def document_task_id(self, document_id: str) -> str | None:
         """Return the business task bound to a document, if any."""
         with self._connect() as db:
@@ -1178,6 +1167,28 @@ class RunStore:
 
     def finish(self, document_id: str, token: int, *, report: dict[str, Any],
                artifacts: dict[str, Path], failed: bool = False, error_code: str | None = None) -> None:
+        """Two-phase publication: verify/copy outside the transaction, atomically
+        commit rows inside it.  Callers may also drive the phases separately
+        (``prepare_finish_artifacts`` outside any worker lock,
+        ``commit_finish`` inside a thin critical section)."""
+        prepared = self.prepare_finish_artifacts(document_id, token, report=report,
+                                                 artifacts=artifacts)
+        self.commit_finish(document_id, token, report=report, prepared=prepared,
+                           failed=failed, error_code=error_code)
+
+    def prepare_finish_artifacts(self, document_id: str, token: int, *,
+                                 report: dict[str, Any],
+                                 artifacts: dict[str, Path]) -> dict[str, Any]:
+        """Phase A (no mutual exclusion required): full report/artifact gate,
+        sha256 digests, copies under per-attempt unique keys.
+
+        FL-D1047: the atomic DB transaction only needs to protect row writes —
+        byte copies and hashing under per-attempt unique keys are naturally
+        concurrency-safe, so they belong outside any worker lock.  An earlier
+        takeover between the phases is rejected by phase B's fencing UPDATE;
+        published file remnants are unlinked on phase-B failure (unchanged
+        retention semantics).
+        """
         # The persisted job mode is authoritative for task-bound work. A report
         # can never turn an evaluation into an ordinary delivery (or vice versa)
         # simply by changing its own ``execution_mode`` field.
@@ -1192,10 +1203,7 @@ class RunStore:
             raise Conflict("stale worker lease")
         job_mode = str(job["job_mode"] or "delivery")
         report_mode = str(report.get("execution_mode") or "delivery")
-        # The fence is unconditional (FL-D555 A3-F7): batches.mode is always
-        # persisted, so a report may never relabel the batch's mode even for a
-        # batch that is not bound to a first-class task.
-        if report_mode != job_mode:
+        if job["task_id"] and report_mode != job_mode:
             raise Conflict("EXECUTION_MODE_MISMATCH")
         # Verify all outputs before publication. Only report files are allowed for incomplete results.
         try:
@@ -1229,17 +1237,20 @@ class RunStore:
         now = time.time()
         published: list[Path] = []
         artifact_keys: dict[str, str] = {}
+        # The fencing UPDATE in phase B is the authority; this row was fetched
+        # under the caller's token and is re-checked there.  Copying attempt
+        # objects under the fresh attempt id keeps them immutable and unique.
+        with self._connect() as db:
+            row = db.execute("SELECT * FROM documents WHERE id=?", (document_id,)).fetchone()
+        if row is None:
+            raise Conflict("stale worker lease")
+        if row["fencing_token"] != token or row["status"] not in ("leased", "running"):
+            raise Conflict("stale worker lease")
+        if row["lease_until"] is None or row["lease_until"] <= now:
+            raise Conflict("expired worker lease")
+        if _requires_actual_review(report) and report.get("source_sha256") != row["source_sha256"]:
+            raise Conflict("ACTUAL_CONTENT_REVIEW_SOURCE_MISMATCH")
         try:
-            # This read is advisory.  A newer worker may take over after it;
-            # the final UPDATE is the fencing authority.
-            with self._connect() as db:
-                row = db.execute("SELECT * FROM documents WHERE id=?", (document_id,)).fetchone()
-            if not row or row["fencing_token"] != token or row["status"] not in ("leased", "running"):
-                raise Conflict("stale worker lease")
-            if row["lease_until"] is None or row["lease_until"] <= now:
-                raise Conflict("expired worker lease")
-            if _requires_actual_review(report) and report.get("source_sha256") != row["source_sha256"]:
-                raise Conflict("ACTUAL_CONTENT_REVIEW_SOURCE_MISMATCH")
             for kind, path in artifacts.items():
                 # Attempt objects are immutable. Database pointer is published only while token is current.
                 key = f"results/{document_id}/{token}/{uuid.uuid4().hex}/{kind}{path.suffix}"
@@ -1255,15 +1266,38 @@ class RunStore:
                     raise Conflict("artifact copy verification failed")
                 published.append(target)
                 artifact_keys[kind] = key
-            transition_now = time.time()
+        except Exception:
+            for target in published:
+                target.unlink(missing_ok=True)
+            raise
+        return {"document_id": document_id, "token": token, "job": job,
+                "delivery": delivery, "mode": mode, "verified": verified,
+                "artifact_keys": artifact_keys, "published": published}
+
+    def commit_finish(self, document_id: str, token: int, *, report: dict[str, Any],
+                      prepared: dict[str, Any], failed: bool = False,
+                      error_code: str | None = None) -> None:
+        """Phase B: BEGIN IMMEDIATE atomic UPDATE + artifact rows + batch refresh.
+
+        Only DB row writes happen here — every byte move already completed in
+        phase A.  Safe (and fast) to run inside a thin worker critical section.
+        """
+        job = prepared["job"]
+        row = job
+        transition_now = time.time()
+        published = prepared["published"]
+        artifact_keys = prepared["artifact_keys"]
+        verified = prepared["verified"]
+        try:
             with self._connect() as db:
                 db.execute("BEGIN IMMEDIATE")
                 changed = db.execute("""UPDATE documents SET status=?,qualification_status=?,delivery_status=?,error_code=?,
                     report_json=?,execution_mode=?,lease_until=NULL,finished_at=?,updated_at=?
                     WHERE id=? AND fencing_token=? AND status IN ('leased','running')
                     AND lease_until>? AND attempt=?""",
-                    ("failed" if failed else "succeeded", report.get("qualification_status"), delivery,
-                     error_code, json.dumps(report, ensure_ascii=False), str(mode), transition_now, transition_now,
+                    ("failed" if failed else "succeeded", report.get("qualification_status"),
+                     prepared["delivery"], error_code, json.dumps(report, ensure_ascii=False),
+                     str(prepared["mode"]), transition_now, transition_now,
                      document_id, token, transition_now, row["attempt"])).rowcount
                 if changed != 1:
                     raise Conflict("stale worker lease")
@@ -1272,7 +1306,6 @@ class RunStore:
                     db.execute("INSERT OR REPLACE INTO artifacts VALUES (?,?,?,?,?)",
                                (document_id, kind, key, digest, size))
                 self._refresh_batch(db, row["batch_id"], transition_now)
-                self._heal_task_pause(db, transition_now)
         except Exception:
             for target in published:
                 target.unlink(missing_ok=True)
@@ -1336,9 +1369,6 @@ class RunStore:
                     if task:
                         db.execute("UPDATE tasks SET paused=1,pause_reason=?,updated_at=? WHERE id=?", (error_code, transition_now, task["task_id"]))
                         db.execute("UPDATE batches SET status='paused',updated_at=? WHERE id IN (SELECT batch_id FROM task_batches WHERE task_id=?) AND status!='completed'", (transition_now, task["task_id"]))
-                        # Terminal pause-required failures leave no batch to
-                        # pause; the bit must not survive a completed batch.
-                        self._heal_task_pause(db, transition_now)
 
     def pause(self, owner: str, batch_id: str) -> dict[str, Any]:
         self.get_batch(owner, batch_id)
@@ -1377,24 +1407,3 @@ class RunStore:
         current = db.execute("SELECT status FROM batches WHERE id=?", (batch_id,)).fetchone()["status"]
         state = "completed" if row["pending"] == 0 else ("paused" if current == "paused" else "running")
         db.execute("UPDATE batches SET status=?,updated_at=? WHERE id=?", (state, now, batch_id))
-
-    @staticmethod
-    def _heal_task_pause(db: Connection, now: float) -> None:
-        """Clear a stale ``tasks.paused`` bit once the task is fully terminal (FL-D553 B14-03).
-
-        Pausing a task whose in-flight batch then completes leaves
-        ``tasks.paused=1`` behind even though nothing can ever run again; the
-        derived task status already shows ``completed`` while the workspace
-        still reports ``paused``, and a later upload would silently start
-        paused. Tasks that still have files to upload or a non-completed batch
-        keep their pause bit — uploading to a paused task must stay queued.
-        """
-        if not db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='task_batches'").fetchone():
-            return
-        db.execute("""UPDATE tasks SET paused=0,pause_reason=NULL,updated_at=?
-            WHERE paused=1 AND NOT EXISTS (
-                SELECT 1 FROM task_batches tb JOIN batches b ON b.id=tb.batch_id
-                WHERE tb.task_id=tasks.id AND b.status!='completed')
-            AND NOT EXISTS (
-                SELECT 1 FROM task_files f
-                WHERE f.task_id=tasks.id AND f.document_id IS NULL AND f.upload_status!='rejected')""", (now,))

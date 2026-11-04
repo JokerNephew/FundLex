@@ -1,10 +1,38 @@
 """The single task orchestration seam shared by Web and integrations."""
 from __future__ import annotations
 
+import os
 from typing import Any, Callable
 
-from .. import guide_store, model_settings
+from .. import guide_store
+from ..direct_pipeline import ENGINE_ID as DIRECT_ENGINE_ID, ENGINE_VERSION as DIRECT_ENGINE_VERSION
 from ..tasks import TaskStore
+
+
+def _model_snapshot(owner_prefs: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Non-secret model configuration snapshot frozen at task creation.
+
+    解析序（FL-D1083 同波）：用户在工作台「设置-模型」的选择 > 管理员系统
+    默认 > 部署 env。三键无凭据。"""
+    prefs = owner_prefs or {}
+    primary = prefs.get("primary") if isinstance(prefs.get("primary"), dict) else {}
+    return {"provider": str(primary.get("provider") or os.environ.get("LLM_PROVIDER", "")),
+            "base_url": str(primary.get("base_url") or os.environ.get("LLM_BASE_URL", "")),
+            "model": str(primary.get("model") or os.environ.get("LLM_MODEL", ""))}
+
+
+def _owner_model_prefs(store, owner: str) -> dict[str, Any]:
+    from .. import model_settings
+    try:
+        user = model_settings.snapshot(store, owner)
+        if user:
+            return user
+    except model_settings.ModelSettingsError:
+        raise ValueError("MODEL_SETTINGS_INVALID") from None
+    try:
+        return model_settings.snapshot_system_default(store) or {}
+    except model_settings.ModelSettingsError:
+        return {}
 
 
 class TaskApplicationService:
@@ -27,26 +55,24 @@ class TaskApplicationService:
     def create_task(self, owner: str, name: str, files: list[dict[str, Any]], *,
                     guide_version_id: str | None = None, idempotency_key: str | None = None,
                     mode: str = "delivery") -> dict[str, Any]:
-        guide = self._guide_resolver(owner, guide_version_id)
-        # Rule switches are owner configuration.  Resolve them here, not from the
-        # request body, and snapshot the result into the task so a later settings
-        # change cannot alter an already-created task.
-        switches = guide_store.rule_settings(self.store, owner, guide["id"])
-        disabled = list(switches.get("disabled_rule_ids") or [])
-
-        # Snapshot settings in the same transaction that inserts the task.
-        # This serializes against BYOK reset/rotation and its orphan-key GC.
-        model_settings.ensure_schema(self.store)
-
-        def model_snapshot(db):
-            return model_settings.snapshot_in_task_transaction(
-                db, owner, mysql=self.store.database.dialect == "mysql")
-
+        guide = self._resolve_guide(owner, guide_version_id)
+        schema = str(guide.get("schema_version") or "")
+        if schema != guide_store.CARD_SCHEMA_VERSION:
+            # Historical guide-rules-v1 versions stay read-only; a new task must
+            # never fall back into the retired engine's interpretation of them.
+            raise ValueError("GUIDE_SCHEMA_UNSUPPORTED")
+        if mode != "delivery":
+            # Direct-through delivery is the only wired mode; evaluation/diagnosis
+            # keep their offline runners until the integration line migrates them.
+            raise ValueError("TASK_MODE_UNSUPPORTED")
         return self.tasks.create(owner, name, guide, files, idempotency_key,
-                                 engine_id="recall_first", guide_version_id=guide["id"],
-                                 guide_rules_sha256=guide["rules_sha256"], mode=mode,
-                                 disabled_rule_ids=disabled,
-                                 model_preferences_factory=model_snapshot)
+                                 engine_id=DIRECT_ENGINE_ID, guide_version_id=guide["id"],
+                                 guide_rules_sha256=guide["rules_sha256"],
+                                 guide_schema_version=schema,
+                                 engine_version=DIRECT_ENGINE_VERSION,
+                                 snapshot={"model": _model_snapshot(_owner_model_prefs(self.store, owner)),
+                                          "rule_switches": {}},
+                                 mode=mode)
 
     def upload_files(self, owner: str, task_id: str, files: list[dict[str, Any]]) -> dict[str, Any]:
         return self.tasks.uploads(owner, task_id, files)

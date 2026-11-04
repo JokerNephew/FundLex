@@ -210,6 +210,15 @@ class UploadResourceMiddleware:
     RETIRED_PATHS = {"/api/batches"}
     GUIDE_UPLOAD_PATHS = {"/api/guides", "/api/guide-generation/runs"}
 
+    @classmethod
+    def _guide_upload_paths(cls) -> set[str]:
+        # FL-D1085：generation 冰封（默认 off）时，激进 multipart 闸不得先把
+        # 415 盖到 domain 404 之前。
+        from .guide_generation.flags import generation_enabled
+        if not generation_enabled():
+            return {"/api/guides"}
+        return cls.GUIDE_UPLOAD_PATHS
+
     def __init__(self, app: Callable, *, settings: UploadGuardSettings):
         self.app = app
         self.settings = settings
@@ -223,7 +232,7 @@ class UploadResourceMiddleware:
         if scope.get("type") != "http" or scope.get("method", "").upper() != "POST":
             return False
         path = scope.get("path", "")
-        return (path.endswith("/uploads") or path in UploadResourceMiddleware.GUIDE_UPLOAD_PATHS
+        return (path.endswith("/uploads") or path in UploadResourceMiddleware._guide_upload_paths()
                 or path in UploadResourceMiddleware.RETIRED_PATHS)
 
     @staticmethod

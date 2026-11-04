@@ -26,6 +26,9 @@ from typing import Any
 from .guide import FINDING_KIND_LABELS
 from .store import Conflict, RunStore, StoreError
 
+from .builtin_cards import (BUILTIN_CARD_DEFAULT_ID, BUILTIN_CARD_V1_ID,
+                            build_builtin_card_document)
+
 BUILTIN_GUIDE_ID = "builtin-v1"
 BUILTIN_GUIDE_PATH = Path(__file__).resolve().parent.parent / "guides" / "builtin_guide_v1.json"
 # FL-D1051：内置默认指引的服务端 canonical 原文 DOCX（冻结档案，勿每次临拼；
@@ -41,8 +44,19 @@ def _builtin_source_docx_files() -> dict[str, Path]:
     return {
         BUILTIN_GUIDE_ID: BUILTIN_GUIDE_SOURCE_DOCX_PATH,
         "builtin-cards-v2": BUILTIN_CARDS_V2_SOURCE_DOCX_PATH,
+        # FL-D1124：新默认（bf4991）共用 V2 原文 canonical（FL-D1123 挂档的同一份）。
+        "bf499150221c42c4967e81f220c64987": BUILTIN_CARDS_V2_SOURCE_DOCX_PATH,
     }
+BUILTIN_CARD_V2_ID = BUILTIN_CARD_DEFAULT_ID
+BUILTIN_CARD_V2_PATH = Path(__file__).resolve().parent.parent / "guides" / "builtin_cards_v2.json"
+# 冻结种子（用户口径 2026-11-03）：生产真实模型解析的《存量基金适用销售费用
+# 新规的基金合同修改指引 V2》（源 sha256 bd75d1eb…02404d）卡包 26 卡，
+# guide_versions aa5edf83 的 rules_json 快照。版本自证不可变：任何模型重解析
+# 不会漂移该种子。
+LEGACY_BUILTIN_IDS = frozenset({BUILTIN_GUIDE_ID, BUILTIN_CARD_V1_ID})
 GUIDE_SOURCE_DIR = "guides"
+# Direct-through routing: only frozen guide_card_v1 packs are executable.
+CARD_SCHEMA_VERSION = "guide_card_v1"
 ENABLEABLE_STATUSES = frozenset({"released", "parsed"})
 # Certification lifecycle: a parsed version only becomes enableable when its
 # parse went through the same quality channel as the built-in guide
@@ -77,7 +91,8 @@ CREATE TABLE IF NOT EXISTS guide_versions (
     created_at REAL NOT NULL, updated_at REAL NOT NULL, released_at REAL
 );
 CREATE TABLE IF NOT EXISTS guide_config (
-    owner TEXT PRIMARY KEY, guide_version_id TEXT NOT NULL, updated_at REAL NOT NULL
+    owner TEXT PRIMARY KEY, guide_version_id TEXT NOT NULL, updated_at REAL NOT NULL,
+    selection_source TEXT NOT NULL DEFAULT 'manual'
 );
 CREATE TABLE IF NOT EXISTS guide_rule_config (
     owner TEXT NOT NULL, guide_version_id TEXT NOT NULL,
@@ -110,6 +125,16 @@ _VERSION_COLUMNS = {
     "updated_at": "REAL NOT NULL DEFAULT 0",
     "released_at": "REAL",
 }
+_CONFIG_COLUMNS = {"guide_version_id": "TEXT NOT NULL DEFAULT ''",
+                   "updated_at": "REAL NOT NULL DEFAULT 0",
+                   "selection_source": "TEXT NOT NULL DEFAULT 'manual'"}
+_SYSTEM_SETTINGS = """
+CREATE TABLE IF NOT EXISTS system_settings (
+    skey TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at REAL NOT NULL
+);
+"""
+SYSTEM_DEFAULT_GUIDE_KEY = "system_default_guide_version_id"
+
 _JOB_COLUMNS = {
     "guide_version_id": "TEXT NOT NULL DEFAULT ''",
     "owner": "TEXT NOT NULL DEFAULT ''",
@@ -136,8 +161,10 @@ def _ensure_tables(store: RunStore) -> None:
         return
     with store._connect() as db:
         db.executescript(_SCHEMA)
+        db.executescript(_SYSTEM_SETTINGS)
         _ensure_columns(db, "guide_versions", _VERSION_COLUMNS)
         _ensure_columns(db, "guide_jobs", _JOB_COLUMNS)
+        _ensure_columns(db, "guide_config", _CONFIG_COLUMNS)
     store._guide_schema_ready = True
 
 
@@ -162,122 +189,6 @@ def _document_sha(doc: dict[str, Any]) -> str:
     return guide_document_sha256(doc)
 
 
-def _validation_clean(validation: dict[str, Any]) -> bool:
-    """The built-in channel's exit condition, recomputed from components.
-
-    Mirrors :func:`fundlex.guide.build_guide_document`: no deterministic
-    errors, no uncovered paragraphs and no verifier leftovers.  Missing keys
-    count as empty so older fixtures stay valid; anything present and
-    non-empty fails closed.
-    """
-    if not isinstance(validation, dict):
-        return False
-    if validation.get("errors") or validation.get("coverage_gaps"):
-        return False
-    verification = validation.get("verification")
-    if isinstance(verification, dict):
-        if verification.get("findings") or verification.get("invalid_findings"):
-            return False
-    return True
-
-
-def _quality_failure_issues(validation: dict[str, Any]) -> dict[str, Any]:
-    """Structured, user-facing reasons when the quality channel rejects a parse."""
-    verification = validation.get("verification")
-    verification = verification if isinstance(verification, dict) else {}
-    findings = []
-    for finding in verification.get("findings") or []:
-        if not isinstance(finding, dict):
-            findings.append(finding)
-            continue
-        enriched = dict(finding)
-        # The finding ``kind`` is a machine enum; the owner UI renders
-        # ``kind_zh`` instead of the raw token (FL-D883/S5).
-        enriched.setdefault("kind_zh", FINDING_KIND_LABELS.get(str(finding.get("kind") or ""),
-                                                               "解析核验发现"))
-        findings.append(enriched)
-    issues: dict[str, Any] = {
-        "error_code": "GUIDE_VALIDATION_UNCLEAN",
-        "clean": False,
-        "errors": validation.get("errors") or [],
-        "warnings": validation.get("warnings") or [],
-        "coverage_gaps": validation.get("coverage_gaps") or [],
-        "verification": {"findings": findings,
-                         "invalid_findings": verification.get("invalid_findings") or 0,
-                         "coverage_explanation": verification.get("coverage_explanation") or ""},
-        "rounds": validation.get("rounds") or 0,
-        "rounds_detail": validation.get("rounds_detail") or [],
-        "detail": "解析结果未通过确定性校验或独立验证，不能启用；请修正指引后重新上传解析。",
-    }
-    return issues
-
-
-def _parse_enrichment(store: RunStore, version_id: str | None,
-                      document: dict[str, Any] | None,
-                      error_code: str | None) -> dict[str, Any]:
-    """Owner-facing enrichment for a finished parse: block report + canary.
-
-    Advisory by construction — enrichment failures never fail the job or the
-    lease write; they simply reduce to no extra detail.
-    """
-    extras: dict[str, Any] = {}
-    if not version_id or (document is None and not error_code):
-        return extras
-    source = None
-    try:
-        path = _source_path(store, version_id)
-        if path.is_file():
-            from .guide import extract_guide_source
-            source = extract_guide_source(path)
-    except Exception:  # noqa: BLE001 - diagnostics must never break a finish
-        source = None
-    canary_report: dict[str, Any] | None = None
-    if document is not None:
-        try:
-            from .guide_canary import executability_report, review_dimensions
-            canary_report = executability_report(document)
-            extras["canary"] = canary_report
-            if not canary_report["passed"]:
-                from datetime import datetime, timezone
-                extras["review"] = {"status": "needs_review",
-                                    "dimensions": {"source": "executability_canary",
-                                                   **review_dimensions(canary_report)},
-                                    "evaluated_at": datetime.now(timezone.utc)
-                                    .isoformat(timespec="seconds")}
-        except Exception as exc:  # noqa: BLE001
-            # A crashing canary must never read as a clean pass (FL-D923): the
-            # finish step derives qualification from this report's ``passed``
-            # flag, so record the crash as a failed report instead of swallowing
-            # it (which previously certified the version silently).
-            canary_report = {"passed": False,
-                             "error": {"type": type(exc).__name__,
-                                       "note": "executability canary crashed"}}
-            extras["canary"] = canary_report
-    if source is not None:
-        try:
-            from .guide_report import block_report
-            problems: dict[str, list[dict[str, Any]]] = {}
-            for finding in (canary_report or {}).get("fatal") or []:
-                rule_id = str(finding.get("rule_id") or "")
-                if rule_id:
-                    problems.setdefault(rule_id, []).append(finding)
-            extras["parse_report"] = block_report(source, document, error_code=error_code,
-                                                  rule_problems=problems or None)
-        except Exception:  # noqa: BLE001
-            pass
-    try:
-        # Advisory version-level quality checklist (FL-D898): presentation
-        # quality and code-map completeness on top of the existing gates.
-        from .guide_quality import check_parse_quality
-        validation = (document.get("validation") or {}) if isinstance(document, dict) else {}
-        extras["quality_checklist"] = check_parse_quality(
-            source, document, validation=validation, canary=canary_report,
-            error_code=error_code)
-    except Exception:  # noqa: BLE001
-        pass
-    return extras
-
-
 def _job_version_id(store: RunStore, job_id: str) -> str | None:
     """Read-only lookup of the version a parse job belongs to."""
     _ensure_tables(store)
@@ -291,6 +202,14 @@ def _version_dict(row) -> dict[str, Any]:
     rules = _json_or(row["rules_json"], {})
     groups = rules.get("groups") if isinstance(rules, dict) else None
     issues = _json_or(row["issues_json"], {})
+    cards = rules.get("cards") if isinstance(rules, dict) else None
+    stats = rules.get("stats") if isinstance(rules, dict) else None
+    # Card packs count by their parse stats (D5); groups are the legacy shape.
+    card_count = None
+    if isinstance(stats, dict) and isinstance(stats.get("cards"), int):
+        card_count = stats["cards"]
+    elif isinstance(cards, list):
+        card_count = len(cards)
     return {
         "id": row["id"], "owner": row["owner"], "built_in": bool(row["built_in"]),
         "parent_version_id": row["parent_version_id"] or "",
@@ -301,7 +220,8 @@ def _version_dict(row) -> dict[str, Any]:
         "status": row["status"], "issues": issues,
         "qualification_status": row["qualification_status"],
         "review": issues.get("review") if isinstance(issues.get("review"), dict) else None,
-        "rules_count": len(groups) if isinstance(groups, list) else 0,
+        "rules_count": (len(groups) if isinstance(groups, list)
+                        else card_count if card_count is not None else 0),
         "created_at": row["created_at"], "updated_at": row["updated_at"],
         "released_at": row["released_at"],
     }
@@ -374,17 +294,143 @@ def ensure_builtin_guide(store: RunStore) -> str:
                  document_sha, str(doc.get("parser_version") or ""), str(doc.get("schema_version") or ""),
                  json.dumps(doc.get("prompt_versions") or {}, ensure_ascii=False),
                  json.dumps(doc, ensure_ascii=False), document_sha, now, BUILTIN_GUIDE_ID))
+    ensure_card_builtin_guide(store)
+    ensure_card_builtin_v2(store)
     return BUILTIN_GUIDE_ID
 
 
-def list_versions(store: RunStore, owner: str) -> list[dict[str, Any]]:
-    """Built-in plus the owner's custom versions, built-in first."""
+def ensure_card_builtin_v2(store: RunStore) -> str:
+    """Install the frozen V2-parsed card pack (``builtin-cards-v2``) idempotently.
+
+    The pack is a frozen seed of a real production parse
+    (guide_versions aa5edf83, guide source sha256 bd75d1eb…02404d).
+    Model reparsing never drifts this seed; the legacy built-in rows are read
+    -only history and remain untouched.
+    """
+    _ensure_tables(store)
+    data = json.loads(BUILTIN_CARD_V2_PATH.read_text(encoding="utf-8"))
+    if not isinstance(data, dict) or data.get("schema_version") != CARD_SCHEMA_VERSION:
+        raise StoreError("built-in V2 card seed is invalid")
+    document_sha = _document_sha(data)
+    now = time.time()
+    with store._connect() as db:
+        db.execute("BEGIN IMMEDIATE")
+        row = db.execute("SELECT * FROM guide_versions WHERE id=?",
+                         (BUILTIN_CARD_V2_ID,)).fetchone()
+        if row is None:
+            db.execute("""INSERT INTO guide_versions
+                (id,owner,built_in,parent_version_id,filename,source_sha256,document_sha256,
+                 parser_version,schema_version,prompt_versions,rules_json,rules_sha256,status,
+                 issues_json,qualification_status,created_at,updated_at,released_at)
+                VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (BUILTIN_CARD_V2_ID, "", 1, "",
+                 str(data.get("source_path_hint") or BUILTIN_CARD_V2_PATH.name),
+                 str(data.get("source_sha256") or ""), document_sha,
+                 str(data.get("parser_version") or ""), CARD_SCHEMA_VERSION,
+                 json.dumps(data.get("prompt_versions") or {}, ensure_ascii=False),
+                 json.dumps(data, ensure_ascii=False), document_sha, "released",
+                 json.dumps({"seed": "production guide_versions aa5edf83 rules_json",
+                             "unparsed_segments": data.get("unparsed_segments") or []},
+                            ensure_ascii=False), "frozen_builtin_v2", now, now, now))
+        elif (row["rules_sha256"] != document_sha or row["built_in"] != 1
+                or row["status"] != "released"
+                or row["qualification_status"] != "frozen_builtin_v2"):
+            # Converge to the frozen file without rewriting timestamps every call.
+            db.execute("""UPDATE guide_versions SET built_in=1,status='released',
+                qualification_status='frozen_builtin_v2',filename=?,source_sha256=?,
+                document_sha256=?,parser_version=?,schema_version=?,prompt_versions=?,
+                rules_json=?,rules_sha256=?,updated_at=? WHERE id=?""",
+                (str(data.get("source_path_hint") or BUILTIN_CARD_V2_PATH.name),
+                 str(data.get("source_sha256") or ""), document_sha,
+                 str(data.get("parser_version") or ""), CARD_SCHEMA_VERSION,
+                 json.dumps(data.get("prompt_versions") or {}, ensure_ascii=False),
+                 json.dumps(data, ensure_ascii=False), document_sha, now, BUILTIN_CARD_V2_ID))
+    return BUILTIN_CARD_V2_ID
+
+
+def ensure_card_builtin_guide(store: RunStore) -> str:
+    """Install the converted built-in card pack (``builtin-cards-v1``) idempotently.
+
+    This is the default executable guide for the direct-through engine.  The
+    legacy ``builtin-v1`` row and its hash are never modified; it stays
+    visible as read-only history.  A conversion that cannot produce an
+    executable card is stored as a visible ``failed`` version instead of
+    silently falling back to the legacy format.
+    """
+    _ensure_tables(store)
+    now = time.time()
+    try:
+        document = build_builtin_card_document(load_builtin_document())
+    except ValueError as exc:
+        with store._connect() as db:
+            row = db.execute("SELECT id FROM guide_versions WHERE id=?",
+                             (BUILTIN_CARD_V1_ID,)).fetchone()
+            issues = json.dumps({"error_code": str(exc), "errors": [{"code": str(exc)}]},
+                                ensure_ascii=False)
+            if row is None:
+                db.execute("""INSERT INTO guide_versions
+                    (id,owner,built_in,filename,source_sha256,status,issues_json,
+                     qualification_status,created_at,updated_at)
+                    VALUES(?,?,?,?,?,?,?,?,?,?)""",
+                    (BUILTIN_CARD_V1_ID, "", 1, "builtin_guide_v1.json", "",
+                     "failed", issues, "conversion_failed", now, now))
+        return BUILTIN_CARD_V1_ID
+    document_sha = _document_sha(document)
+    with store._connect() as db:
+        db.execute("BEGIN IMMEDIATE")
+        row = db.execute("SELECT * FROM guide_versions WHERE id=?",
+                         (BUILTIN_CARD_V1_ID,)).fetchone()
+        if row is None or row["rules_sha256"] != document_sha or row["status"] != "released":
+            db.execute("""INSERT OR REPLACE INTO guide_versions
+                (id,owner,built_in,parent_version_id,filename,source_sha256,document_sha256,
+                 parser_version,schema_version,prompt_versions,rules_json,rules_sha256,status,
+                 issues_json,qualification_status,created_at,updated_at,released_at)
+                VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (BUILTIN_CARD_V1_ID, "", 1, "", "builtin_guide_v1.json",
+                 str(document.get("source_sha256") or ""), document_sha,
+                 str(document.get("parser_version") or ""), CARD_SCHEMA_VERSION, "{}",
+                 json.dumps(document, ensure_ascii=False), document_sha, "released",
+                 json.dumps({"unparsed_segments": document.get("unparsed_segments") or []},
+                            ensure_ascii=False), "converted_builtin",
+                 row["created_at"] if row else now, now, now))
+    return BUILTIN_CARD_V1_ID
+
+
+def _default_guide_id(store: RunStore) -> str:
+    """Executable default: the frozen V2-parsed card pack; legacy fallbacks
+    only for a broken installation (never a silent old-algorithm reroute)."""
+    ensure_card_builtin_v2(store)
+    with store._connect() as db:
+        row = db.execute("SELECT status FROM guide_versions WHERE id=?",
+                         (BUILTIN_CARD_V2_ID,)).fetchone()
+    if row is not None and row["status"] == "released":
+        return BUILTIN_CARD_V2_ID
+    return BUILTIN_GUIDE_ID
+
+
+def list_versions(store: RunStore, owner: str, *, include_legacy: bool = False) -> list[dict[str, Any]]:
+    """Built-in plus the owner's custom versions, built-in first.
+
+    用户口径（无正式用户，删旧不绕行）：活跃清单只有卡包（builtin-cards-v1
+    与用户 guide_card_v1 版本）；``guide-rules-v1`` 仅存于库、按 id 直查仍可
+    只读，但不在任何选择面主动暴露（须显式 ``include_legacy=True``）。
+    """
     _ensure_tables(store)
     ensure_builtin_guide(store)
     with store._connect() as db:
         rows = db.execute("SELECT * FROM guide_versions WHERE built_in=1 OR owner=? "
                           "ORDER BY built_in DESC, created_at DESC", (owner,)).fetchall()
-    return [_version_dict(row) for row in rows]
+    versions = [_version_dict(row) for row in rows]
+    if not include_legacy:
+        versions = [v for v in versions
+                    if v["id"] not in LEGACY_BUILTIN_IDS
+                    and (str(v.get("schema_version") or "") == CARD_SCHEMA_VERSION
+                         or v["status"] in {"uploaded", "parsing", "parse_failed", "failed"})]
+        # 兜底：默认可执行内置必须始终可见。
+        if not any(v["id"] == BUILTIN_CARD_V2_ID for v in versions):
+            versions = [_version_dict(row) for row in db.execute(
+                "SELECT * FROM guide_versions WHERE id=?", (BUILTIN_CARD_V2_ID,)).fetchall()] + versions
+    return versions
 
 
 def get_version(store: RunStore, owner: str, version_id: str) -> dict[str, Any]:
@@ -419,46 +465,62 @@ def guide_document(store: RunStore, version_id: str) -> dict[str, Any]:
 
 
 def current_guide(store: RunStore, owner: str) -> dict[str, Any]:
-    """The owner's configured guide version, defaulting to the built-in."""
+    """The owner's configured guide version.
+
+    Unconfigured owners (and owners still pointing at the legacy built-in)
+    resolve to the converted card pack, never to the retired legacy format.
+    An explicitly selected *custom* legacy version is returned as-is for
+    read-only viewing; task creation rejects it with
+    ``GUIDE_SCHEMA_UNSUPPORTED``.
+    """
     _ensure_tables(store)
     ensure_builtin_guide(store)
+    default_id = _default_guide_id(store)
     with store._connect() as db:
         config = db.execute("SELECT guide_version_id FROM guide_config WHERE owner=?", (owner,)).fetchone()
         if config:
-            row = db.execute("SELECT * FROM guide_versions WHERE id=?", (config["guide_version_id"],)).fetchone()
+            configured = config["guide_version_id"]
+            # 旧内置（rules-v1 与 v1 转换版）→ 直接落到 V2 解析内置（只读历史不区分）。
+            if configured in LEGACY_BUILTIN_IDS and default_id not in LEGACY_BUILTIN_IDS:
+                configured = default_id
+            row = db.execute("SELECT * FROM guide_versions WHERE id=?", (configured,)).fetchone()
             if row is not None and (row["built_in"] or row["owner"] == owner):
                 return _version_dict(row)
-        row = db.execute("SELECT * FROM guide_versions WHERE id=?", (BUILTIN_GUIDE_ID,)).fetchone()
+        # 解析序：用户未选 → admin 系统默认（若可执行，只读公开版本可用）
+        # → 内置 V2 兜底。
+        sys_default = db.execute("SELECT value FROM system_settings WHERE skey=?",
+                                 (SYSTEM_DEFAULT_GUIDE_KEY,)).fetchone()
+        if sys_default and sys_default["value"]:
+            row = db.execute("SELECT * FROM guide_versions WHERE id=?",
+                             (sys_default["value"],)).fetchone()
+            if row is not None and row["status"] in ("parsed", "released") \
+                    and str(row["schema_version"] or "") == CARD_SCHEMA_VERSION:
+                return _version_dict(row)
+        row = db.execute("SELECT * FROM guide_versions WHERE id=?", (default_id,)).fetchone()
     return _version_dict(row)
 
 
-def set_current_guide(store: RunStore, owner: str, version_id: str) -> dict[str, Any]:
-    """Point the owner's new tasks at a visible, enableable version.
+def set_current_guide(store: RunStore, owner: str, version_id: str,
+                      *, selection_source: str = "manual") -> dict[str, Any]:
+    """Point the owner's new tasks at a visible, enableable card pack.
 
-    Only ``released`` and ``parsed`` versions may be enabled; anything else
-    (uploaded, parsing, parse_failed, failed, archived) raises
-    ``ValueError("GUIDE_NOT_ENABLEABLE")``.
+    Only ``released``/``parsed`` versions are enableable, and only frozen
+    ``guide_card_v1`` packs are executable: legacy ``guide-rules-v1``
+    versions remain read-only history and raise
+    ``ValueError("GUIDE_SCHEMA_UNSUPPORTED")`` here.  There is no quality
+    certification or operation-registry gate on card packs.
     """
     version = get_version(store, owner, version_id)
     if version["status"] not in ENABLEABLE_STATUSES:
         raise ValueError("GUIDE_NOT_ENABLEABLE")
-    # Enabling requires the same qualification as the built-in guide:
-    # deterministic validation clean plus verification without leftover
-    # findings.  A re-parse produces a new version that must re-qualify; the
-    # predecessor's certification never carries over.
-    if version["qualification_status"] not in ENABLEABLE_QUALIFICATIONS:
-        raise ValueError("GUIDE_NOT_CERTIFIED")
-    # A parsed guide is data, not executable policy.  Admission replays the
-    # runtime's own router predicate (FL-D648): every operation the runtime
-    # would treat as authoritative must resolve to a registered contract, so a
-    # version that would fail closed at runtime can never be enabled.
-    from .guide_canary import blocking_gaps
-    gaps = blocking_gaps(guide_document(store, version_id))
-    if gaps:
-        raise ValueError("GUIDE_OPERATION_REGISTRY_MISSING:" + ",".join(gaps))
+    if selection_source not in {"manual", "auto"}:
+        raise ValueError("GUIDE_SELECTION_SOURCE_INVALID")
+    if str(version.get("schema_version") or "") != CARD_SCHEMA_VERSION:
+        # 旧槽位格式:仅历史只读兼容。启用仍走旧认证+注册门;直通新任务不路由旧引擎。
+        raise ValueError("GUIDE_SCHEMA_UNSUPPORTED")
     with store._connect() as db:
-        db.execute("INSERT OR REPLACE INTO guide_config(owner,guide_version_id,updated_at) VALUES(?,?,?)",
-                   (owner, version_id, time.time()))
+        db.execute("INSERT OR REPLACE INTO guide_config(owner,guide_version_id,updated_at,selection_source) "
+                   "VALUES(?,?,?,?)", (owner, version_id, time.time(), selection_source))
     return version
 
 
@@ -785,14 +847,11 @@ def finish_guide_job(store: RunStore, job_id: str, fencing_token: int, *, docume
     if document is not None and not isinstance(document, dict):
         raise ValueError("GUIDE_DOCUMENT_INVALID")
     now = time.time()
-    quality_issues: dict[str, Any] | None = None
-    if document is not None and not error_code:
-        validation = document.get("validation") if isinstance(document.get("validation"), dict) else {}
-        if not _validation_clean(validation):
-            quality_issues = _quality_failure_issues(validation)
-            error_code = "GUIDE_VALIDATION_UNCLEAN"
-    extras = _parse_enrichment(store, _job_version_id(store, job_id), document, error_code)
-    canary = extras.get("canary") if isinstance(extras.get("canary"), dict) else None
+    if document is not None and not error_code \
+            and str(document.get("schema_version") or "") != CARD_SCHEMA_VERSION:
+        # 新解析一律 guide_card_v1;遗留旧格式不再开启(旧解析认证族已按裁决物理删除,
+        # 历史版本保持只读)。失败关闭,不冒称旧路径可用。
+        document, error_code = None, "GUIDE_SCHEMA_UNSUPPORTED"
     with store._connect() as db:
         db.execute("BEGIN IMMEDIATE")
         job = db.execute("SELECT * FROM guide_jobs WHERE id=?", (job_id,)).fetchone()
@@ -802,18 +861,18 @@ def finish_guide_job(store: RunStore, job_id: str, fencing_token: int, *, docume
                 or job["lease_until"] is None or job["lease_until"] <= now):
             raise Conflict("stale guide job lease")
         version_id = job["guide_version_id"]
+        if document is not None and not error_code \
+                and str(document.get("schema_version") or "") == CARD_SCHEMA_VERSION:
+            cards = document.get("cards")
+            if not isinstance(cards, list) or not cards:
+                # A card pack with zero executable cards is an honest failure,
+                # never a silently "parsed" empty guide.
+                document, error_code = None, "GUIDE_NO_EXECUTABLE_CARDS"
         if document is not None and not error_code:
             document_sha = _document_sha(document)
             issues = dict(document.get("validation") or {})
-            if extras.get("parse_report") is not None:
-                issues["parse_report"] = extras["parse_report"]
-            if canary is not None:
-                issues["canary"] = canary
-            if extras.get("review") is not None:
-                issues["review"] = extras["review"]
-            qualification = (QUALIFICATION_NEEDS_REVIEW
-                             if (canary is not None and not canary.get("passed"))
-                             else QUALIFICATION_CERTIFIED)
+            # 计划/模型台账仅记录,不作启用判定依据(卡包无认证门)。
+            qualification = QUALIFICATION_CERTIFIED
             db.execute("""UPDATE guide_versions SET status='parsed',rules_json=?,document_sha256=?,
                 rules_sha256=?,parser_version=?,schema_version=?,prompt_versions=?,issues_json=?,
                 qualification_status=?,updated_at=?
@@ -827,19 +886,13 @@ def finish_guide_job(store: RunStore, job_id: str, fencing_token: int, *, docume
                                  "AND lease_until>?", (now, job_id, fencing_token, now)).rowcount
             if changed != 1:
                 raise Conflict("stale guide job lease")
+            if str(document.get("schema_version") or "") == CARD_SCHEMA_VERSION:
+                _auto_activate_card_version(db, job["owner"], version_id)
         else:
             code = error_code or "GUIDE_PARSE_FAILED"
-            # Quality-gate rejections are terminal for this version: the same
-            # source re-parsed automatically would repeat the model spend, and
-            # the user remedy is re-upload/re-parse into a new version.
-            status = "failed" if (quality_issues is not None
-                                  or job["attempts"] >= MAX_GUIDE_JOB_ATTEMPTS) else "parse_failed"
-            issues = dict(quality_issues or {"error_code": code, "errors": [{"code": code}],
-                                             "attempts": job["attempts"]})
-            if extras.get("parse_report") is not None:
-                issues["parse_report"] = extras["parse_report"]
-            if canary is not None:
-                issues["canary"] = canary
+            status = "failed" if job["attempts"] >= MAX_GUIDE_JOB_ATTEMPTS else "parse_failed"
+            issues = {"error_code": code, "errors": [{"code": code}],
+                      "attempts": job["attempts"]}
             db.execute("UPDATE guide_versions SET status=?,issues_json=?,updated_at=? WHERE id=?",
                        (status, json.dumps(issues, ensure_ascii=False), now, version_id))
             changed = db.execute("UPDATE guide_jobs SET status=?,error_code=?,lease_until=NULL,updated_at=? "
@@ -892,6 +945,27 @@ def diff_versions(store: RunStore, owner: str, version_id: str,
     return diff_guide_documents(before, after)
 
 
+def _auto_activate_card_version(db, owner: str, version_id: str) -> None:
+    """Auto-switch the owner to a freshly parsed card pack.
+
+    Concurrency rule (auto < later choice): the switch happens only when the
+    owner has no selection yet, or the current selection was recorded *before*
+    this version was uploaded.  A later explicit (manual) choice, or a later
+    upload that already became the current version, is never clobbered by an
+    earlier parse finishing late.
+    """
+    version = db.execute("SELECT created_at FROM guide_versions WHERE id=?", (version_id,)).fetchone()
+    if version is None:
+        return
+    uploaded_at = float(version["created_at"] or 0)
+    config = db.execute("SELECT guide_version_id,updated_at FROM guide_config WHERE owner=?",
+                        (owner,)).fetchone()
+    if config is not None and float(config["updated_at"] or 0) >= uploaded_at:
+        return
+    db.execute("INSERT OR REPLACE INTO guide_config(owner,guide_version_id,updated_at,selection_source) "
+               "VALUES(?,?,?,?)", (owner, version_id, time.time(), "auto"))
+
+
 def guide_source_path(store: RunStore, version_id: str) -> Path:
     """Stored source for a version; built-in resolves to the frozen JSON."""
     _ensure_tables(store)
@@ -902,6 +976,73 @@ def guide_source_path(store: RunStore, version_id: str) -> Path:
     if row["built_in"]:
         return BUILTIN_GUIDE_PATH
     return _source_path(store, version_id)
+
+
+def list_enableable_versions(store: RunStore) -> list[dict[str, Any]]:
+    """Admin 全库可读 meta：可执行(enableable)的卡包版本；跨属主，仅元数据、
+    不带卡包全文。"""
+    _ensure_tables(store)
+    ensure_builtin_guide(store)
+    with store._connect() as db:
+        rows = db.execute("""SELECT id,owner,built_in,parent_version_id,filename,source_sha256,
+            document_sha256,rules_sha256,schema_version,status,qualification_status,
+            created_at,updated_at,released_at,rules_json
+            FROM guide_versions
+            WHERE status IN ('parsed','released') ORDER BY built_in DESC, created_at DESC""").fetchall()
+    items = []
+    for row in rows:
+        schema = str(row["schema_version"] or "")
+        if schema != CARD_SCHEMA_VERSION:
+            continue
+        try:
+            doc = _json_or(row["rules_json"], {})
+            cards = len(doc.get("cards") or []) if isinstance(doc, dict) else 0
+        except Exception:
+            cards = 0
+        items.append({"id": row["id"], "owner": (row["owner"] or "").strip() or "(builtin)",
+                      "built_in": bool(row["built_in"]),
+                      "parent_version_id": row["parent_version_id"] or "",
+                      "filename": row["filename"], "source_sha256": row["source_sha256"],
+                      "document_sha256": row["document_sha256"],
+                      "rules_sha256": row["rules_sha256"],
+                      "schema_version": schema, "status": row["status"],
+                      "qualification_status": row["qualification_status"],
+                      "cards": cards, "created_at": row["created_at"],
+                      "updated_at": row["updated_at"], "released_at": row["released_at"]})
+    return items
+
+
+def get_system_default_guide(store: RunStore) -> dict[str, Any] | None:
+    _ensure_tables(store)
+    with store._connect() as db:
+        row = db.execute("SELECT value,updated_at FROM system_settings WHERE skey=?",
+                         (SYSTEM_DEFAULT_GUIDE_KEY,)).fetchone()
+    return ({"version_id": row["value"], "updated_at": row["updated_at"]}
+            if row and row["value"] else None)
+
+
+def set_system_default_guide(store: RunStore, version_id: str) -> dict[str, Any]:
+    """Admin 冒烟校验后写入系统级默认指引（已建任务快照不动）。"""
+    _ensure_tables(store)
+    with store._connect() as db:
+        row = db.execute("SELECT * FROM guide_versions WHERE id=?", (version_id,)).fetchone()
+    if row is None:
+        raise KeyError("guide version not found")
+    if str(row["schema_version"] or "") != CARD_SCHEMA_VERSION:
+        raise ValueError("GUIDE_SCHEMA_UNSUPPORTED")
+    if row["status"] not in ENABLEABLE_STATUSES:
+        raise ValueError("GUIDE_NOT_ENABLEABLE")
+    document = _json_or(row["rules_json"], {})
+    cards = len(document.get("cards") or []) if isinstance(document, dict) else 0
+    if cards <= 0:
+        raise ValueError("GUIDE_NO_EXECUTABLE_CARDS")
+    now = time.time()
+    with store._connect() as db:
+        db.execute("BEGIN IMMEDIATE")
+        db.execute("INSERT OR REPLACE INTO system_settings(skey,value,updated_at) VALUES(?,?,?)",
+                   (SYSTEM_DEFAULT_GUIDE_KEY, version_id, now))
+    return {"version_id": version_id, "updated_at": now, "cards": cards,
+            "status": row["status"]}
 
 
 def guide_metrics(store: RunStore) -> dict[str, Any]:

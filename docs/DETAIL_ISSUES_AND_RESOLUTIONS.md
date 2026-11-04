@@ -9996,3 +9996,10 @@ H＝E×…
 - 内容:release/prod-current-20261104=后端 fundlex+guides=产线当下字节冷合并(与 /opt 零差)+frontend=qa-base@466029f+交接执照【docs/DEPLOY_HANDOVER_20261104.md】+推 GitHub 同步。
 - 验证:沙箱冒烟首页 200、api 口径 401、产线无扰;快照差分产线=0。
 - 后续法之身:后续发布一律向该分支做 3-way 对缝;上家守则已定格(禁整目录、报错成全、白名单 frontend)。
+
+## FL-D1126 比对上传阻塞全局（P0，2026-11-04 用户报告，已诊断·修复待 GO）
+- 现象：合同比对上传一组文件卡住时，其他比对任务也无法上传（全局阻塞）。
+- 根因（后端主凶）：`compare/api.py upload_compare_task` 是 async def 端点，却在事件循环里做重活——`.doc` 走 soffice 子进程转换（秒级~十秒级）、`prepare_compare_input` 接受修订、`parse_compare_document` 全量解析、DB 落库全部同步内联。async 端点同步干活=冻结整个 uvicorn worker 事件循环；产线仅 2 workers，1-2 组并发阻塞上传=整站假死。
+- 伴生（前端次因）：`continueUploads()` 逐组串行 await 且禁用提交钮，单组卡死时用户自身流程也被串住（设计上为保幂等，但放大体感）。
+- 拟修（最小）：上传处理整段移入线程池（starlette run_in_threadpool 包 validate/prepare/store 调用），事件循环即刻解放；soffice 转换并发行保持现状由线程池天然限流。前端串行暂不动（保幂等语义）。
+- 状态：等用户 GO 后上产（FL-D1119 最严档）。

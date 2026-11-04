@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import tempfile
 import time
+import traceback
 import threading
 from concurrent.futures import ThreadPoolExecutor
 import logging
@@ -16,7 +17,9 @@ from pathlib import Path
 from typing import Any, Callable, Iterator
 
 from .store import (Conflict, RunStore, sha256_file, engine_build, SCHEMA_VERSION,
-                    validate_delivery, is_recall_report)
+                    validate_delivery, is_recall_report, is_direct_report)
+from .direct_pipeline import (ENGINE_ID as DIRECT_ENGINE_ID,
+                              DirectPipelineError, process_direct_edit)
 from .db import DatabaseError
 from .config import local_data_dir
 
@@ -30,6 +33,14 @@ RETRYABLE_MODEL_CODES = {"MODEL_NETWORK_ERROR", "MODEL_RETRY_EXHAUSTED", "MODEL_
                          "MODEL_CONCURRENCY_LIMIT", "MODEL_RESERVATION_EXPIRED"}
 
 Processor = Callable[[Path, Path, str], dict[str, Any]]
+
+
+def _json_dict(raw) -> dict:
+    try:
+        value = json.loads(raw) if raw else {}
+    except (ValueError, TypeError):
+        return {}
+    return value if isinstance(value, dict) else {}
 
 # Name of the liveness marker written into every ``fundlex_job_*`` workspace.
 _WORKSPACE_MARKER = "workspace.json"
@@ -102,25 +113,20 @@ def _default_processor(input_path: Path, output_dir: Path, ruleset_version: str,
                        checkpoint_dir: Path | None = None, gateway: Any = None,
                        mode: str = "delivery",
                        disabled_rule_ids: list[str] | None = None) -> dict[str, Any]:
-    # The runtime serves exactly one engine: the guide-bound recall-first
-    # pipeline. The retired rulesets are no longer reachable from the worker, so
-    # an unbound or legacy job fails closed instead of silently running the old
-    # ruleset-only path. Their offline runners import the pipelines directly.
-    if engine_id != "recall_first":
-        raise ValueError("ENGINE_RETIRED")
-    # The recall-first engine consumes the bound guide snapshot, never a ruleset
-    # file; an unbound call is a caller bug and fails inside the pipeline with
-    # its own error report.
-    from .recall_pipeline import process_recall_first
-    return process_recall_first(input_path, output_dir, guide_document=guide_document, gateway=gateway,
-                                checkpoint_dir=checkpoint_dir, execution_mode="delivery",
-                                disabled_rule_ids=disabled_rule_ids)
+    # The runtime serves exactly one engine: the direct-through card pipeline.
+    # The recall-first pipeline and the retired rulesets are no longer
+    # reachable from the worker; their offline runners import the pipelines
+    # directly and are exempt because they inject their own processor.
+    raise ValueError("LEGACY_ENGINE_RETIRED")
 
 
 class Worker:
     def __init__(self, store: RunStore, processor: Processor | None = None, *, lease_seconds: int = 900):
         self.store = store
         self._guide_lock = threading.Lock()
+        # FL-D1047：真实提速不降质——flock 只包 claim/finish/retry/reap 等
+        # 秒级临界区，模型定位/改写/DOCX 写回（耗时主体）在锁外并行。
+        self._critical = threading.Lock()
         self.processor = processor or _default_processor
         if lease_seconds <= 0:
             raise ValueError("lease_seconds must be positive")
@@ -149,8 +155,10 @@ class Worker:
                          stats["removed_files"], stats["removed_bytes"], stats["removed_dirs"])
 
     @contextmanager
-    def _worker_lock(self):
+    def _worker_lock(self, *, blocking: bool = False):
         # OS lock is released on process death; the file itself is never the lock.
+        # blocking=False keeps the historical mutual exclusion for whole-loop
+        # callers; critical-section callers pass blocking=True.
         with (self.store.root / "worker.lock").open("a+b") as stream:
             stream.seek(0)
             if stream.read(1) == b"":
@@ -160,10 +168,10 @@ class Worker:
             try:
                 if os.name == "nt":
                     import msvcrt
-                    msvcrt.locking(stream.fileno(), msvcrt.LK_NBLCK, 1)
+                    msvcrt.locking(stream.fileno(), msvcrt.LK_NBLCK if not blocking else msvcrt.LK_LOCK, 1)
                 else:
                     import fcntl
-                    fcntl.flock(stream, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    fcntl.flock(stream, fcntl.LOCK_EX if blocking else fcntl.LOCK_EX | fcntl.LOCK_NB)
             except OSError as exc:
                 raise Conflict("local profile permits only one worker") from exc
             try:
@@ -197,9 +205,22 @@ class Worker:
             stopped.set()
             thread.join(timeout=35)
 
+    @contextmanager
+    def _critical_section(self):
+        """Claim/finish/retry/reap 的租约与存储临界区（秒级）。
+
+        跨进程互斥由 flock（worker.lock 文件），进程内由 ``_critical``；
+        绝不跨区域持有：model 调用与 DOCX 处理一律在锁外。
+        临界区一律**阻塞式**：窗口是秒级，两个进程/线程仅需按序用过——
+        绝不把良性互斥竞争升级成 worker 崩溃（R4）。
+        """
+        with self._critical:
+            with self._worker_lock(blocking=True):
+                yield
+
     def run_once(self) -> bool:
-        with self._worker_lock():
-            return self._run_once()
+        # FL-D1047：可并发调用——互斥只在临界区，模型与写回主体并行。
+        return self._run_once()
 
     @staticmethod
     def _is_takeover(exc: BaseException) -> bool:
@@ -264,11 +285,15 @@ class Worker:
         min_free = int(os.environ.get("FUNDLEX_MIN_FREE_BYTES", str(256 * 1024 * 1024)))
         if shutil.disk_usage(self.store.root).free < min_free:
             raise OSError("local storage below configured free-space reserve")
-        self._reap_stale_workspaces()
-        self._prune_storage(time.time())
+        with self._critical_section():
+            # R2：stale workspace 重扫与存储清理只能在临界区内（含自锁语义），
+            # 保留 retention fail-closed 语义不变。
+            self._reap_stale_workspaces()
+            self._prune_storage(time.time())
         if self._run_guide_job():
             return True
-        job = self.store.claim(lease_seconds=self.lease_seconds)
+        with self._critical_section():
+            job = self.store.claim(lease_seconds=self.lease_seconds)
         if job is None:
             return False
         doc_id, token = job["id"], job["fencing_token"]
@@ -280,43 +305,58 @@ class Worker:
             try:
                 if not source.is_file() or source.stat().st_size != job["source_size"] or sha256_file(source) != job["source_sha256"]:
                     raise ValueError("INPUT_INTEGRITY_FAILED")
-                if (self.processor is _default_processor and job.get("engine_id") != "recall_first"
-                        and job.get("ruleset_sha256")):
-                    # The runtime worker serves the guide-bound engine only. A
-                    # legacy job that still names a retired ruleset fails closed
-                    # rather than silently running against a different package.
-                    # Offline runners inject their own processor and are exempt.
-                    raise ValueError("RULESET_RETIRED")
-                if job.get("engine_build") and (job["engine_build"] != engine_build() or job["schema_version"] != SCHEMA_VERSION):
+                job_engine = str(job.get("engine_id") or "")
+                if self.processor is _default_processor:
+                    if job_engine == DIRECT_ENGINE_ID:
+                        pass  # 直通卡包引擎，按绑定 schema 路由
+                    elif job_engine == "recall_first":
+                        # recall 引擎已退役。在途旧任务以真实码失败关闭，
+                        # 历史报告只读；绝不作为新任务的旧引擎 fallback。
+                        raise ValueError("LEGACY_ENGINE_RETIRED")
+                    elif job.get("ruleset_sha256"):
+                        raise ValueError("RULESET_RETIRED")
+                    else:
+                        raise ValueError("ENGINE_RETIRED")
+                # FL-D1058（以集成树 c80007e 为准）：跨补丁引擎指纹漂移不得误杀
+                # 卡包任务。直通版本不可变性由卡包（guide 版本+hash 快照）承担，
+                # 非整包指纹；非卡包任务仍按整包指纹 on/off 防护。
+                if job.get("engine_build") and job["engine_build"] != engine_build() \
+                        and str(job.get("guide_schema_version") or "") != "guide_card_v1":
                     raise ValueError("ENGINE_SCHEMA_MISMATCH")
-                guide_document = self._bound_guide_document(job)
+                if job.get("engine_build") and job["schema_version"] != SCHEMA_VERSION:
+                    raise ValueError("ENGINE_SCHEMA_MISMATCH")
+                # INT 用户级模型偏好（old-era 列）：直通引擎以任务创建时冻结的
+                # snapshot_json 为唯一模型来源；preferences 仅作报告审计字段透传
+                # （对齐集成树 c80007e 口径）。
                 from . import model_settings
                 preferences = model_settings.decode_snapshot(job.get("model_preferences") or "{}")
+                effective_source, effective_sha = source, str(job["source_sha256"])
+                # F1：租约心跳必须从转换第一步就包住——不然 >lease_seconds 的
+                # 转换会被终杀并烧 attempt（FL 接管判不接受）。转换耗时主体
+                # （300s×2）与模型改写共享同一条租约接续语义。
                 with self._lease_heartbeat(doc_id, token):
+                    if str(job.get("conversion_state") or "") in {"pending_convert", "convert_failed", "converted"}:
+                        # 异步转换（用户裁决）：worker 第一步执行 doc_convert——
+                        # 300s 上限+一次软件重试；终态如实出码；attempt 幂等不重复转换。
+                        effective_source, effective_sha = self._converted_source(job)
+                        source = effective_source
                     if self.processor is _default_processor:
-                        gateway = (model_settings.gateway_for(preferences, store=self.store,
-                                     owner=job.get("owner")) if preferences else None)
-                        try:
-                            with _document_trace(job, self.store):
-                                report = self.processor(source, output_dir, job["ruleset_version"],
-                                    engine_id=job.get("engine_id", ""), guide_version_id=job.get("guide_version_id", ""),
-                                    guide_document=guide_document, checkpoint_dir=self.store.root / "checkpoints" / doc_id,
-                                    mode=job.get("mode", "delivery"), gateway=gateway,
-                                    disabled_rule_ids=_disabled_rule_ids(job.get("disabled_rule_ids")))
-                        finally:
-                            # Explicitly injected gateways are caller-owned in the
-                            # pipeline API; this Worker created this one per job.
-                            close = getattr(gateway, "close", None)
-                            if callable(close):
-                                try:
-                                    close()
-                                except Exception:  # noqa: BLE001 - cleanup must not mask job result
-                                    pass
+                        with _document_trace(job, self.store):
+                            card_document, guide_meta = self._bound_card_document(job)
+                            snapshot = _json_dict(job.get("snapshot_json"))
+                            report = process_direct_edit(
+                                source, output_dir,
+                                card_document=card_document, guide=guide_meta,
+                                model_snapshot=snapshot.get("model") if isinstance(snapshot, dict) else {},
+                                source_sha256=effective_sha,
+                                document_id=doc_id,
+                                mode=str(job.get("mode") or "delivery"))
                     else:
                         report = self.processor(source, output_dir, job["ruleset_version"])
                 if isinstance(report, dict) and report.get("error_code") in RETRYABLE_MODEL_CODES:
-                    self.store.retry(doc_id, token, error_code=report["error_code"],
-                                    report=report)
+                    with self._critical_section():
+                        self.store.retry(doc_id, token, error_code=report["error_code"],
+                                        report=report)
                     return True
                 if not isinstance(report, dict):
                     raise ValueError("INVALID_PIPELINE_REPORT")
@@ -439,13 +479,19 @@ class Worker:
                 # A pipeline-written report.md already carries the per-change detail;
                 # appending the worker header would only duplicate the stub.
                 try:
-                    self.store.finish(doc_id, token, report=report, artifacts=paths,
-                                      failed=bool(report.get("qualification_status") == "failed" or report.get("error_code")),
-                                      error_code=report.get("error_code"))
+                    # FL-D1047：校验/摘要/对象拷贝在临界区外完成；
+                    # 临界区只包 BEGIN IMMEDIATE 的原子 UPDATE/INSERT。
+                    prepared = self.store.prepare_finish_artifacts(
+                        doc_id, token, report=report, artifacts=paths)
+                    with self._critical_section():
+                        self.store.commit_finish(doc_id, token, report=report, prepared=prepared,
+                                                 failed=bool(report.get("qualification_status") == "failed" or report.get("error_code")),
+                                                 error_code=report.get("error_code"))
                 except BaseException:
                     # finish commits its UPDATE and artifact rows atomically;
                     # on raise, this attempt's copied objects are unreferenced.
-                    self._reap_attempt_objects(doc_id, token)
+                    with self._critical_section():
+                        self._reap_attempt_objects(doc_id, token)
                     raise
             except Conflict as exc:
                 # An expired worker cannot publish over a newer attempt.
@@ -458,8 +504,9 @@ class Worker:
                     # lease policy (budget/circuit stops also pause the task) and
                     # leave the model budget ledger to the next attempt.
                     try:
-                        self.store.retry(doc_id, token, error_code=exc.code,
-                                        report=getattr(exc, "report", None))
+                        with self._critical_section():
+                            self.store.retry(doc_id, token, error_code=exc.code,
+                                            report=getattr(exc, "report", None))
                     except Conflict as lease_exc:
                         # A2-F4: the lease was taken over mid-processing; the
                         # newer epoch owns the retry decision (fail-closed).
@@ -468,27 +515,44 @@ class Worker:
                     return True
                 if isinstance(exc, (OSError, sqlite3.OperationalError, DatabaseError)) or getattr(exc, "code", "") in RETRYABLE_MODEL_CODES:
                     try:
-                        self.store.retry(doc_id, token, error_code=getattr(exc, "code", "TEMPORARY_STORAGE_FAILURE"))
+                        with self._critical_section():
+                            self.store.retry(doc_id, token, error_code=getattr(exc, "code", "TEMPORARY_STORAGE_FAILURE"))
                     except Conflict as lease_exc:
                         if not self._is_takeover(lease_exc):
                             raise
                     return True
-                raw_code = str(exc)
+                # 真相先行：终端失败的 traceback 必须先打到 stderr（journalctl
+                # 可见，绝不再出现只剩 PROCESSING_FAILED 的哑巴错误）。
+                traceback.print_exc()
+                # 含稳定 .code 的失败异常（DirectPipelineError/DocxError 等）
+                # 一律以真实错误码结案；不再被 known_codes 名单抹平。
+                exc_code = getattr(exc, "code", None)
+                raw_code = str(exc_code) if isinstance(exc_code, str) and exc_code else str(exc)
+                exc_get = exc_code
                 known_codes = {"INPUT_INTEGRITY_FAILED", "RULESET_HASH_MISMATCH", "RULESET_RETIRED",
                                "INVALID_PIPELINE_REPORT", "ENGINE_SCHEMA_MISMATCH", "RESULT_SIZE_LIMIT",
                                "MISSING_VERIFIED_ARTIFACTS", "ARTIFACT_VERIFICATION_MISMATCH",
                                "GUIDE_VERSION_MISSING", "GUIDE_RULESET_HASH_MISMATCH",
-                               "GUIDE_NOT_CERTIFIED"}
+                               "GUIDE_NOT_CERTIFIED", "LEGACY_ENGINE_RETIRED",
+                               "ENGINE_RETIRED", "GUIDE_SCHEMA_UNSUPPORTED",
+                               "GUIDE_CARD_DOCUMENT_INVALID"}
+                stable_code = bool(raw_code and raw_code.upper() == raw_code
+                                   and "_" in raw_code and " " not in raw_code
+                                   and raw_code.isascii() and len(raw_code) < 80)
                 code = ("GUIDE_OPERATION_REGISTRY_MISSING"
                         if raw_code.startswith("GUIDE_OPERATION_REGISTRY_MISSING")
-                        else raw_code if raw_code in known_codes else "PROCESSING_FAILED")
+                        else raw_code if stable_code else "PROCESSING_FAILED")
+                # 病灶必须可检索：错误码是给机器的，诊断文字是给人的
+                # （fl-D1058 口径续）。原文截断脱敏，不写回影响文档结构。
+                detail = f"{type(exc).__name__}: {str(exc)[:160]}"
                 report = {
                     "document_id": doc_id, "source_sha256": job["source_sha256"],
                     "ruleset_version": job["ruleset_version"], "ruleset_sha256": job.get("ruleset_sha256", ""),
                     "engine_build": job.get("engine_build", ""), "schema_version": job.get("schema_version", ""),
                     "qualification_status": "failed",
                     "delivery_status": "not_generated", "error_code": code,
-                    "errors": [{"code": code, "stage": "worker", "message": type(exc).__name__}],
+                    "errors": [{"code": code, "stage": "worker", "message": detail}],
+                    "unresolved": [{"code": code, "message": detail}],
                 }
                 if self.store.document_task_id(doc_id):
                     # Even a failed terminal attempt carries the persisted job
@@ -499,11 +563,15 @@ class Worker:
                 report_path = output_dir / "report.json"
                 report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
                 try:
-                    self.store.finish(doc_id, token, report=report,
-                                      artifacts={"report_json": report_path, "report_md": md},
-                                      failed=True, error_code=code)
+                    prepared = self.store.prepare_finish_artifacts(
+                        doc_id, token, report=report,
+                        artifacts={"report_json": report_path, "report_md": md})
+                    with self._critical_section():
+                        self.store.commit_finish(doc_id, token, report=report, prepared=prepared,
+                                                 failed=True, error_code=code)
                 except BaseException as finish_exc:
-                    self._reap_attempt_objects(doc_id, token)
+                    with self._critical_section():
+                        self._reap_attempt_objects(doc_id, token)
                     # A2-F4: a newer attempt took over; its epoch owns the
                     # terminal state and this failure report must not land.
                     if not self._is_takeover(finish_exc):
@@ -526,35 +594,44 @@ class Worker:
         can retry; every other error is recorded on the job and the version.
         """
         from . import guide_store
-        job = guide_store.claim_guide_job(self.store, lease_seconds=max(self.lease_seconds, 600))
+        with self._critical_section():
+            job = guide_store.claim_guide_job(self.store, lease_seconds=max(self.lease_seconds, 600))
         if job is None:
             return False
-        from .guide import GuideError, build_guide_document, extract_guide_source
+        from .guide import GuideError, extract_guide_source
+        from .guide_cards import build_guide_card_document
         from .model import ModelGateway
         try:
             path = guide_store.guide_source_path(self.store, job["guide_version_id"])
             if not path.is_file():
                 raise GuideError("GUIDE_SOURCE_UNREADABLE", {"path": str(path)})
             source = extract_guide_source(path)
-            document = build_guide_document(source, ModelGateway.from_env())
+            # 直通解析入口（适配器语义已由第 1 线对齐）：模型处理在锁外，
+            # 只有 lease/finish 在临界区（R4）。
+            document = build_guide_card_document(source, ModelGateway.from_env())
         except Exception as exc:  # noqa: BLE001 - job errors must not kill the worker
             if self._is_guide_stop(exc):
                 try:
-                    guide_store.release_guide_job(self.store, job["id"], job["fencing_token"])
+                    with self._critical_section():
+                        guide_store.release_guide_job(self.store, job["id"], job["fencing_token"])
                 except Conflict as lease_exc:
                     if str(lease_exc) != "stale guide job lease":
                         raise
                 return True
+            traceback.print_exc()
             code = getattr(exc, "code", None) or "GUIDE_PARSE_FAILED"
             try:
-                guide_store.finish_guide_job(self.store, job["id"], job["fencing_token"], error_code=str(code))
+                with self._critical_section():
+                    guide_store.finish_guide_job(self.store, job["id"], job["fencing_token"],
+                                                 error_code=str(code))
             except Conflict as lease_exc:
                 if str(lease_exc) != "stale guide job lease":
                     raise
             return True
         try:
-            finished = guide_store.finish_guide_job(self.store, job["id"],
-                                                    job["fencing_token"], document=document)
+            with self._critical_section():
+                finished = guide_store.finish_guide_job(self.store, job["id"],
+                                                        job["fencing_token"], document=document)
         except Conflict as lease_exc:
             if str(lease_exc) != "stale guide job lease":
                 raise
@@ -570,15 +647,14 @@ class Worker:
                 pass
         return True
 
-    def _bound_guide_document(self, job: dict[str, Any]) -> dict[str, Any] | None:
-        """Resolve and verify the guide snapshot bound to a recall-first job.
+    def _bound_card_document(self, job: dict[str, Any]) -> tuple[dict, dict]:
+        """Resolve and verify the frozen card-pack snapshot bound to a job.
 
-        The batch records the version id and rules hash at task creation; a
-        version that disappeared or changed since is a hard failure, never a
-        silent fallback to a different guide.
+        The task froze (version id, pack hash, schema) at creation; the worker
+        re-checks all three against storage.  A version that disappeared, was
+        rewritten, or still carries the legacy schema is a hard failure —
+        never a silent fallback to the owner's current guide or legacy engine.
         """
-        if job.get("engine_id") != "recall_first":
-            return None
         from . import guide_store
         version_id = job.get("guide_version_id") or ""
         try:
@@ -587,20 +663,90 @@ class Worker:
             raise ValueError("GUIDE_VERSION_MISSING") from None
         if (version.get("rules_sha256") or "") != (job.get("guide_rules_sha256") or ""):
             raise ValueError("GUIDE_RULESET_HASH_MISMATCH")
+        schema = str(version.get("schema_version") or "")
+        if schema != guide_store.CARD_SCHEMA_VERSION:
+            raise ValueError("GUIDE_SCHEMA_UNSUPPORTED")
+        if str(job.get("guide_schema_version") or "") not in {"", guide_store.CARD_SCHEMA_VERSION}:
+            raise ValueError("GUIDE_SCHEMA_UNSUPPORTED")
         try:
             document = guide_store.guide_document(self.store, version_id)
-            from .guide import validate_runtime_guide
-            from .generation.registry import ensure_registered_operations, operation_registry_coverage_gaps
-            ensure_registered_operations(document)
-            gaps = operation_registry_coverage_gaps(document)
-            if gaps:
-                raise ValueError("GUIDE_OPERATION_REGISTRY_MISSING:" + ",".join(gaps))
-            validate_runtime_guide(
-                document, approved_source_sha256=version["source_sha256"],
-                approved_document_sha256=job.get("guide_rules_sha256"))
-            return document
         except KeyError:
             raise ValueError("GUIDE_VERSION_MISSING") from None
+        from .guide import GuideError
+        from .guide_cards import validate_card_document
+        try:
+            brief = validate_card_document(document)
+        except GuideError as exc:
+            raise ValueError("GUIDE_CARD_DOCUMENT_INVALID") from exc
+        if brief.get("state") != "OK" or int(brief.get("card_count") or 0) < 1:
+            raise ValueError("GUIDE_CARD_DOCUMENT_INVALID")
+        return document, {"version_id": version["id"], "schema_version": schema,
+                          "document_sha256": version["document_sha256"],
+                          "parser_version": version["parser_version"]}
+
+    def _converted_source(self, job: dict[str, Any]) -> tuple[Path, str]:
+        """Materialize the converted DOCX for a pending_convert document.
+
+        Request-time sync conversion is forbidden by the product decision;
+        conversion runs here in the worker identity.  A cached converted object
+        (per document) makes every later attempt idempotent — no re-conversion.
+        """
+        doc_id, token = job["id"], job["fencing_token"]
+        cached_key = str(job.get("converted_key") or "")
+        if cached_key:
+            cached = self.store.object_path(cached_key)
+            cached_sha = str(job.get("converted_sha256") or "")
+            if (cached.is_file() and cached_sha
+                    and sha256_file(cached) == cached_sha):
+                return cached, cached_sha
+        from .doc_convert import DocConvertError, convert_doc_to_docx
+        from .upload_validation import UploadValidationError, validate_docx_upload
+        raw = self.store.object_path(job["input_key"])
+        timeout_s = int(os.environ.get("FUNDLEX_DOC_CONVERT_TIMEOUT_S", "300"))
+        converted: bytes | None = None
+        last: DocConvertError | None = None
+        for _ in range(2):  # 300s 上限 + 一次软件重试（工单②）
+            try:
+                converted = convert_doc_to_docx(raw.read_bytes(), timeout_s=timeout_s)
+                break
+            except DocConvertError as exc:
+                last = exc
+        if converted is None:
+            self._mark_conversion_failed(doc_id, token)
+            raise DirectPipelineError(getattr(last, "code", None) or "LEGACY_DOC_CONVERT_FAILED")
+        try:
+            validate_docx_upload("converted-target.docx", converted)
+        except UploadValidationError as exc:
+            self._mark_conversion_failed(doc_id, token)
+            raise DirectPipelineError(str(exc.code)) from exc
+        key = f"converted/{doc_id}.docx"
+        target = self.store.object_path(key)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        temp_key = target.parent / f"{target.name}.part-{token}"
+        with temp_key.open("wb") as stream:
+            stream.write(converted)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temp_key, target)
+        digest = sha256_file(target)
+        now = time.time()
+        with self._critical_section(), self.store._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            changed = db.execute("""UPDATE documents SET conversion_state='converted',
+                converted_key=?,converted_sha256=?,converted_size=?,updated_at=?
+                WHERE id=? AND fencing_token=? AND status IN ('leased','running')""",
+                (key, digest, len(converted), now, doc_id, token)).rowcount
+            if changed != 1:
+                raise Conflict("stale worker lease")
+        return target, digest
+
+    def _mark_conversion_failed(self, document_id: str, token: int) -> None:
+        """诚实终态：转换状态落库 convert_failed（用户可随后手动 retry）。"""
+        with self._critical_section(), self.store._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            db.execute("""UPDATE documents SET conversion_state='convert_failed',updated_at=?
+                WHERE id=? AND fencing_token=? AND status IN ('leased','running')""",
+                (time.time(), document_id, token))
 
     @staticmethod
     def _is_recall_stop(exc: BaseException) -> bool:
@@ -647,6 +793,26 @@ class Worker:
 
     @staticmethod
     def _markdown(report: dict[str, Any]) -> str:
+        if is_direct_report(report):
+            block = report.get("direct_edit") or {}
+            lines = ["# FundLex 合同修改结果", "",
+                     f"- 合同 ID：{report.get('document_id', '')}",
+                     f"- 源文件 SHA-256：{report.get('source_sha256', '')}",
+                     f"- 指引版本：{(report.get('guide') or {}).get('version_id', '')}",
+                     f"- 引擎：{report.get('engine_id', '')} {report.get('engine_version', '')}",
+                     f"- 交付完整性：{report.get('delivery_status', 'not_generated')}",
+                     f"- 实际写回处数：{block.get('actual_written_count', 0)}", ""]
+            for change in block.get("changes") or []:
+                lines.append(f"## {change.get('rule_card_id', '')} · {change.get('location', '')}")
+                lines.append("")
+                lines.append(f"修改前：{str(change.get('before', '')).strip()}")
+                lines.append("")
+                lines.append(f"修改后：{str(change.get('after', '')).strip()}")
+                lines.append("")
+            if report.get("delivery_status") == "incomplete":
+                lines.append("本次处理未产生任何可交付的实质修改，合同未交付。")
+                lines.append("")
+            return "\n".join(lines)
         if report.get("plan") or report.get("guide"):
             # The pipeline report owns the user-facing per-change detail: rule,
             # requirement, before text, after text and proof state.
@@ -672,7 +838,7 @@ class Worker:
             completed += 1
         return completed
 
-    def run_forever(self, *, poll_seconds: float = 1.0, concurrency: int = 2,
+    def run_forever(self, *, poll_seconds: float = 1.0, concurrency: int = 3,
                     stop_event: threading.Event | None = None) -> None:
         if not 1 <= concurrency <= 8:
             raise ValueError("workflow concurrency must be between 1 and 8")
@@ -701,21 +867,22 @@ class Worker:
                 transient_failures = 0
                 if not progressed:
                     stopped.wait(poll_seconds)
-        with self._worker_lock():
-            with ThreadPoolExecutor(max_workers=concurrency, thread_name_prefix="fundlex") as pool:
-                futures = [pool.submit(consume) for _ in range(concurrency)]
-                try:
-                    while not stopped.wait(poll_seconds):
-                        for future in futures:
-                            if future.done():
-                                future.result()
-                                # A consumer may observe stop between the outer wait
-                                # and this completion check. That is a clean shutdown.
-                                if stopped.is_set():
-                                    break
-                                raise RuntimeError("workflow slot stopped unexpectedly")
-                finally:
-                    stopped.set()
+        # FL-D1047：槽位真并行；临界区由 claim/finish/retry 自包含，
+        # 不再全程持 OS 锁（fencing token 下并发天然安全）。
+        with ThreadPoolExecutor(max_workers=concurrency, thread_name_prefix="fundlex") as pool:
+            futures = [pool.submit(consume) for _ in range(concurrency)]
+            try:
+                while not stopped.wait(poll_seconds):
+                    for future in futures:
+                        if future.done():
+                            future.result()
+                            # A consumer may observe stop between the outer wait
+                            # and this completion check. That is a clean shutdown.
+                            if stopped.is_set():
+                                break
+                            raise RuntimeError("workflow slot stopped unexpectedly")
+            finally:
+                stopped.set()
 
 
 def main() -> None:
@@ -725,11 +892,19 @@ def main() -> None:
     parser.add_argument("--once", action="store_true", help="drain currently available work then exit")
     args = parser.parse_args()
     store = RunStore(local_data_dir())
+    if os.environ.get("FUNDLEX_DOC_CONVERT_WARMUP", "1") != "0":
+        # 异步转换预热（FL-D1074）：worker 身份进程启动先起一次 soffice，
+        # 字体/模块缓存提前建立，首个 .doc 不再吃 120s 冷启动拒收。
+        try:
+            from .doc_convert import warm_up
+            warm_up()
+        except Exception:
+            pass
     worker = Worker(store)
     if args.once:
         print(f"processed {worker.run_until_idle()} document(s)")
     else:
-        worker.run_forever(concurrency=int(os.environ.get("FUNDLEX_WORKFLOW_CONCURRENCY", "2")))
+        worker.run_forever(concurrency=int(os.environ.get("FUNDLEX_WORKFLOW_CONCURRENCY", "3")))
 
 
 if __name__ == "__main__":
