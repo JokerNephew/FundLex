@@ -2844,47 +2844,6 @@ def _run_audit(model: Any, rules_by_id: dict[str, dict], targets: Sequence[Targe
             "artifact_failures": artifact_failures}
 
 
-def _confirm_merged_append(rule: dict, plan_entry: dict[str, Any], location: str,
-                           actual: DocumentInspection, facts: Facts, rules_by_id: dict[str, dict],
-                           other_edits: Sequence[dict[str, Any]]) -> str | None:
-    """Deterministically confirm an append whose base clause a sibling rule deletes.
-
-    G03 appends a new clause "after the original 份额类别设置 clause" while G06 deletes
-    that very clause (the conversion sentence); G16 appends the daily-accrual clause
-    while G17 deletes the usage-scope sentence. The merge writes the append text into
-    the freed span, so the audit often judges the append "wrong" because its base text
-    is gone — even though the deletion is an authorised change by another rule and the
-    append text is present verbatim. The confirmation is evidence-based: the append
-    text must be in AFTER and the sibling operation must itself be a deletion.
-    """
-    if plan_entry.get("operation") not in {"insert", "append"}:
-        return None
-    if not any(operation.get("op") == "append"
-               and condition_matches(operation.get("condition"), facts)
-               for operation in rule.get("operations") or []):
-        return None
-    # The base clause may be deleted by a SIBLING rule at the same site (G03+G06,
-    # G16+G17), not only by another operation of the same rule. The evidence check
-    # below still requires a real append text and a real delete edit at this location;
-    # the sibling's own rule definition is used to prove that operation is a delete.
-    try:
-        span = actual.by_location(location)
-    except DocxError:
-        return None
-    after = _compact(display_text(span.text)[0])
-    fixed = str(plan_entry.get("replacement") or "")
-    if not fixed or _compact(fixed) not in after:
-        return None
-    sibling_deletes = [entry.get("rule_id") for entry in other_edits
-                       if entry.get("operation") in {"replace", "delete"}
-                       and any(operation.get("op") == "delete"
-                               for operation in (rules_by_id.get(str(entry.get("rule_id")), {})
-                                                 .get("operations") or []))]
-    if not sibling_deletes:
-        return None
-    return fixed
-
-
 def _merge_audit_state(state: dict[str, Any], round_ledger: dict[str, Any],
                        targets: Sequence[Target]) -> None:
     """Re-audited rules replace their previous verdicts; other rules stay untouched."""
@@ -2901,12 +2860,6 @@ def _merge_audit_state(state: dict[str, Any], round_ledger: dict[str, Any],
         state["missed"][rule_id] = []
     for item in round_ledger["missed_targets"]:
         state["missed"].setdefault(item["rule_id"], []).append(item)
-
-
-def _audit_issue_key(issue: Mapping[str, Any]) -> str:
-    """Stable identity of one audit issue across repair rounds."""
-    return "|".join(str(issue.get(name) or "") for name in
-                    ("code", "rule_id", "location", "affected_obligation"))
 
 
 def _audit_context_key(context: Any) -> str:

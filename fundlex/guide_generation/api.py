@@ -6,6 +6,7 @@ API only enqueues long-running work; the worker performs all model calls.
 from __future__ import annotations
 
 import json
+import os
 import time
 import uuid
 from pathlib import Path
@@ -94,8 +95,22 @@ def _public_run(gg: GuideGenerationStore, run: dict[str, Any], *, detail: bool =
     return base
 
 
+from .flags import GENERATION_ENABLED_KEY, generation_enabled
+
+
 def register_guide_generation_routes(application, store: RunStore,
                                      gg: GuideGenerationStore, user_dependency) -> None:
+    if not generation_enabled():
+        # 域冰封（默认 off）：``/api/guide-generation*`` 全部端点干净地 404，
+        # 路由表其余面孔不动；``FUNDLEX_GUIDE_GENERATION_ENABLED=1`` 才可启用。
+        @application.api_route("/api/guide-generation",
+                               methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
+        @application.api_route("/api/guide-generation/{_path:path}",
+                               methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
+        def _generation_frozen(_path: str = ""):
+            raise HTTPException(404, "GUIDE_GENERATION_DISABLED")
+
+        return
     gg.ensure_schema()
     application.state.guide_generation = gg
 

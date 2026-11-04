@@ -190,6 +190,84 @@ def save_settings(store, owner, payload):
     return public_settings(store, owner)
 
 
+_SYSTEM_DEFAULT_OWNER = "__system_default_model__"
+
+
+def snapshot_system_default(store) -> dict:
+    """系统级默认模型（管理员设，所有用户 apply）。读取失败不冒称已配置。"""
+    return snapshot(store, _SYSTEM_DEFAULT_OWNER)
+
+
+def save_system_default(store, payload) -> dict:
+    """保存系统默认模型：与 /api/settings/model 同形（RolePreferences），
+    保存前网关冒烟（联通失败拒存）。api_key 继续走环境密钥面，不落库。
+
+    ``payload`` = flat RolePreferences dict（{model,timeout_s,...}）。
+    """
+    payload = {"primary": payload}
+    # 先留旧值：smoke 失败必须回滚到原配置，不能因一次保存失败覆盖/清空既有默认。
+    ensure_schema(store)
+    with store._connect() as db:
+        prior = db.execute("SELECT settings_json FROM user_model_settings WHERE owner=?",
+                           (_SYSTEM_DEFAULT_OWNER,)).fetchone()
+    prior_json = prior["settings_json"] if prior else None
+    result = save_settings(store, _SYSTEM_DEFAULT_OWNER, payload)
+    snap = snapshot_system_default(store)
+    if not snap:
+        raise ModelSettingsError("SYSTEM_MODEL_EMPTY")
+    smoke = _smoke_gateway(snap, store=store)
+    if smoke is not True:
+        with store._connect() as db:
+            if prior_json is None:
+                db.execute("DELETE FROM user_model_settings WHERE owner=?",
+                           (_SYSTEM_DEFAULT_OWNER,))
+            else:
+                db.execute("INSERT OR REPLACE INTO user_model_settings"
+                           "(owner,settings_json,updated_at) VALUES(?,?,?)",
+                           (_SYSTEM_DEFAULT_OWNER, prior_json, time.time()))
+        raise ModelSettingsError(f"SYSTEM_MODEL_SMOKE_FAILED:{smoke}")
+    return result
+
+
+def reset_system_default(store) -> dict:
+    return reset_settings(store, _SYSTEM_DEFAULT_OWNER)
+
+
+def _smoke_gateway(preferences: dict, *, store) -> "bool | str":
+    """轻量上联烟：GET {base_url}/models 15s 超时；失败即返错码/原因。"""
+    api = resolve(preferences, store=store)[0].get("primary")
+    base_url = str(getattr(api, "base_url", "") or "").rstrip("/")
+    model = str(getattr(api, "model", "") or "")
+    if not base_url or not model:
+        return "SYSTEM_MODEL_INCOMPLETE"
+    import os
+    import urllib.request
+    import urllib.error
+    key = os.environ.get("LLM_API_KEY", "")
+    if not key:
+        return "SYSTEM_MODEL_SECRET_MISSING"
+    path = "/models" if base_url.rstrip("/").endswith("/v1") else "/v1/models"
+    req = urllib.request.Request(base_url + path,
+                                 headers={"Authorization": f"Bearer {key}"})
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            if resp.status != 200:
+                return f"SYSTEM_MODEL_SMOKE_HTTP_{resp.status}"
+    except urllib.error.HTTPError as exc:
+        return f"SYSTEM_MODEL_SMOKE_HTTP_{exc.code}"
+    except Exception:
+        return "SYSTEM_MODEL_SMOKE_UNREACHABLE"
+    return True
+
+
+def resolve_for_owner(store, owner: str, *, mysql: bool = False) -> dict:
+    """任务创建时冻结快照的解析序：用户 > 系统默认 > env。"""
+    mine = snapshot(store, owner)
+    if mine:
+        return mine
+    return snapshot_system_default(store)
+
+
 def reset_settings(store, owner):
     ensure_schema(store)
     with store._connect() as db:

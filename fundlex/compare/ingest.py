@@ -6,7 +6,7 @@ from typing import Any
 
 import hashlib
 
-from ..upload_validation import validate_docx_upload
+from ..upload_validation import normalize_contract_upload, validate_docx_upload
 from .parser import parse_compare_document
 
 try:  # Older deployments do not have the tracked-revision normalizer.
@@ -22,20 +22,21 @@ def prepare_compare_upload(name: str, data: bytes) -> dict[str, Any]:
     additionally proves that the normalized package is readable by the worker.
     """
     filename = Path((name or "").replace("\\", "/")).name
-    validate_docx_upload(filename, data)
-    original_sha256 = hashlib.sha256(data).hexdigest()
-    original_size = len(data)
-    # FL-D1024: Word saves may carry an inert attachedTemplate link; strip it
-    # before every downstream validator sees the package.  Recorded identity
-    # (sha/size) stays bound to the user's raw bytes.
-    from .revisions import normalize_external_links
-    data = normalize_external_links(data)
+    # 与任务上传同链归一（FL-D1057 复用点）：CDF 二进制 .doc 自动转换。
+    # 审计身份（original）= 用户上传原件；工作字节（normalized）= 转换产物；
+    # 两者绝不混算，不做回退伪造。
+    uploaded_raw = bytes(data)
+    filename, data, _converted = normalize_contract_upload(filename, data)
     normalized = data
+    original_sha256 = hashlib.sha256(uploaded_raw).hexdigest()
+    original_size = len(uploaded_raw)
     revisions_accepted = 0
     if prepare_compare_input is not None:
         try:
             prepared = prepare_compare_input(data)
             normalized = prepared.data
+            original_sha256 = (prepared.original_sha256
+                               if not _converted else original_sha256)
             revisions_accepted = prepared.revisions_accepted
         except Exception as exc:
             raise ValueError("COMPARE_INVALID_DOCX") from exc

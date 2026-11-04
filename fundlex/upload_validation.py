@@ -39,12 +39,6 @@ def validate_docx_upload(name: str, data: bytes) -> str:
             f"file name exceeds {MAX_FILENAME_BYTES} bytes; rename the file and upload again",
             422)
     suffix = Path(safe_name).suffix.lower()
-    if suffix == ".doc" or data.startswith(LEGACY_DOC_MAGIC):
-        # Legacy binary Word files must be saved as DOCX by the user.  Do not
-        # rename them or feed them into the OOXML pipeline.
-        raise UploadValidationError(
-            "LEGACY_DOC_UNSUPPORTED",
-            "legacy Word .doc is unsupported; save it as .docx and upload again")
     if not safe_name or suffix != ".docx":
         raise UploadValidationError("UNSUPPORTED_FILE_FORMAT", "only DOCX files are supported")
     if not data or len(data) > MAX_UPLOAD_BYTES:
@@ -68,6 +62,38 @@ def validate_docx_upload(name: str, data: bytes) -> str:
     except (zipfile.BadZipFile, zipfile.LargeZipFile):
         raise UploadValidationError("INVALID_DOCX_PACKAGE", "invalid DOCX package") from None
     return safe_name
+
+
+def normalize_contract_upload(name: str, data: bytes) -> tuple[str, bytes, bool]:
+    """上传归一：CDF 二进制 \``.doc\``（扩展名或 magic）自动转换后按 DOCX 校验。
+
+    冻结接口（协助 FL-D1057 比对侧复用，与 fundlex.doc_convert 同源）：
+    ``(safe_name, normalized_bytes, converted)``。来源/产物 hash 一律以归一
+    后的字节为准（source_sha256 记转换产物）；转换失败如实报
+    ``LEGACY_DOC_CONVERT_*``（不再是 LEGACY_DOC_UNSUPPORTED 拒绝分支）。
+    """
+    suffix = Path((name or "").replace("\\", "/")).suffix.lower()
+    if suffix == ".doc" or data.startswith(LEGACY_DOC_MAGIC):
+        # 展示名沿用原件名（安全名规则与 DOCX 相同）。
+        display = Path((name or "").replace("\\", "/")).name
+        if len(display.encode("utf-8")) > MAX_FILENAME_BYTES:
+            raise UploadValidationError(
+                "UPLOAD_FILENAME_TOO_LONG",
+                f"file name exceeds {MAX_FILENAME_BYTES} bytes; rename the file and upload again",
+                422)
+        from .doc_convert import DocConvertError, convert_doc_to_docx
+        try:
+            converted = convert_doc_to_docx(bytes(data))
+        except DocConvertError as exc:
+            # 区分 soffice 错误与产品错误：全部如实，不冒称转换。
+            raise UploadValidationError(exc.code, exc.user_message) from exc
+        # 转换产物按完整 DOCX 包安全链校验（以 .docx 名义过同一闸门）。
+        validate_docx_upload(
+            Path(display).with_suffix(".docx").name if display else "converted.docx",
+            converted)
+        return display or "converted.docx", converted, True
+    safe_name = validate_docx_upload(name, data)
+    return safe_name, bytes(data), False
 
 
 def has_tracked_revisions(data: bytes) -> bool:

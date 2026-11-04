@@ -21,7 +21,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import quote
 
-from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
+from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Query, Request, UploadFile
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import (
     FileResponse,
@@ -53,8 +53,8 @@ from . import model_settings
 from .upload_validation import (
     MAX_BATCH_BYTES, MAX_COMPRESSION_RATIO,
     MAX_PART_BYTES, MAX_UNCOMPRESSED_BYTES, MAX_UPLOAD_BYTES,
-    UploadValidationError, has_tracked_revisions, validate_batch_limits,
-    validate_docx_upload,
+    UploadValidationError, has_tracked_revisions, normalize_contract_upload,
+    validate_batch_limits, validate_docx_upload,
 )
 from .upload_guard import add_upload_guard
 from .integrations import IntegrationStore
@@ -231,6 +231,26 @@ class FeishuAppCredentialsRequest(BaseModel):
     app_secret: str = Field(min_length=8, max_length=256)
 
 
+class AdminSystemGuideRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    version_id: str | None = Field(default=None, max_length=128)
+
+
+class AdminRoleRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    role: str = Field(pattern="^(admin|member)$")
+
+
+class AdminPasswordRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    password: str = Field(min_length=8, max_length=1024)
+
+
+class AdminTaskDeleteConfirm(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    confirm: str = Field(min_length=1, max_length=128)
+
+
 class FeishuBindingCodeRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     ttl_seconds: int = Field(default=600, ge=60, le=3600)
@@ -252,6 +272,17 @@ class DecisionRequest(BaseModel):
     selection_epoch: int | None = Field(default=None, ge=0)
     manifest_hash: str | None = Field(default=None, min_length=64, max_length=64,
                                       pattern="^[0-9a-f]{64}$")
+    # FL-D1036：双层修订独立选择——keyed `part|kind|id`（仅限报告原修订白名单），
+    # verdict accept|reject；缺省=旧行为（原修订全接受）。
+    foreign_decisions: dict[str, str] | None = Field(default=None, max_length=500)
+
+    @field_validator("foreign_decisions")
+    @classmethod
+    def foreign_verdicts(cls, value):
+        if value is not None:
+            if any(not isinstance(k, str) or v not in {"accept", "reject"} for k, v in value.items()):
+                raise ValueError("foreign_decisions must map part|kind|id to accept|reject")
+        return value
 
 
 def _auth_mode() -> str:
@@ -331,6 +362,35 @@ def _admin(request: Request, x_fundlex_user: str | None = Header(default=None),
     return identity
 
 
+def _admin_strict(request: Request,
+                  authorization: str | None = Header(default=None)) -> dict:
+    """管理员强制门槛（看板后端专属）：未登录 401，非管理员 403（@order）。
+    """
+    identity = _password_identity(request, authorization)
+    if identity is None:
+        raise HTTPException(401, "login required")
+    if identity["role"] != "admin":
+        raise HTTPException(403, "ADMIN_REQUIRED")
+    return identity
+
+
+class _AdminThrottle:
+    """极低量级滑动窗口：管理员变更操作自然节流，不依赖外部服务。"""
+
+    def __init__(self, *, limit: int = 30, window_seconds: int = 600):
+        self.limit = limit
+        self.window = window_seconds
+        self._events: dict[str, list[float]] = {}
+
+    def check(self, actor: str) -> None:
+        now = time.time()
+        events = [t for t in self._events.get(actor, []) if now - t < self.window]
+        if len(events) >= self.limit:
+            raise HTTPException(429, "ADMIN_THROTTLED")
+        events.append(now)
+        self._events[actor] = events
+
+
 def _capabilities_identity(request: Request, x_fundlex_user: str | None = Header(default=None),
                            authorization: str | None = Header(default=None)) -> dict | None:
     """Capabilities stay reachable without a token in password mode.
@@ -376,6 +436,7 @@ def _validate_upload(name: str, data: bytes) -> str:
 
 
 RECALL_ENGINE_ID = "recall_first"
+from .direct_pipeline import ENGINE_ID as DIRECT_ENGINE_ID
 _GUIDE_RESET_IDS = frozenset({"", "builtin"})
 _RECALL_TARGET_DONE = frozenset({"planned", "satisfied", "not_applicable"})
 _RECALL_TARGET_UNRESOLVED = frozenset({"unresolved", "not_planned"})
@@ -477,46 +538,10 @@ def _recall_metrics(store: RunStore, documents: list[dict], key: str) -> dict[st
     return metrics
 
 
-def _guide_enable_block_reason(version: dict) -> str | None:
-    """Machine-readable reason a version cannot be enabled (``None`` = enableable)."""
-    if version["status"] not in guide_store.ENABLEABLE_STATUSES:
-        return "GUIDE_NOT_PARSED"
-    if version["qualification_status"] not in guide_store.ENABLEABLE_QUALIFICATIONS:
-        return "GUIDE_NOT_CERTIFIED"
-    return None
-
-
-def _guide_public(version: dict, *, current: bool) -> dict:
-    """Owner-facing guide metadata; server paths never appear here."""
-    issues = version.get("issues")
-    issue_count = 0
-    if isinstance(issues, dict):
-        issue_count = sum(len(issues[key]) for key in ("errors", "warnings", "coverage_gaps")
-                          if isinstance(issues.get(key), list))
-    review = version.get("review")
-    return {"id": version["id"], "built_in": bool(version["built_in"]),
-            "parent_version_id": version.get("parent_version_id", ""),
-            "filename": version["filename"],
-            "status": version["status"], "qualification_status": version["qualification_status"],
-            "certified": version["qualification_status"] in guide_store.ENABLEABLE_QUALIFICATIONS,
-            "enable_block_reason": _guide_enable_block_reason(version),
-            "review": review if isinstance(review, dict) else None,
-            "document_sha256": version["document_sha256"], "rules_sha256": version["rules_sha256"],
-            "groups": int(version.get("rules_count") or 0), "issues": issue_count,
-            "current": bool(current), "created_at": version["created_at"], "updated_at": version["updated_at"]}
-
-
 def _card_overview(document: dict | None) -> list[dict]:
-    """FL-D1078：卡版指引（guide_card_v1）的弹窗卡表概览。
-
-    与 rules_overview 同型的轻量行；`action_text` 是卡的操作正文
-    （content_requirement），供前端「操作内容」列直接上人读文本，
-    不再把「操作类型+来源段落号」机器话顶出去。
-    """
+    """Light card overview for guide payloads (empty for legacy documents)."""
     overview = []
-    if not isinstance(document, dict) or not isinstance(document.get("cards"), list):
-        return overview
-    for card in document["cards"]:
+    for card in ((document or {}).get("cards") or []):
         if not isinstance(card, dict):
             continue
         applicability = card.get("applicability") if isinstance(card.get("applicability"), dict) else {}
@@ -532,6 +557,24 @@ def _card_overview(document: dict | None) -> list[dict]:
     return overview
 
 
+def _guide_public(version: dict, *, current: bool, document: dict | None = None) -> dict:
+    """Owner-facing guide metadata; server paths never appear here."""
+    issues = version.get("issues")
+    issue_count = 0
+    if isinstance(issues, dict):
+        issue_count = sum(len(issues[key]) for key in ("errors", "warnings", "coverage_gaps")
+                          if isinstance(issues.get(key), list))
+    return {"id": version["id"], "built_in": bool(version["built_in"]),
+            "parent_version_id": version.get("parent_version_id", ""),
+            "filename": version["filename"],
+            "status": version["status"], "qualification_status": version["qualification_status"],
+            "document_sha256": version["document_sha256"], "rules_sha256": version["rules_sha256"],
+            "groups": int(version.get("rules_count") or 0), "issues": issue_count,
+            "guide_schema": str(version.get("schema_version") or ""),
+            "cards_overview": _card_overview(document),
+            "current": bool(current), "created_at": version["created_at"], "updated_at": version["updated_at"]}
+
+
 def _rules_overview(store: RunStore, version_id: str) -> list[dict]:
     """Per-rule operation counts from the parsed document; empty when not parsed."""
     try:
@@ -540,6 +583,15 @@ def _rules_overview(store: RunStore, version_id: str) -> list[dict]:
         return []
     groups = document.get("groups") if isinstance(document, dict) else None
     overview: list[dict] = []
+    if isinstance(document, dict) and document.get("schema_version") == "guide_card_v1":
+        for card in document.get("cards") or []:
+            if not isinstance(card, dict):
+                continue
+            action = card.get("action") if isinstance(card.get("action"), dict) else {}
+            overview.append({"card_id": card.get("card_id"), "title": card.get("title"),
+                             "action": action.get("type"),
+                             "locator_quotes": len((card.get("target") or {}).get("locator_quotes") or [])})
+        return overview
     for group in groups if isinstance(groups, list) else []:
         if not isinstance(group, dict):
             continue
@@ -753,8 +805,16 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
 
     def _apply_selection(owner: str, batch_id: str, document_id: str,
                          decisions: list[dict] | None, *, expected_epoch: int | None = None,
-                         expected_manifest_hash: str | None = None) -> dict:
+                         expected_manifest_hash: str | None = None,
+                         foreign_decisions: dict | None = None) -> dict:
         path, report = _redline_for(owner, batch_id, document_id)
+        if foreign_decisions is not None:
+            block = report.get("direct_edit") if isinstance(report.get("direct_edit"), dict) else {}
+            if report.get("report_contract") == "direct_edit_v1" \
+                    and block.get("revision_tier") == "normalized_base":
+                # 拍板 C：normalized_base 档原修订已随基底归一，独立选择只放行
+                # 我方修订；foreign_decisions 一律拒绝。
+                raise Conflict("FOREIGN_DECISIONS_UNSUPPORTED_TIER")
         manifests = _manifests_from_report(report)
         chosen = decisions if decisions is not None else selective_accept_all(str(path), report)
         verdict = resolve_selection(manifests, chosen, client_ids=decisions is not None)
@@ -771,7 +831,8 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
         target = temp_dir / "selected_final.docx"
         derived_redline = temp_dir / "selected_redline.docx"
         try:
-            result = generate_selected_artifact(path, target, report, verdict.decisions)
+            result = generate_selected_artifact(path, target, report, verdict.decisions,
+                                                foreign_decisions=foreign_decisions)
             # The engine redline always stays available as the full record of what
             # the engine planned. A second revision file is only worth publishing
             # when the user actually departed from "accept everything": otherwise it
@@ -779,7 +840,8 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
             has_selected_redline = _selection_overrides_default(report, verdict.decisions,
                                                                  result.rejected)
             if has_selected_redline:
-                generate_selected_redline(path, derived_redline, report, verdict.decisions)
+                generate_selected_redline(path, derived_redline, report, verdict.decisions,
+                                          foreign_decisions=foreign_decisions)
             published = store.publish_selected_artifacts(
                 owner, batch_id, document_id, final=target,
                 redline=derived_redline if has_selected_redline else None,
@@ -819,13 +881,21 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
 
     def guide_items(owner: str) -> list[dict]:
         current = guide_store.current_guide(store, owner)
-        return [_guide_public(version, current=version["id"] == current["id"])
+        def document_for(version: dict) -> dict | None:
+            if str(version.get("schema_version") or "") != "guide_card_v1":
+                return None
+            try:
+                return guide_store.guide_document(store, version["id"])
+            except (KeyError, StoreError):
+                return None
+        return [_guide_public(version, current=version["id"] == current["id"],
+                              document=document_for(version))
                 for version in guide_store.list_versions(store, owner)]
 
     def guide_settings(owner: str) -> dict:
         items = guide_items(owner)
         current = next((item for item in items if item["current"]), items[0] if items else None)
-        return {"current": current, "available": items, "engine_id": RECALL_ENGINE_ID}
+        return {"current": current, "available": items, "engine_id": DIRECT_ENGINE_ID}
 
     @application.get("/api/capabilities")
     def capabilities(identity: dict | None = Depends(_capabilities_identity)):
@@ -839,15 +909,23 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
         # or expose them (a broken legacy file must not break the engine).
         try:
             current = guide_store.current_guide(store, identity["id"])
+            document = None
+            if str(current.get("schema_version") or "") == "guide_card_v1":
+                try:
+                    document = guide_store.guide_document(store, current["id"])
+                except (KeyError, StoreError):
+                    document = None
             guide = {"version_id": current["id"], "built_in": bool(current["built_in"]),
                      "status": current["status"], "rules_sha256": current["rules_sha256"],
-                     "groups": int(current.get("rules_count") or 0), "filename": current["filename"]}
+                     "groups": int(current.get("rules_count") or 0), "filename": current["filename"],
+                     "guide_schema": str(current.get("schema_version") or ""),
+                     "cards_overview": _card_overview(document)}
         except (KeyError, OSError, ValueError, StoreError):
             # A broken guide installation must not hide the rest of capabilities.
             guide = None
         enabled = bool(guide) and guide.get("status") in {"parsed", "released"}
         engine = {
-            "id": RECALL_ENGINE_ID,
+            "id": DIRECT_ENGINE_ID,
             "rule_source": "guide",
             "guide": guide,
             "delivery_mode": "formal" if enabled else "unavailable",
@@ -1157,18 +1235,17 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
     def get_guide(version_id: str, user: str = Depends(_user)):
         version = visible_guide(user, version_id)
         current = guide_store.current_guide(store, user)
-        item = _guide_public(version, current=version["id"] == current["id"])
+        document = None
+        if str(version.get("schema_version") or "") == "guide_card_v1":
+            try:
+                document = guide_store.guide_document(store, version_id)
+            except (KeyError, StoreError):
+                document = None
+        item = _guide_public(version, current=version["id"] == current["id"],
+                           document=document)
         issues = version.get("issues")
         item["issues_detail"] = issues if isinstance(issues, dict) else {}
         item["rules_overview"] = _rules_overview(store, version_id)
-        # FL-D1078：卡版指引详情挂卡表数据源（组版指引为空数组）
-        try:
-            document = guide_store.guide_document(store, version_id)
-        except (KeyError, StoreError):
-            document = None
-        item["cards_overview"] = _card_overview(document)
-        if isinstance(document, dict) and document.get("schema_version"):
-            item["guide_schema"] = str(document["schema_version"])
         prompts = version.get("prompt_versions")
         item["prompt_versions"] = prompts if isinstance(prompts, dict) else {}
         return item
@@ -1253,7 +1330,10 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
     @application.put("/api/settings/guide")
     def update_guide_settings(payload: GuideSettingRequest, user: str = Depends(_user)):
         requested = (payload.version_id or "").strip()
-        target = (guide_store.BUILTIN_GUIDE_ID if requested in _GUIDE_RESET_IDS | {guide_store.BUILTIN_GUIDE_ID}
+        # A settings reset now targets the executable built-in card pack; the
+        # legacy built-in remains visible as read-only history.
+        target = (guide_store.BUILTIN_CARD_DEFAULT_ID
+                  if requested in _GUIDE_RESET_IDS | {guide_store.BUILTIN_GUIDE_ID}
                   else requested)
         try:
             guide_store.set_current_guide(store, user, target)
@@ -1325,13 +1405,16 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
         engine = (payload.engine_id or "").strip()
         ruleset_version = (payload.ruleset_version or "").strip()
         if ruleset_version:
-            # The legacy rulesets were retired from the runtime; the guide-bound
-            # engine is the only way to create a task now.
+            # The legacy rulesets were retired from the runtime; the direct-
+            # through card engine is the only way to create a task now.
             raise HTTPException(422, "RULESET_RETIRED")
         if not engine:
             raise HTTPException(422, "ENGINE_REQUIRED")
-        if engine != RECALL_ENGINE_ID:
+        if engine not in {RECALL_ENGINE_ID, DIRECT_ENGINE_ID}:
             raise HTTPException(422, "ENGINE_UNSUPPORTED")
+        # ``recall_first`` is accepted as the old request name and maps onto
+        # the direct-through engine; tasks are always created bound to it.
+        engine = DIRECT_ENGINE_ID
         try:
             return task_service.create_task(user, payload.name,
                                             [f.model_dump() for f in payload.files],
@@ -1428,6 +1511,246 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
         batch_id, _ = task_document_context(user, task_id, document_id)
         return document_accept_all(batch_id, document_id, payload=payload, user=user)
 
+    _admin_throttle = _AdminThrottle()
+
+    @application.get("/api/admin/system-guide")
+    def admin_system_guide(admin: dict = Depends(_admin_strict)):
+        from . import guide_store as _gs
+        return {"current": _gs.get_system_default_guide(store),
+                "versions": _gs.list_enableable_versions(store)}
+
+    @application.put("/api/admin/system-guide")
+    def admin_system_guide_set(payload: AdminSystemGuideRequest, admin: dict = Depends(_admin_strict)):
+        from . import guide_store as _gs
+        actor = admin.get("username") or admin.get("id") or "admin"
+        _admin_throttle.check(actor)
+        version_id = (payload.version_id or "").strip()
+        try:
+            result = _gs.set_system_default_guide(store, version_id)
+        except KeyError as exc:
+            raise HTTPException(404, "guide version not found") from exc
+        except ValueError as exc:
+            raise HTTPException(409, str(exc)) from exc
+        tasks.admin_audit(actor, "admin_system_guide_set", "", "",
+                          f"version_id={version_id},cards={result['cards']}")
+        return result
+
+    @application.post("/api/admin/tasks/{task_id}/pause")
+    def admin_pause_task(task_id: str, admin: dict = Depends(_admin_strict)):
+        actor = admin.get("username") or "admin"
+        _admin_throttle.check(actor)
+        try:
+            return tasks.admin_pause_task(actor, task_id)
+        except NotFound as exc:
+            raise HTTPException(404, "task not found") from exc
+        except Conflict as exc:
+            raise_api_error(409, exc, fallback="CONFLICT")
+
+    @application.post("/api/admin/tasks/{task_id}/resume")
+    def admin_resume_task(task_id: str, admin: dict = Depends(_admin_strict)):
+        actor = admin.get("username") or "admin"
+        _admin_throttle.check(actor)
+        try:
+            return tasks.admin_resume_task(actor, task_id)
+        except NotFound as exc:
+            raise HTTPException(404, "task not found") from exc
+        except Conflict as exc:
+            raise_api_error(409, exc, fallback="CONFLICT")
+
+    @application.post("/api/admin/tasks/{task_id}/cancel")
+    def admin_cancel_task(task_id: str, admin: dict = Depends(_admin_strict)):
+        actor = admin.get("username") or "admin"
+        _admin_throttle.check(actor)
+        try:
+            return tasks.admin_cancel_task(actor, task_id)
+        except NotFound as exc:
+            raise HTTPException(404, "task not found") from exc
+        except Conflict as exc:
+            raise_api_error(409, exc, fallback="CONFLICT")
+
+    @application.post("/api/admin/users/{user_id}/enable")
+    def admin_enable_user(user_id: str, admin: dict = Depends(_admin_strict)):
+        from .auth import LastAdminError, UserNotFound
+        actor = admin.get("username") or "admin"
+        _admin_throttle.check(actor)
+        try:
+            record = application.state.users.set_disabled(user_id, False)
+        except UserNotFound as exc:
+            raise HTTPException(404, "user not found") from exc
+        except LastAdminError as exc:
+            raise_api_error(409, exc, fallback="CONFLICT")
+        tasks.admin_audit(actor, "admin_user_enable", "", user_id)
+        return {**{k: record.get(k) for k in ("id", "username", "role", "disabled")},
+                "must_change_password": bool(record.get("must_change_password", False))}
+
+    @application.post("/api/admin/users/{user_id}/reset-password")
+    def admin_reset_password(user_id: str, payload: AdminPasswordRequest,
+                             admin: dict = Depends(_admin_strict)):
+        from .auth import UserNotFound, ValidationError
+        actor = admin.get("username") or "admin"
+        _admin_throttle.check(actor)
+        try:
+            record = application.state.users.admin_set_password(
+                user_id, payload.password, must_change_password=True)
+            application.state.sessions.revoke_user_sessions(user_id)
+        except UserNotFound as exc:
+            raise_api_error(404, exc, fallback="NOT_FOUND")
+        except ValidationError as exc:
+            raise_api_error(422, exc, fallback="INVALID_REQUEST")
+        tasks.admin_audit(actor, "admin_user_reset_password", "", user_id)
+        return {"id": record["id"], "must_change_password": record["must_change_password"],
+                "role": record["role"], "disabled": record["disabled"]}
+
+    @application.post("/api/admin/users/{user_id}/role")
+    def admin_set_role(user_id: str, payload: AdminRoleRequest,
+                       admin: dict = Depends(_admin_strict)):
+        from .auth import LastAdminError, UserNotFound, ValidationError
+        actor = admin.get("username") or "admin"
+        _admin_throttle.check(actor)
+        try:
+            record = application.state.users.admin_set_role(user_id, payload.role)
+        except UserNotFound as exc:
+            raise_api_error(404, exc, fallback="NOT_FOUND")
+        except (LastAdminError, ValidationError) as exc:
+            raise_api_error(409, exc, fallback="CONFLICT")
+        tasks.admin_audit(actor, "admin_user_set_role", "", user_id, f"role={payload.role}")
+        return {k: record.get(k) for k in ("id", "username", "role", "disabled")}
+
+    @application.get("/api/admin/model-usage")
+    def admin_model_usage(
+        from_ts: float | None = Query(default=None, description="from epoch seconds"),
+        to_ts: float | None = Query(default=None, description="to epoch seconds"),
+        model: str = Query(default="", description="configured_model exact match"),
+        task_type: str = Query(default="", description="task_type exact match"),
+        admin: dict = Depends(_admin_strict)):
+        return tasks.admin_model_usage(from_ts, to_ts, model or "", task_type or "")
+
+    @application.get("/api/admin/system/status")
+    def admin_system_status(admin: dict = Depends(_admin_strict)):
+        return tasks.admin_system_status()
+
+    @application.get("/api/admin/system-status")
+    def admin_system_status_alias(admin: dict = Depends(_admin_strict)):
+        # 前端原路径别名：同响应体、同源审计。
+        return admin_system_status(admin)
+
+    @application.get("/api/admin/guides")
+    def admin_guides_alias(admin: dict = Depends(_admin_strict)):
+        # 前端原路径别名：与 GET /api/admin/system-guide 响应体同源。
+        return admin_system_guide(admin)
+
+    @application.get("/api/admin/system-model")
+    def admin_system_model_get(admin: dict = Depends(_admin_strict)):
+        """系统默认模型（公开面，api_key 不回显）。"""
+        prefs = model_settings.snapshot_system_default(store)
+        if not prefs:
+            return {"current": None, "available_fields": list(
+                model_settings.Preferences.model_fields)}
+        try:
+            view = model_settings.public_settings(store, model_settings._SYSTEM_DEFAULT_OWNER)
+        except Exception:
+            view = prefs
+        return {"current": view, "available_fields": list(model_settings.Preferences.model_fields)}
+
+    @application.put("/api/admin/system-model")
+    def admin_system_model_put(payload: model_settings.RolePreferences,
+                               admin: dict = Depends(_admin_strict)):
+        """管理员保存系统默认模型：保存前网关联通冒烟，失败拒存。"""
+        actor = admin.get("username") or "admin"
+        _admin_throttle.check(actor)
+        try:
+            result = model_settings.save_system_default(store, payload.model_dump())
+        except model_settings.ModelSettingsError as exc:
+            reason = str(exc)
+            raise HTTPException(409, reason) from exc
+        tasks.admin_audit(actor, "admin_system_model_put", "", "",
+                          str(payload.model_dump())[:400])
+        return {"saved": True, "result": result}
+
+    @application.delete("/api/admin/system-model")
+    def admin_system_model_reset(admin: dict = Depends(_admin_strict)):
+        actor = admin.get("username") or "admin"
+        _admin_throttle.check(actor)
+        result = model_settings.reset_system_default(store)
+        tasks.admin_audit(actor, "admin_system_model_reset")
+        return {"reset": True, "result": result}
+
+    @application.get("/api/admin/audit")
+    def admin_audit_list(page: int = 1, page_size: int = 50,
+                         admin: dict = Depends(_admin_strict)):
+        if page < 1 or not 1 <= page_size <= 500:
+            raise HTTPException(422, "invalid pagination")
+        return tasks.admin_audit_list(page=page, page_size=page_size)
+
+    @application.get("/api/admin/tasks/{task_id}/artifacts")
+    def admin_task_artifacts(task_id: str, admin: dict = Depends(_admin_strict)):
+        try:
+            return tasks.admin_artifacts(task_id)
+        except NotFound as exc:
+            raise HTTPException(404, "task not found") from exc
+
+    @application.get("/api/admin/tasks/{task_id}/artifacts/{kind}/{document_id}")
+    def admin_task_artifact_download(task_id: str, kind: str, document_id: str,
+                                      admin: dict = Depends(_admin_strict)):
+        actor = admin.get("username") or "admin"
+        try:
+            data, digest = tasks.admin_artifact_download(task_id, document_id, kind, actor)
+        except NotFound as exc:
+            raise HTTPException(404, "document not found") from exc
+        except Conflict as exc:
+            raise_api_error(409, exc, fallback="CONFLICT")
+        media = ("application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                 if kind.endswith((".docx", "final", "redline")) else "application/json")
+        return Response(content=data, media_type=media,
+                        headers={"ETag": digest,
+                                 "Cache-Control": "private, no-store"})
+
+    @application.delete("/api/admin/tasks/{task_id}")
+    def admin_delete_task(task_id: str, payload: AdminTaskDeleteConfirm,
+                          admin: dict = Depends(_admin_strict)):
+        actor = admin.get("username") or "admin"
+        _admin_throttle.check(actor)
+        try:
+            return tasks.admin_delete_task(actor, task_id, confirm=payload.confirm)
+        except NotFound as exc:
+            raise HTTPException(404, "task not found") from exc
+        except ValueError as exc:
+            raise HTTPException(409, str(exc)) from exc
+
+    @application.get("/api/admin/tasks")
+    def admin_tasks_list(q: str = "", status: str | None = None,
+                         page: int = 1, page_size: int = 50,
+                         admin: dict = Depends(_admin_strict)):
+        """管理员任务看板（分页+q+状态筛。"""
+        if page < 1 or not 1 <= page_size <= 200:
+            raise HTTPException(422, "invalid pagination")
+        return tasks.admin_tasks(q=q, status=status, page=page, page_size=page_size)
+
+    @application.get("/api/admin/tasks/{task_id}/documents")
+    def admin_task_documents(task_id: str, admin: dict = Depends(_admin_strict)):
+        """管理员视角单任务文档行。"""
+        try:
+            return tasks.admin_documents(task_id)
+        except NotFound as exc:
+            raise HTTPException(404, "task not found") from exc
+
+    @application.post("/api/admin/documents/{document_id}/retry", status_code=202)
+    def admin_document_retry(document_id: str, admin: dict = Depends(_admin_strict)):
+        """管理员强制重试：failed/retry_wait→202 回排队；running/succeeded→409。"""
+        actor = admin.get("username") or admin.get("id") or "admin"
+        _admin_throttle.check(actor)
+        try:
+            return tasks.admin_retry_document(actor, document_id)
+        except NotFound as exc:
+            raise HTTPException(404, "document not found") from exc
+        except Conflict as exc:
+            raise_api_error(409, exc, fallback="CONFLICT")
+
+    @application.post("/api/tasks/{task_id}/documents/{document_id}/retry", status_code=202)
+    def task_document_retry(task_id: str, document_id: str, user: str = Depends(_user)):
+        """手动重试终态失败的合同：仅 failed + 未达上限 + 属主；回排队列。"""
+        return task_call(tasks.retry_document, user, task_id, document_id)
+
     @application.get("/api/tasks/{task_id}/documents/{document_id}/download/{kind}")
     def task_document_download(task_id: str, document_id: str, kind: str, user: str = Depends(_user)):
         batch_id, _ = task_document_context(user, task_id, document_id)
@@ -1454,17 +1777,33 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
                 data = await upload.read(MAX_UPLOAD_BYTES + 1)
                 total_bytes += len(data)
                 name = Path((upload.filename or "").replace("\\", "/")).name
+                original_size = len(data)
                 error = None
-                try:
-                    validate_docx_upload(name, data)
-                    # Documents that already carry another department's tracked
-                    # changes are accepted: FundLex overlays its own revisions
-                    # (distinct author) instead of rejecting the upload.
-                except UploadValidationError as exc:
-                    error = exc.code
+                conversion_state = ""
+                from .upload_validation import LEGACY_DOC_MAGIC
+                if name.lower().endswith(".doc") or data.startswith(LEGACY_DOC_MAGIC):
+                    # 异步转换（用户裁决）：CDF 原件原样接收入队，
+                    # 请求期内不做任何转换；Worker 第一步转换（300s+一次重试）。
+                    # conversions 只做名字/尺寸闸门，包安全接管在 Worker 侧。
+                    if not Path(name).name:
+                        error = "UNSUPPORTED_FILE_FORMAT"
+                    elif len(data) > MAX_UPLOAD_BYTES:
+                        error = "UPLOAD_REQUEST_SIZE_LIMIT"
+                    else:
+                        conversion_state = "pending_convert"
+                else:
+                    try:
+                        # Documents that already carry another department's tracked
+                        # changes are accepted: FundLex overlays its own revisions
+                        # (distinct author) instead of rejecting the upload.
+                        name, data, _c = normalize_contract_upload(name, data)
+                    except UploadValidationError as exc:
+                        error = exc.code
                 if total_bytes > MAX_BATCH_BYTES:
                     error = "UPLOAD_REQUEST_SIZE_LIMIT"
-                uploads.append({"client_id": cid, "name": name, "data": data, "error_code": error})
+                uploads.append({"client_id": cid, "name": name, "data": data,
+                                "original_size": original_size,
+                                "conversion_state": conversion_state, "error_code": error})
             return task_call(tasks.uploads, user, task_id, uploads)
         finally:
             for upload in files:
@@ -1502,7 +1841,10 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
             count = 0
             # 用户视角的结果清单（行构造单一事实源在 fundlex.edit_summary）：
             # 去掉了 job_status/artifact 种类等技术列。
-            rows = [list(RESULT_LIST_HEADER)]
+            # 表头在遍历后按任务实际产物决定：直通任务=7 列（含「修改详情」），
+            # 历史任务=旧 6 列；行与表头始终同一构造器，禁止错列。
+            rows: list[list[str]] = []
+            header_mode = "legacy"
             # The accepted-revision contracts go into their own folder so the deliverable
             # is the same shape as the offline package: 结果总览.md + 结果清单.csv +
             # 最终版（接受修订后）/<合同>.docx + 逐份修改说明/<合同>/.
@@ -1531,6 +1873,11 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
                             report = store.get_report(user, doc["batch_id"], doc["document_id"])
                         except (NotFound, ReportJsonError):
                             report = {}
+                    direct = bool(isinstance(report, dict)
+                                  and report.get("report_contract") == "direct_edit_v1")
+                    if direct:
+                        header_mode = "direct"
+                        from . import direct_report
                     # Reuse digests verified earlier in this request for the
                     # pair checks of sibling kinds of the same document.
                     verified: dict[str, str] = {}
@@ -1544,24 +1891,37 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
                                                            verified_hashes=verified)
                         verified[kind] = digest
                         suffix = ".docx" if kind.endswith(("final", "redline")) else ".md"
-                        _, arcname = archive_entry(kind, name, suffix,
-                                                  delivery_status=doc["delivery_status"])
+                        if direct:
+                            # 直通命名口径：最终版=全部修订已定案，带痕版保留修订标记。
+                            arcname = (f"最终版（全部修订已定案）/{name}{suffix}" if kind == "final"
+                                       else f"带痕版（保留全部修订标记）/{name}{suffix}" if kind == "redline"
+                                       else f"{name}/{name}-{kind}{suffix}")
+                        else:
+                            _, arcname = archive_entry(kind, name, suffix,
+                                                      delivery_status=doc["delivery_status"])
                         archive.writestr(arcname, data)
                         count += 1
-                    detail_rows = edit_detail_rows(report)
+                    detail_rows = (direct_report.edit_detail_rows(report) if direct
+                                   else edit_detail_rows(report))
                     if detail_rows:
                         detail = io.StringIO()
+                        header = list(direct_report.EDIT_DETAIL_HEADER) if direct else list(EDIT_DETAIL_HEADER)
                         csv.writer(detail).writerows(
                             [csv_safe_cell(cell) for cell in row]
-                            for row in [list(EDIT_DETAIL_HEADER), *detail_rows])
+                            for row in [header, *detail_rows])
                         archive.writestr(f"{notes_dir}/{name}/{name}（修改说明）.csv",
                                          detail.getvalue().encode("utf-8-sig"))
                         count += 1
-                    rows.append(result_list_row(index, doc["name"], report, doc))
+                    rows.append((direct_report.result_list_row(index, doc["name"], report, doc)
+                                 if direct else result_list_row(index, doc["name"], report, doc)))
                 if not any(doc.get("document_id") for doc in docs):
                     raise Conflict("暂无可下载结果，请等待合同处理完成")
+                from . import direct_report as _direct_report
+                header = (list(_direct_report.RESULT_LIST_HEADER) if header_mode == "direct"
+                          else list(RESULT_LIST_HEADER))
                 summary = io.StringIO()
-                csv.writer(summary).writerows([csv_safe_cell(cell) for cell in row] for row in rows)
+                csv.writer(summary).writerows([csv_safe_cell(cell) for cell in row]
+                                              for row in [header, *rows])
                 archive.writestr("结果清单.csv", summary.getvalue().encode("utf-8-sig"))
                 archive.writestr("结果总览.md", task_call(tasks.report, user, task_id))
             output.seek(0)
@@ -1626,11 +1986,17 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
     @application.get("/api/batches/{batch_id}/documents/{document_id}/report")
     def document_report(batch_id: str, document_id: str, user: str = Depends(_user)):
         try:
-            return store.get_report(user, batch_id, document_id)
+            report = store.get_report(user, batch_id, document_id)
         except NotFound as exc:
             raise_api_error(404, exc, fallback="NOT_FOUND")
         except ReportJsonError as exc:
             raise_api_error(409, exc, fallback="REPORT_JSON_INVALID")
+        if report.get("report_contract") == "direct_edit_v1":
+            # 裁决 D6：直通报告查看走公开版投影，内部诊断不外泄。
+            from .direct_report import public_project
+            doc = store.get_document(user, batch_id, document_id)
+            return public_project(report, doc)
+        return report
 
     @application.get("/api/batches/{batch_id}/documents/{document_id}/revisions")
     def document_revisions(batch_id: str, document_id: str, user: str = Depends(_user)):
@@ -1651,7 +2017,8 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
         try:
             return task_call(_apply_selection, user, batch_id, document_id, decisions,
                              expected_epoch=payload.selection_epoch,
-                             expected_manifest_hash=payload.manifest_hash)
+                             expected_manifest_hash=payload.manifest_hash,
+                             foreign_decisions=payload.foreign_decisions)
         except NotFound as exc:
             raise_api_error(404, exc, fallback="NOT_FOUND")
         except Conflict as exc:
@@ -1686,11 +2053,39 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
             raise_api_error(404, exc, fallback="NOT_FOUND")
         except Conflict as exc:
             raise_api_error(409, exc, fallback="CONFLICT")
+        if kind in {"report_json", "report_md"}:
+            # 裁决 D6：直通任务的用户下载报告是公开版投影；含 skipped/诊断的
+            # 内部全量 JSON 留排障通道，不作用户件。
+            public = _public_report_download(user, batch_id, document_id, kind, data)
+            if public is not None:
+                return public
         media = "application/vnd.openxmlformats-officedocument.wordprocessingml.document" if kind in docx_kinds else ("application/json" if kind == "report_json" else "text/markdown")
         suffix = ".docx" if kind in docx_kinds else ".json" if kind == "report_json" else ".md"
         # Serve the exact bytes that were re-verified after the gate, not a path
         # that could be replaced between validation and streaming.
         return Response(content=data, media_type=media,
+                        headers={"Content-Disposition": f'attachment; filename="{document_id}_{kind}{suffix}"',
+                                 "ETag": digest, "Cache-Control": "private, no-store"})
+
+    def _public_report_download(user: str, batch_id: str, document_id: str, kind: str,
+                                data: bytes) -> Response | None:
+        from .direct_report import public_project, render_public_markdown
+        try:
+            report = json.loads(data.decode("utf-8"))
+        except (ValueError, UnicodeError):
+            return None
+        if not isinstance(report, dict) or report.get("report_contract") != "direct_edit_v1":
+            return None
+        doc = store.get_document(user, batch_id, document_id)
+        import hashlib as _hashlib
+        if kind == "report_md":
+            body = render_public_markdown(doc.get("filename") or "合同.docx", report, doc).encode("utf-8")
+            media, suffix = "text/markdown", ".md"
+        else:
+            body = json.dumps(public_project(report, doc), ensure_ascii=False, indent=2).encode("utf-8")
+            media, suffix = "application/json", ".json"
+        digest = _hashlib.sha256(body).hexdigest()
+        return Response(content=body, media_type=media,
                         headers={"Content-Disposition": f'attachment; filename="{document_id}_{kind}{suffix}"',
                                  "ETag": digest, "Cache-Control": "private, no-store"})
 

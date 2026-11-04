@@ -28,41 +28,61 @@ def _dsl_condition_supported(conditions: list[str], applicability: str) -> bool:
     return any(marker in text for marker in supported) or not text.strip()
 
 
-def classify_item(item: GuideItem, parsed_groups: list[dict[str, Any]]) -> dict[str, Any]:
+def _card_view(unit: dict[str, Any]) -> tuple[str, str, str, str]:
+    """(title, section, requirement, unit_id) for legacy groups and card docs."""
+    if "card_id" in unit or "action" in unit:
+        target = unit.get("target") or {}
+        sections = " / ".join(str(name) for name in target.get("contract_sections") or [])
+        action = unit.get("action") or {}
+        applicability = unit.get("applicability") or {}
+        requirement = " ".join([str(action.get("content_requirement") or ""),
+                                str(applicability.get("text") or "")]).strip()
+        return (str(unit.get("title") or ""), sections, requirement,
+                str(unit.get("card_id") or ""))
+    return (str(unit.get("title") or ""), str(unit.get("section_hint") or ""),
+            str(unit.get("requirement") or ""), str(unit.get("rule_id") or ""))
+
+
+def classify_item(item: GuideItem, parsed_units: list[dict[str, Any]]) -> dict[str, Any]:
     matched = []
-    for group in parsed_groups:
-        title = str(group.get("title") or "")
-        section = str(group.get("section_hint") or "")
-        requirement = str(group.get("requirement") or "")
+    for unit in parsed_units:
+        title, section, requirement, _unit_id = _card_view(unit)
         if item.title and (item.title[:30] in title or title[:30] in item.title):
-            matched.append(group)
+            matched.append(unit)
         elif item.section and section and item.section[:20] in section:
-            matched.append(group)
+            matched.append(unit)
         elif item.business_requirement and requirement and item.business_requirement[:40] in requirement:
-            matched.append(group)
-    parsed_ids = [str(group.get("rule_id") or "") for group in matched]
+            matched.append(unit)
+    parsed_ids = [_card_view(unit)[3] for unit in matched]
     if not item.new_text.strip():
         return {"classification": "GUIDE_COVERAGE_GAP", "parsed_rule_ids": parsed_ids,
                 "reason": "候选指引没有新合同文案，现有引擎无可执行目标。"}
     if not item.requirement_ids or not item.impact_ids:
         return {"classification": "GUIDE_COVERAGE_GAP", "parsed_rule_ids": parsed_ids,
                 "reason": "候选指引缺少法规或真实合同来源，不能进入引擎。"}
-    if not _dsl_condition_supported(item.conditions, item.applicability):
-        return {"classification": "ENGINE_CAPABILITY_GAP", "parsed_rule_ids": parsed_ids,
-                "reason": "候选指引含渠道/持有期限/多条件业务条件，当前 DSL 的 condition 类型无法表达。"}
     if not matched:
         return {"classification": "ENGINE_CAPABILITY_GAP", "parsed_rule_ids": [],
                 "reason": "当前 Guide Parser 未能生成可对应规则；不据此修改候选指引。"}
-    for group in matched:
-        operations = group.get("operations") or []
-        if not operations:
+    legacy = [unit for unit in matched if "operations" in unit]
+    if legacy:  # frozen guide-rules-v1 documents keep the old capability check
+        if not _dsl_condition_supported(item.conditions, item.applicability):
             return {"classification": "ENGINE_CAPABILITY_GAP", "parsed_rule_ids": parsed_ids,
-                    "reason": "解析规则没有可执行 operation。"}
-        if any(str(op.get("op")) not in {"append", "replace", "delete", "noop"} for op in operations):
-            return {"classification": "ENGINE_CAPABILITY_GAP", "parsed_rule_ids": parsed_ids,
-                    "reason": "解析规则含当前引擎不支持的 operation。"}
+                    "reason": "候选指引含渠道/持有期限/多条件业务条件，旧 DSL 的 condition 类型无法表达。"}
+        for group in legacy:
+            operations = group.get("operations") or []
+            if not operations:
+                return {"classification": "ENGINE_CAPABILITY_GAP", "parsed_rule_ids": parsed_ids,
+                        "reason": "解析规则没有可执行 operation。"}
+            if any(str(op.get("op")) not in {"append", "replace", "delete", "noop"} for op in operations):
+                return {"classification": "ENGINE_CAPABILITY_GAP", "parsed_rule_ids": parsed_ids,
+                        "reason": "解析规则含当前引擎不支持的 operation。"}
+        return {"classification": "expressible", "parsed_rule_ids": parsed_ids,
+                "reason": "解析规则在业务含义和当前 operation/condition 能力范围内可对应。"}
+    # guide_card_v1 units: natural-language conditions, no DSL ceiling.  Any
+    # matched card is expressible in the direct-through contract; the
+    # free-form channel/holding-period conditions are records, not blockers.
     return {"classification": "expressible", "parsed_rule_ids": parsed_ids,
-            "reason": "解析规则在业务含义和当前 operation/condition 能力范围内可对应。"}
+            "reason": "原子规则卡以自然语言条件表达，直通契约下可对应；条件复杂度仅为记录。"}
 
 
 def run_engine_compatibility(*, guide_docx: str | Path, items: list[GuideItem],
@@ -79,7 +99,10 @@ def run_engine_compatibility(*, guide_docx: str | Path, items: list[GuideItem],
         parse_error = f"{exc.code}:{exc.details}"
     except Exception as exc:
         parse_error = f"{type(exc).__name__}:{exc}"
-    parsed_groups = list((parse_document or {}).get("groups") or [])
+    doc_schema = str((parse_document or {}).get("schema_version") or "")
+    # guide_card_v1 exposes "cards"; frozen guide-rules-v1 documents expose "groups".
+    parsed_groups = list((parse_document or {}).get("cards") or
+                         (parse_document or {}).get("groups") or [])
     results: list[dict[str, Any]] = []
     for item in items:
         result = classify_item(item, parsed_groups)
@@ -87,7 +110,13 @@ def run_engine_compatibility(*, guide_docx: str | Path, items: list[GuideItem],
         result["source"] = "guide_parser_and_dsl"
         results.append(result)
     sample_run: dict[str, Any] = {"status": "not_run"}
-    if sample_contract and parse_document and not parse_error:
+    if doc_schema == "guide_card_v1":
+        # The legacy recall-first engine cannot consume card documents; the
+        # direct-through engine is owned by the contract-editing line.  Skip
+        # the sample run instead of silently feeding cards to the old engine.
+        sample_run = {"status": "skipped",
+                      "note": "guide_card_v1 卡包不接旧 recall-first 引擎；样例合同运行待直通引擎接线。"}
+    elif sample_contract and parse_document and not parse_error:
         try:
             from ..recall_pipeline import process_recall_first
             target = Path(output_dir or "/tmp")

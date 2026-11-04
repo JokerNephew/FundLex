@@ -109,7 +109,7 @@ CREATE INDEX IF NOT EXISTS auth_throttle_bucket_key
     ON auth_throttle (bucket, throttle_key)
 """
 
-_USER_COLUMNS = "id, username, display_name, role, disabled, created_at, updated_at"
+_USER_COLUMNS = "id, username, display_name, role, disabled, must_change_password, created_at, updated_at"
 
 _DUMMY_HASH: str | None = None
 
@@ -191,6 +191,8 @@ def _record(row: Row) -> dict:
         "display_name": row["display_name"] or "",
         "role": row["role"] or "member",
         "disabled": bool(row["disabled"]),
+        "must_change_password": bool(row["must_change_password"])
+        if "must_change_password" in row.keys() else False,
         "created_at": float(row["created_at"]),
         "updated_at": float(row["updated_at"]),
     }
@@ -207,6 +209,12 @@ class UserStore:
     def ensure_schema(self) -> None:
         with self.db.connect() as conn:
             conn.executescript(USERS_SCHEMA)
+            try:
+                conn.execute("ALTER TABLE users ADD COLUMN must_change_password INTEGER NOT NULL DEFAULT 0")
+            except Exception:
+                present = {row["name"] for row in conn.execute("PRAGMA table_info(users)")}
+                if "must_change_password" not in present:
+                    raise
 
     def _fetch(self, column: str, value) -> Row | None:
         with self.db.connect() as conn:
@@ -263,6 +271,45 @@ class UserStore:
             raise AccountDisabled("account is disabled")
         return _record(row)
 
+    def admin_set_role(self, user_id: str, role: str) -> dict:
+        """Admin 变更角色。role 枚举校验；把最后的启用管理员降级会被拒。"""
+        role = _validate_role(role)
+        now = float(self._clock())
+        with self.db.connect() as conn:
+            if self.db.dialect != "mysql":
+                conn.execute("BEGIN IMMEDIATE")
+            row = conn.execute(f"SELECT {_USER_COLUMNS} FROM users WHERE id=?",
+                               (user_id,)).fetchone()
+            if row is None:
+                raise UserNotFound(user_id)
+            if bool(row["role"] == "admin") and role != "admin":
+                admins = conn.execute(
+                    "SELECT id FROM users WHERE role='admin' AND disabled=0").fetchall()
+                if len(admins) <= 1 and not row["disabled"]:
+                    raise LastAdminError(user_id)
+            conn.execute("UPDATE users SET role=?, updated_at=? WHERE id=?",
+                         (role, now, user_id))
+            updated = conn.execute(f"SELECT {_USER_COLUMNS} FROM users WHERE id=?",
+                                   (user_id,)).fetchone()
+        return _record(updated)
+
+    def admin_set_password(self, user_id: str, new_password: str,
+                           *, must_change_password: bool = True) -> dict:
+        """Admin 直接设定新密码；标记下次登录必改。"""
+        new_password = _validate_password(new_password)
+        now = float(self._clock())
+        with self.db.connect() as conn:
+            row = conn.execute("SELECT id FROM users WHERE id=?", (user_id,)).fetchone()
+            if row is None:
+                raise UserNotFound(user_id)
+            conn.execute("""UPDATE users SET password_hash=?,
+                must_change_password=?, updated_at=? WHERE id=?""",
+                (hash_password(new_password), 1 if must_change_password else 0,
+                 now, user_id))
+            updated = conn.execute(f"SELECT {_USER_COLUMNS} FROM users WHERE id=?",
+                                   (user_id,)).fetchone()
+        return _record(updated)
+
     def change_password(self, user_id: str, old_password: str, new_password: str) -> dict:
         _validate_password(new_password)
         row = self._fetch("id", user_id)
@@ -272,7 +319,7 @@ class UserStore:
             raise InvalidCredentials("current password is incorrect")
         now = float(self._clock())
         with self.db.connect() as conn:
-            conn.execute("UPDATE users SET password_hash=?, updated_at=? WHERE id=?",
+            conn.execute("UPDATE users SET password_hash=?, must_change_password=0, updated_at=? WHERE id=?",
                          (hash_password(new_password), now, user_id))
         record = self.get(user_id)
         if record is None:  # pragma: no cover - the row exists in this call

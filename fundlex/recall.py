@@ -117,11 +117,6 @@ def compact_offsets(span_text: str) -> tuple[str, list[int]]:
     return "".join(chars), index
 
 
-def _nfkc_compact(value: str) -> str:
-    import unicodedata
-    return _compact(unicodedata.normalize("NFKC", value))
-
-
 def _raw_to_compact(compact_map: list[int], raw: int) -> int:
     """Inverse of ``compact_map``: the compact offset for a raw document offset.
 
@@ -5130,25 +5125,6 @@ def _looks_like_heading(text: str) -> bool:
     return bool(re.match(r"^[一二三四五六七八九十]+[、.]", compacted))
 
 
-def _section_for_hint(sections: Sequence[Section], hint: Any) -> Section | None:
-    """The section whose title contains the rule's section hint (longest match wins)."""
-    text = str(hint or "").strip()
-    if not text:
-        return None
-    def clean(value: str) -> str:
-        return re.sub(r"[\ufff9-\ufffb\u200b-\u200f\u202a-\u202e\ufeff]", "",
-                      _compact(value)).replace("的", "")
-    compact_hint = clean(text)
-    best: Section | None = None
-    best_length = 0
-    for section in sections:
-        compact_title = clean(section.title)
-        if compact_hint and compact_hint in compact_title:
-            if len(compact_title) > best_length:
-                best, best_length = section, len(compact_title)
-    return best
-
-
 def _reference_continuation(rule: dict, facts: "Facts | None", matched_quote: str,
                             span: Any, compact_text: dict[str, str],
                             by_location: dict[str, Any]) -> tuple[str, int, int] | None:
@@ -5892,21 +5868,6 @@ def _sequence_ratio(left: str, right: str) -> float:
     return SequenceMatcher(None, left, right).ratio()
 
 
-def _deterministic_new_text(rule: dict, facts: Facts) -> str | None:
-    """The rule's new text when every operation carries a fixed replacement."""
-    pieces: list[str] = []
-    for operation in rule.get("operations") or []:
-        if not condition_matches(operation.get("condition"), facts):
-            continue
-        if operation.get("op") not in {"replace", "append"}:
-            return None
-        instantiated, issues = instantiate_slots(str(operation.get("new_text") or ""), facts)
-        if issues or not instantiated:
-            return None
-        pieces.append(instantiated)
-    return "".join(pieces) or None
-
-
 def composite_fragment(rule: dict, facts: Facts, paragraph: ParagraphSpan,
                        hit_start: int, hit_end: int) -> tuple[str, str] | None:
     """Explain a composite reference slice: (compact prefix, matched slice).
@@ -6606,21 +6567,6 @@ def _splice_fragment(actual: str, old_text: str, new_text: str) -> str | None:
         return prefix + suffix
     return (prefix + append_separator(prefix, new_text) + new_text
             + append_separator(new_text, suffix) + suffix)
-
-
-def _composite_reference(rule: dict, facts: Facts, target: Target,
-                         inspection: DocumentInspection) -> tuple[str, tuple[str, ...]] | None:
-    """The operation reference text a composite target belongs to, plus its parts."""
-    span = inspection.by_location(target.location)
-    for operation in rule.get("operations") or []:
-        if not condition_matches(operation.get("condition"), facts):
-            continue
-        old_text = str(operation.get("old_text") or "")
-        if len(_compact(old_text)) < 8:
-            continue
-        if _compact(target.quote) and _compact(target.quote) in _compact(old_text):
-            return old_text, target.composite or (target.location,)
-    return None
 
 
 def _g11_bearer_end(text: str, operation: Mapping[str, Any]) -> int | None:

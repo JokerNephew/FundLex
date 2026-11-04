@@ -44,6 +44,7 @@ from .docx import (
     _accept_all_revision_parts,
     _overlay_revision_inventory,
     _read_parts,
+    _revision_markers,
     _sha,
     _validate_package,
     _validate_revision_manifest,
@@ -56,6 +57,95 @@ from .docx import (
 ACCEPT = "accept"
 REJECT = "reject"
 
+# Kinds the DOCX overlay path preserves for another author (see
+# fundlex.docx.OVERLAY_PROPERTY_CHANGES) and this module can therefore
+# settle independently.  Inline w:ins / w:del are handled separately.
+_FOREIGN_PROPERTY_CHANGES = {
+    "trPrChange", "tcPrChange", "pPrChange", "rPrChange", "tblPrChange",
+    "sectPrChange", "numberingChange", "tblGridChange",
+}
+
+
+def _foreign_key(entry: Mapping[str, Any]) -> str:
+    """Stable address of a bound source revision: part|kind|id."""
+    return f"{entry.get('part', '')}|{entry.get('kind', '')}|{entry.get('id', '')}"
+
+
+def _marker_key(part: str, marker: etree._Element) -> str:
+    return f"{part}|{etree.QName(marker).localname}|{marker.get(Q('id'), '')}"
+
+
+def _normalize_foreign_decisions(foreign_decisions: Mapping[Any, Any],
+                                 source_entries: Sequence[Mapping[str, str]]) -> dict[str, str]:
+    """Validate decisions addressed at pre-existing (foreign) revisions.
+
+    Every key must address a revision in the generation-persisted whitelist
+    (``source_revision_manifest``); unknown keys fail closed instead of being
+    silently ignored.
+    """
+    known = {_foreign_key(entry) for entry in source_entries}
+    normalized: dict[str, str] = {}
+    if not isinstance(foreign_decisions, Mapping):
+        raise DocxError("FOREIGN_SELECTION_INVALID_DECISION")
+    for raw_key, raw_verdict in foreign_decisions.items():
+        key = str(raw_key)
+        if key not in known:
+            raise DocxError("FOREIGN_SELECTION_UNKNOWN_REVISION", key)
+        verdict = str(raw_verdict).strip().lower()
+        if verdict not in {ACCEPT, REJECT}:
+            raise DocxError("FOREIGN_SELECTION_INVALID_VERDICT", key)
+        if key in normalized:
+            raise DocxError("FOREIGN_SELECTION_INVALID_DECISION", key)
+        normalized[key] = verdict
+    return normalized
+
+
+def _accept_foreign_marker(marker: etree._Element) -> None:
+    """Accept another author's revision in place (keep / drop its record)."""
+    local = etree.QName(marker).localname
+    parent = marker.getparent()
+    if parent is None:
+        raise DocxError("REVISION_STRUCTURE_INVALID")
+    if local == "ins":
+        _unwrap_revision(marker, restoring_delete=False)
+    elif local == "del" or local in _FOREIGN_PROPERTY_CHANGES:
+        # Accepting a deletion keeps the post-edit text; accepting a property
+        # change keeps the current properties.  Both just drop the record.
+        parent.remove(marker)
+    else:
+        raise DocxError("FOREIGN_REVISION_DECISION_UNSUPPORTED", local)
+
+
+def _reject_foreign_marker(marker: etree._Element) -> None:
+    """Reject another author's revision, restoring the pre-edit state."""
+    local = etree.QName(marker).localname
+    parent = marker.getparent()
+    if parent is None:
+        raise DocxError("REVISION_STRUCTURE_INVALID")
+    if local == "ins":
+        parent.remove(marker)  # the inserted content disappears
+    elif local == "del":
+        _unwrap_revision(marker, restoring_delete=True)  # old text returns
+    elif local in _FOREIGN_PROPERTY_CHANGES:
+        # The marker carries the OLD property snapshot as its single child
+        # element whose tag equals the container's tag (w:pPr inside
+        # w:pPrChange inside the current w:pPr, and so on for tc/tr/tbl/sectPr,
+        # numPr and tblGrid).  Restore: swap the container's children back to
+        # the snapshot, then drop the record.
+        snapshot = next((child for child in marker
+                         if isinstance(child.tag, str) and child.tag == parent.tag), None)
+        if snapshot is None:
+            raise DocxError("REVISION_STRUCTURE_INVALID", local)
+        restored = [deepcopy(child) for child in snapshot]
+        for child in list(parent):
+            if child is not marker:
+                parent.remove(child)
+        for index, node in enumerate(restored):
+            parent.insert(index, node)
+        parent.remove(marker)
+    else:
+        raise DocxError("FOREIGN_REVISION_DECISION_UNSUPPORTED", local)
+
 
 @dataclass(frozen=True)
 class SelectionResult:
@@ -66,6 +156,13 @@ class SelectionResult:
     absent: tuple[int, ...]
     path: str
     sha256: str
+    #: Layered mode only (`foreign_decisions` passed): other authors' revisions
+    #: addressed by the caller, keyed ``part|kind|id``.  Legacy mode leaves
+    #: these empty and keeps its historical "foreign revisions are accepted"
+    #: behavior.
+    foreign_accepted: tuple[str, ...] = ()
+    foreign_rejected: tuple[str, ...] = ()
+    foreign_kept: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -417,6 +514,88 @@ def apply_decisions(root: etree._Element, manifests: Sequence[Mapping[str, Any]]
     return tuple(int(rid) for rid in per_id if rid not in seen)
 
 
+def _parse_xml_roots(parts: Mapping[str, bytes], limits: ZipLimits) -> dict[str, etree._Element]:
+    return {name: _xml(data, limits) for name, data in parts.items()
+            if name.endswith(".xml")}
+
+
+def _apply_foreign_layer(roots: Mapping[str, etree._Element],
+                         decisions: Mapping[str, str]) -> set[str]:
+    """Settle addressed foreign revisions in place; return applied keys."""
+    settled: set[str] = set()
+    for name, root in roots.items():
+        for marker in list(_revision_markers(root)):
+            key = _marker_key(name, marker)
+            verdict = decisions.get(key)
+            if verdict is None:
+                continue
+            if verdict == ACCEPT:
+                _accept_foreign_marker(marker)
+            else:
+                _reject_foreign_marker(marker)
+            settled.add(key)
+    return settled
+
+
+def _accepted_view_bytes(root: etree._Element) -> bytes:
+    """Canonical form after accepting every remaining revision."""
+    from .compare.revisions import _accept_revisions
+    clone = deepcopy(root)
+    _accept_revisions(clone)
+    return etree.tostring(clone, method="c14n")
+
+
+def _expected_kept_foreign(source: Sequence[Mapping[str, str]],
+                           settled_keys: set[str]) -> list[dict[str, str]]:
+    return [dict(entry) for entry in source if _foreign_key(entry) not in settled_keys]
+
+
+def _our_id_set(manifests: Sequence[Mapping[str, Any]]) -> set[str]:
+    return {str(item[key]) for item in manifests for key in ("del_id", "ins_id")}
+
+
+def _layered_open_checks(target: Path, parts: Mapping[str, bytes],
+                         roots: Mapping[str, etree._Element],
+                         manifests: Sequence[Mapping[str, Any]],
+                         expected_foreign: Sequence[Mapping[str, str]],
+                         limits: ZipLimits, *, mode: str,
+                         accepted_subset: Sequence[Mapping[str, Any]] = ()) -> None:
+    """Re-open ``target`` and prove layered selection state byte-vs-structure.
+
+    ``mode == "artifact"``: no FundLex revision id may remain; the accepted
+    view of every story part must equal the independently rebuilt reference.
+    ``mode == "redline"``: only the accepted FundLex pairs remain tracked,
+    verified by the strict native revision-manifest check; foreign leftovers
+    must equal the whitelist minus the settled ones.
+    """
+    reopened = _read_redline_parts(target, limits)
+    _validate_package(reopened, limits, full=False)
+    our_ids = _our_id_set(manifests)
+    actual_foreign = _foreign_revisions(reopened, our_ids, limits)
+    if actual_foreign != tuple(dict(entry) for entry in expected_foreign):
+        raise DocxError("FOREIGN_SELECTION_MISMATCH")
+    doc_root = _xml(reopened[DOCUMENT], limits)
+    present_ours = {node.get(Q("id")) for node in doc_root.iter()
+                    if node.tag in {Q("ins"), Q("del")}} & our_ids
+    if mode == "artifact":
+        if present_ours:
+            raise DocxError("FOREIGN_SELECTION_MISMATCH", "stray managed revision id")
+        reference_views = {name: _accepted_view_bytes(root) for name, root in roots.items()}
+        for name, expected_view in reference_views.items():
+            if _accepted_view_bytes(_xml(reopened[name], limits)) != expected_view:
+                raise DocxError("SELECTED_ACCEPTED_MISMATCH", name)
+    else:
+        accepted_ids = {str(item[key]) for item in accepted_subset for key in ("del_id", "ins_id")}
+        if present_ours != accepted_ids:
+            raise DocxError("SELECTED_REDLINE_MISMATCH")
+        _validate_revision_manifest(doc_root, accepted_subset, allow_existing_revisions=True)
+        for name, expected_view in ((n, _accepted_view_bytes(r)) for n, r in roots.items()):
+            if _accepted_view_bytes(_xml(reopened[name], limits)) != expected_view:
+                raise DocxError("SELECTED_ACCEPTED_MISMATCH", name)
+    if set(reopened) != set(parts):
+        raise DocxError("PACKAGE_MEMBER_DRIFT")
+
+
 def _read_redline_parts(path: Path, limits: ZipLimits) -> dict[str, bytes]:
     """Read an artifact even when it lacks a ``.docx`` suffix.
 
@@ -448,7 +627,8 @@ def _expected_old(edit: Mapping[str, Any]) -> str:
 def generate_selected_artifact(redline: str | Path, target: str | Path,
                                report: Mapping[str, Any],
                                decisions: Mapping[Any, Any] | Iterable[Any],
-                               *, limits: ZipLimits | None = None,
+                               *, foreign_decisions: Mapping[Any, Any] | None = None,
+                               limits: ZipLimits | None = None,
                                verify: bool = True) -> SelectionResult:
     """Write a new DOCX with only the selected revisions accepted.
 
@@ -456,11 +636,20 @@ def generate_selected_artifact(redline: str | Path, target: str | Path,
     contains the ``w:ins`` / ``w:del`` markup). The selected result is written
     to ``target`` and independently re-opened before it is published.
 
-    Foreign revisions already present in the uploaded contract are **accepted**
-    in ``selected_final``, exactly like the engine's final artifact.  They are
-    not treated as FundLex edits and never appear in decisions; the report's
-    bound ``source_revision_manifest`` is used as a strict whitelist.
+    ``foreign_decisions`` (layered mode) addresses pre-existing revisions by
+    ``part|kind|id`` from the report's bound ``source_revision_manifest``:
+    ``accept`` keeps their post-edit state, ``reject`` restores the pre-edit
+    text (or restores the old property layout for ``*PrChange``), and
+    undecided foreign revisions stay tracked in the artifact.
+
+    Without ``foreign_decisions`` (legacy mode), foreign revisions already
+    present in the uploaded contract are **accepted** in ``selected_final``,
+    exactly like the engine's final artifact.
     """
+    if foreign_decisions is not None:
+        return _generate_selected_artifact_layered(redline, target, report,
+                                                   decisions, foreign_decisions,
+                                                   limits=limits, verify=verify)
     limits = limits or ZipLimits()
     redline, target = Path(redline), Path(target)
     if redline.resolve() == target.resolve():
@@ -517,10 +706,69 @@ def _verify_selection(path: Path, expected_document: bytes,
             raise DocxError("SELECTED_STORY_MISMATCH", name)
 
 
+def _generate_selected_artifact_layered(redline: str | Path, target: str | Path,
+                                        report: Mapping[str, Any],
+                                        decisions: Mapping[Any, Any] | Iterable[Any],
+                                        foreign_decisions: Mapping[Any, Any],
+                                        *, limits: ZipLimits | None = None,
+                                        verify: bool = True) -> SelectionResult:
+    """Layered selection: foreign revisions decided independently (see above)."""
+    limits = limits or ZipLimits()
+    redline, target = Path(redline), Path(target)
+    if redline.resolve() == target.resolve():
+        raise DocxError("OUTPUT_PATH_INVALID")
+    manifests = _manifests_from_report(report)
+    if not manifests:
+        raise DocxError("REVISION_MANIFEST_UNAVAILABLE")
+    source = _source_revisions_from_report(report)
+    fdec = _normalize_foreign_decisions(foreign_decisions, source)
+    parts = _read_redline_parts(redline, limits)
+    _validate_package(parts, limits, full=False)
+    _validate_foreign_revisions(parts, manifests, source, limits)
+    roots = _parse_xml_roots(parts, limits)
+    root = roots[DOCUMENT]
+    _validate_revision_manifest(root, manifests, allow_existing_revisions=True)
+    verdict = resolve_selection(manifests, decisions)
+    absent = apply_decisions(root, manifests, verdict.decisions)
+    settled = _apply_foreign_layer(roots, fdec)
+    # Replace the parts whose XML actually changed (our decisions always touch
+    # the main document; foreign decisions may touch any story part).
+    replacements = {name: _tostring_decl(rooted) for name, rooted in roots.items()
+                    if _tostring_decl(rooted) != _decl_bytes(parts[name], limits)}
+    expected_foreign = _expected_kept_foreign(source, set(fdec))
+    try:
+        _write_package_replaced(target, parts, replacements)
+        if verify:
+            _layered_open_checks(target, parts, roots, manifests, expected_foreign,
+                                 limits, mode="artifact")
+        decided = sorted(fdec.items())
+        foreign_accepted = tuple(key for key, value in decided if value == ACCEPT)
+        foreign_rejected = tuple(key for key, value in decided if value == REJECT)
+        foreign_kept = tuple(_foreign_key(entry) for entry in expected_foreign)
+        return SelectionResult(accepted=verdict.accepted, rejected=verdict.rejected,
+                               absent=absent, path=str(target),
+                               sha256=_sha(target.read_bytes()),
+                               foreign_accepted=foreign_accepted,
+                               foreign_rejected=foreign_rejected,
+                               foreign_kept=foreign_kept)
+    except Exception:
+        target.unlink(missing_ok=True)
+        raise
+
+
+def _tostring_decl(root: etree._Element) -> bytes:
+    return etree.tostring(root, encoding="UTF-8", xml_declaration=True)
+
+
+def _decl_bytes(data: bytes, limits: ZipLimits) -> bytes:
+    return _tostring_decl(_xml(data, limits))
+
+
 def generate_selected_redline(redline: str | Path, target: str | Path,
                               report: Mapping[str, Any],
                               decisions: Mapping[Any, Any] | Iterable[Any],
-                              *, limits: ZipLimits | None = None) -> SelectionResult:
+                              *, foreign_decisions: Mapping[Any, Any] | None = None,
+                              limits: ZipLimits | None = None) -> SelectionResult:
     """Write a revision artifact showing only the edits kept in the selection.
 
     The engine's redline tracks *every* edit it planned. After a review only the
@@ -536,7 +784,16 @@ def generate_selected_redline(redline: str | Path, target: str | Path,
     tracked as a change. That matches ``apply_decisions``' "accept all by default"
     semantics and keeps this artifact consistent with ``selected_final``, which
     also only changes what a verdict actually named.
+
+    In layered mode (``foreign_decisions`` passed), pre-existing revisions follow
+    the same rule per key: accepted or undecided foreign revisions stay tracked;
+    rejected ones are restored to the pre-edit state.  The accepted view of the
+    produced redline equals the layered ``selected_final`` of the same decisions.
     """
+    if foreign_decisions is not None:
+        return _generate_selected_redline_layered(redline, target, report,
+                                                  decisions, foreign_decisions,
+                                                  limits=limits)
     limits = limits or ZipLimits()
     redline, target = Path(redline), Path(target)
     if redline.resolve() == target.resolve():
@@ -564,6 +821,56 @@ def generate_selected_redline(redline: str | Path, target: str | Path,
         return SelectionResult(accepted=verdict.accepted, rejected=verdict.rejected,
                                absent=(),
                                path=str(target), sha256=_sha(target.read_bytes()))
+    except Exception:
+        target.unlink(missing_ok=True)
+        raise
+
+
+def _generate_selected_redline_layered(redline: str | Path, target: str | Path,
+                                       report: Mapping[str, Any],
+                                       decisions: Mapping[Any, Any] | Iterable[Any],
+                                       foreign_decisions: Mapping[Any, Any],
+                                       *, limits: ZipLimits | None = None) -> SelectionResult:
+    """Layered tracked-changes variant: rejected foreign revisions are settled."""
+    limits = limits or ZipLimits()
+    redline, target = Path(redline), Path(target)
+    if redline.resolve() == target.resolve():
+        raise DocxError("OUTPUT_PATH_INVALID")
+    manifests = _manifests_from_report(report)
+    if not manifests:
+        raise DocxError("REVISION_MANIFEST_UNAVAILABLE")
+    source = _source_revisions_from_report(report)
+    fdec = _normalize_foreign_decisions(foreign_decisions, source)
+    parts = _read_redline_parts(redline, limits)
+    _validate_package(parts, limits, full=False)
+    _validate_foreign_revisions(parts, manifests, source, limits)
+    roots = _parse_xml_roots(parts, limits)
+    root = roots[DOCUMENT]
+    _validate_revision_manifest(root, manifests, allow_existing_revisions=True)
+    verdict = resolve_selection(manifests, decisions)
+    _keep_accepted_only(root, manifests, verdict.decisions)
+    # In a tracked-changes artifact an *accepted* foreign revision stays
+    # tracked; only rejected ones are settled back to the pre-edit state.
+    rejected_foreign = {key: verdict_value for key, verdict_value in fdec.items()
+                        if verdict_value == REJECT}
+    _apply_foreign_layer(roots, rejected_foreign)
+    accepted_subset = [item for item in manifests
+                       if verdict.decisions[int(item["del_id"])] == ACCEPT]
+    replacements = {name: _tostring_decl(rooted) for name, rooted in roots.items()
+                    if _tostring_decl(rooted) != _decl_bytes(parts[name], limits)}
+    expected_foreign = _expected_kept_foreign(source, set(rejected_foreign))
+    try:
+        _write_package_replaced(target, parts, replacements)
+        _layered_open_checks(target, parts, roots, manifests, expected_foreign,
+                             limits, mode="redline", accepted_subset=accepted_subset)
+        rejected_keys = tuple(sorted(rejected_foreign))
+        kept = tuple(_foreign_key(entry) for entry in expected_foreign)
+        accepted_keys = tuple(sorted(key for key, value in fdec.items() if value == ACCEPT))
+        return SelectionResult(accepted=verdict.accepted, rejected=verdict.rejected,
+                               absent=(), path=str(target),
+                               sha256=_sha(target.read_bytes()),
+                               foreign_accepted=accepted_keys,
+                               foreign_rejected=rejected_keys, foreign_kept=kept)
     except Exception:
         target.unlink(missing_ok=True)
         raise

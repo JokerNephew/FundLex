@@ -1,44 +1,18 @@
-"""Readable, business-facing summaries of a recall-first report's edits.
+"""历史旧引擎报告的最小只读兼容渲染（legacy read-only compatibility）。
 
-Both the workbench (``GET /api/tasks/{id}/download/all`` and the task overview
-markdown) and the offline delivery-package tool (``tools/evaluation/p6_package.py``)
-need the *same* answer to "how many places did this contract change, and where".
+⚠ 直通重构后，本模块只服务 ``guide-rules-v1`` 旧引擎产生的**历史报告**（含
+``tools/evaluation/p6_package.py`` 离线评测包）。新 ``direct_edit_v1`` 报告的
+所有用户出口（结果页、结果总览、ZIP 清单/CSV、公开版单份报告、飞书摘要）一律
+走 ``fundlex.direct_report``——那里以实际写回证据为唯一计数来源；不要再往本
+模块加新口径，也不要让新任务回退到本模块的 plan 账展示。
 
-Rather than re-implementing that extraction twice (they would drift), this module
-is the single source of truth. It reads only what the engine itself recorded in
-the report — the plan's edits, the guide's rule titles/requirements and the
-audit verdicts — and never invents content.
+历史说明：本模块的 ``edit_count``/``plan_edits`` 反映的是旧引擎的 plan.edits
+账；G01–G22 固定短标签映射（RULE_SHORT）已按直通工单物理删除，规则展示改用
+指引自带的标题（``guide.groups[*].title``），缺标题时如实回退规则编号。
 """
 from __future__ import annotations
 
 from typing import Any
-
-# Short business labels for the "修改内容" column of the overview tables. The
-# guide's own long titles are used verbatim in the per-case explanation; these
-# stay concise so the overview reads at a glance.
-RULE_SHORT = {
-    "G01": "补充直销豁免（释义）",
-    "G02": "释义份额类别按费用分组",
-    "G03": "补充直销豁免（基本情况）",
-    "G04": "基本情况份额类别按费用分组",
-    "G05": "调整“调低赎回费率”/删除备案表述",
-    "G06": "删除不同类别不得转换旧句",
-    "G07": "单类别：补充直销申购豁免",
-    "G08": "多类别：补充直销申购豁免",
-    "G09": "赎回金额表述改为“扣除或加上”",
-    "G10": "单类别：申购费用承担表述",
-    "G11": "多类别：申购费用承担表述",
-    "G12": "赎回费归属改为全额计入基金财产",
-    "G13": "删除 7 日短期持有赎回费旧句",
-    "G14": "调整可调低费率范围",
-    "G15": "删除销售服务费支付旧条款",
-    "G16": "补充销售服务费计提/返还条款",
-    "G17": "删除销售服务费用途旧条款",
-    "G18": "收益分配费用差异表述",
-    "G19": "单类别浮动费：清算分配表述",
-    "G20": "多类别浮动费：清算分配表述",
-    "G22": "非浮动多类别：清算分配表述",
-}
 
 OP_TEXT = {"insert": "新增", "replace": "替换", "delete": "删除"}
 
@@ -79,11 +53,15 @@ def rule_title(guide: dict, rule_id: str) -> str:
 
 
 def rule_label(guide: dict, rule_id: str) -> str:
-    """Readable label for one edit's rule, joining composite ids ("G12+G13")."""
+    """Readable label for one edit's rule, joining composite ids ("G12+G13").
+
+    标签一律取指引文档自带的标题；历史报告指引缺标题时如实回退规则编号，
+    不再有内置的 G 编号固定映射。
+    """
     if not rule_id:
         return ""
     parts = [part.strip() for part in str(rule_id).split("+") if part.strip()]
-    return "＋".join(RULE_SHORT.get(part) or rule_title(guide, part) for part in parts)
+    return "＋".join(rule_title(guide, part) for part in parts)
 
 
 def audit_verdicts(report: dict) -> dict[str, str]:
@@ -108,6 +86,10 @@ def verdict_text(verdict: str | None) -> str:
 
 def edit_count(report: dict) -> int:
     """How many places this contract was actually modified."""
+    block = report.get("direct_edit")
+    if isinstance(block, dict):
+        # Direct engine: only reopen-verified writes count, never plan sizes.
+        return int(block.get("actual_written_count") or 0)
     return len(plan_edits(report))
 
 
@@ -134,6 +116,14 @@ def summary_detail(report: dict, result: dict | None = None) -> str:
     Prefers the rule-level wording ("涉及：…"); when nothing was edited but items
     stayed unchanged by the safety rules, say so instead of leaving it blank.
     """
+    block = report.get("direct_edit")
+    if isinstance(block, dict):
+        titles = list(dict.fromkeys(
+            str(change.get("rule_card_id") or "") for change in (block.get("changes") or [])
+            if change.get("status") == "written" and change.get("rule_card_id")))
+        if titles:
+            return "涉及：" + "、".join(titles)
+        return "无需修改"
     labels = edit_labels(report)
     if labels:
         return "涉及：" + "、".join(labels)
@@ -363,7 +353,7 @@ def rule_requirement(guide: dict, rule_id: str) -> str:
 
 
 __all__ = [
-    "RULE_SHORT", "OP_TEXT", "DELIVERY_TEXT", "CLIP_LIMIT_BEFORE", "CLIP_LIMIT_AFTER",
+    "OP_TEXT", "DELIVERY_TEXT", "CLIP_LIMIT_BEFORE", "CLIP_LIMIT_AFTER",
     "FINAL_ROOT", "WORKING_ROOT", "NOTES_ROOT",
     "RESULT_LIST_HEADER", "EDIT_DETAIL_HEADER", "DETAIL_CLIP_NOTE", "OUTCOME_LABELS",
     "plan_edits", "rule_title", "rule_label", "audit_verdicts", "verdict_text",

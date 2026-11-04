@@ -1,9 +1,9 @@
 """FastAPI routes for the independent contract comparison feature."""
 from __future__ import annotations
 import gzip
-import logging
 import hashlib
 import json
+import logging
 from collections import OrderedDict
 from threading import Lock
 from pathlib import Path
@@ -78,8 +78,11 @@ class CompareFileManifest(BaseModel):
     @classmethod
     def filename(cls, value: str) -> str:
         path = Path(value.replace("\\", "/"))
-        if path.name != value or not value.strip() or any(ord(c) < 32 for c in value) or not value.lower().endswith(".docx"):
-            raise ValueError("manifest requires a DOCX base filename; save legacy .doc as .docx first")
+        suffix = path.suffix.lower()
+        # 产品化：CDF 二进制 .doc 与 DOCX 都可以进清单——上传端自动转换。
+        if (path.name != value or not value.strip() or any(ord(c) < 32 for c in value)
+                or suffix not in {".docx", ".doc"}):
+            raise ValueError("manifest requires a DOCX or convertible .doc base filename")
         return value
 
 
@@ -223,21 +226,35 @@ def register_compare_routes(application, compare_store: CompareStore, user_depen
                 name = Path((upload.filename or "").replace("\\", "/")).name
                 error = None
                 prepared = None
-                try:
-                    validate_upload(name, data)
-                except HTTPException as exc:
-                    if exc.status_code == 415:
-                        error = _upload_rejection_code(name, data)
-                    else:
-                        error = "COMPARE_UPLOAD_REJECTED"
-                if error is None:
+                from ..doc_convert import is_legacy_doc
+                # 二进制 .doc：跳过旧 *格式* 闸门，真接走归一转换+包安全链，
+                # 失败如实返回转换/包安全码（不再混成 UNSUPPORTED）。
+                if is_legacy_doc(data) or name.lower().endswith(".doc"):
                     from .ingest import prepare_compare_upload
+                    from ..upload_validation import UploadValidationError
                     try:
                         prepared = prepare_compare_upload(name, data)
-                    except Exception as _ingest_exc:
-                        error = "COMPARE_INVALID_DOCX"
+                    except Exception as exc:  # noqa: BLE001 - 失败如实上抛
+                        error = (exc.code if isinstance(exc, UploadValidationError)
+                                 else "COMPARE_INVALID_DOCX")
                         prepared = None
-                        _capture_ingest_reject(name, data, _ingest_exc)
+                        _capture_ingest_reject(name, data, exc)
+                else:
+                    try:
+                        validate_upload(name, data)
+                    except HTTPException as exc:
+                        if exc.status_code == 415:
+                            error = _upload_rejection_code(name, data)
+                        else:
+                            error = "COMPARE_UPLOAD_REJECTED"
+                    if error is None:
+                        from .ingest import prepare_compare_upload
+                        try:
+                            prepared = prepare_compare_upload(name, data)
+                        except Exception as _ingest_exc:
+                            error = "COMPARE_INVALID_DOCX"
+                            prepared = None
+                            _capture_ingest_reject(name, data, _ingest_exc)
                 uploads.append({
                     "client_id": cid,
                     "name": name,
@@ -247,10 +264,7 @@ def register_compare_routes(application, compare_store: CompareStore, user_depen
                     "revisions_accepted": prepared["revisions_accepted"] if prepared and error is None else 0,
                     "error_code": error,
                 })
-            # FL-D1093（FL-D1084 体检缺陷③）：上传完成落结构化 INFO——
-            # 名称列表+status/error_code 摘要，不含内容/正文/哈希，事后可用于
-            # 还原「花了多少秒+收了/拒了哪几份+错码是什么」的产线实例
-            #（prod 16:47 .doc 上传 200 但 receipt 无迹可查了的事）。
+            # FL-D1093：上传完成落结构化 INFO——名称+status/error_code 摘要，不含内容。
             result = call(compare_store.upload, user, task_id, uploads)
             try:
                 receipts = result.get("receipts", []) if isinstance(result, dict) else []
@@ -266,7 +280,7 @@ def register_compare_routes(application, compare_store: CompareStore, user_depen
                                         or next((r.get("error_code") for r in receipts
                                                  if r.get("client_id") == u["client_id"]), None))}
                         for u in uploads], ensure_ascii=False))
-            except Exception:  # 日志失败绝不影响上传响应
+            except Exception:
                 logging.getLogger("fundlex.compare").warning("compare receipts log capture failed")
             return result
         finally:

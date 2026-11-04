@@ -308,7 +308,7 @@ def _validate_package(parts: Mapping[str, bytes], limits: ZipLimits, *, full: bo
                         # w:edit="trackedChanges" w:enforcement="0" 是 Word 曾开过修订模式
                         # 的历史痕迹（广发系修订件通病），并非真保护；enforcement 缺省保守拒。
                         _enf = (element.get(Q("enforcement")) or "").strip().lower()
-                        if _enf in ("1", "true", "on", "yes"):
+                        if _enf not in ("0", "false", "off", "no"):
                             raise DocxError("DOCUMENT_PROTECTED")
             for element in root.iter():
                 if not isinstance(element.tag, str):
@@ -509,6 +509,124 @@ def _max_revision_id_in_parts(parts: Mapping[str, bytes], limits: ZipLimits) -> 
             # scan only needs every parseable part's max id.
             continue
     return highest
+
+
+def _read_parts_bytes(source: bytes, limits: ZipLimits) -> dict[str, bytes]:
+    """Byte variant of :func:`_read_parts` with the same ZIP guards."""
+    try:
+        with zipfile.ZipFile(io.BytesIO(source)) as archive:
+            infos = archive.infolist()
+            if len(infos) > limits.max_entries:
+                raise DocxError("ZIP_ENTRY_LIMIT")
+            seen: set[str] = set()
+            total = 0
+            parts: dict[str, bytes] = {}
+            for info in infos:
+                canonical = _part_name(info.filename)
+                if canonical in seen:
+                    raise DocxError("ZIP_DUPLICATE_PART", info.filename)
+                seen.add(canonical)
+                if info.flag_bits & 1:
+                    raise DocxError("ZIP_ENCRYPTED")
+                if info.is_dir():
+                    raise DocxError("ZIP_DIRECTORY_ENTRY_UNSUPPORTED")
+                total += info.file_size
+                if info.file_size > limits.max_part_bytes or total > limits.max_uncompressed_bytes:
+                    raise DocxError("ZIP_EXPANSION_LIMIT")
+                if info.file_size and info.file_size / max(info.compress_size, 1) > limits.max_ratio:
+                    raise DocxError("ZIP_RATIO_LIMIT")
+                parts[info.filename] = archive.read(info)
+            return parts
+    except (OSError, zipfile.BadZipFile, RuntimeError) as exc:
+        raise DocxError("ZIP_INVALID", str(exc)) from exc
+
+
+@dataclass(frozen=True)
+class LinkSanitization:
+    """Result of removing inert external template links from one package."""
+
+    data: bytes  # byte-identical to the input when nothing was stripped
+    journal: tuple[dict[str, str], ...] = ()
+
+
+def strip_inert_attached_template_links(parts: Mapping[str, bytes],
+                                        limits: ZipLimits) -> tuple[dict[str, bytes],
+                                                                    list[dict[str, str]]]:
+    """Drop inert ``attachedTemplate`` links kept by Word .doc→.docx saves.
+
+    Shared implementation for all ingest paths (Compare ingest / direct
+    pipeline entry / writer working copy).  It removes ONLY the relationship
+    whose type ends with ``/attachedTemplate`` (and its ``w:attachedTemplate``
+    reference in ``word/settings.xml``); hyperlinks and every other external
+    target are left untouched.  Returns ``(stripped_parts, journal)``; an
+    empty journal means the parts mapping was returned unchanged.
+    """
+    rels_name = "word/_rels/settings.xml.rels"
+    if rels_name not in parts:
+        return dict(parts), []
+    office_r = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+    root = _xml(parts[rels_name], limits)
+    journal: list[dict[str, str]] = []
+    for rel in list(root):
+        rel_type = str(rel.get("Type", ""))
+        if rel_type.endswith("/attachedTemplate"):
+            journal.append({
+                "part": rels_name,
+                "rel_id": str(rel.get("Id", "")),
+                "type": rel_type.rsplit("/", 1)[-1],
+                "target": str(rel.get("Target", "")),
+                "target_mode": str(rel.get("TargetMode", "")),
+            })
+            root.remove(rel)
+    if not journal:
+        return dict(parts), []
+    stripped: dict[str, bytes] = dict(parts)
+    stripped[rels_name] = etree.tostring(root, encoding="UTF-8", xml_declaration=True)
+    settings_name = "word/settings.xml"
+    if settings_name in stripped:
+        removed_ids = {entry["rel_id"] for entry in journal}
+        sroot = _xml(stripped[settings_name], limits)
+        sremoved = False
+        for el in list(sroot.iter(Q("attachedTemplate"))):
+            parent = el.getparent()
+            if el.get("{" + office_r + "}id") in removed_ids and parent is not None:
+                journal_entry = next(entry for entry in journal
+                                     if entry["rel_id"] == el.get("{" + office_r + "}id"))
+                journal_entry["settings_element"] = "removed"
+                parent.remove(el)
+                sremoved = True
+        if sremoved:
+            stripped[settings_name] = etree.tostring(sroot, encoding="UTF-8", xml_declaration=True)
+    return stripped, journal
+
+
+def _pack_parts_bytes(parts: Mapping[str, bytes]) -> bytes:
+    """Deterministic ZIP representation of a parts mapping (normalized hash)."""
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as output:
+        for name, data in parts.items():
+            info = zipfile.ZipInfo(name, date_time=(1980, 1, 1, 0, 0, 0))
+            info.compress_type = zipfile.ZIP_DEFLATED
+            info.create_system = 3
+            info.external_attr = 0o600 << 16
+            output.writestr(info, data)
+    return buffer.getvalue()
+
+
+def sanitize_docx_external_links(data: bytes, *,
+                                 limits: ZipLimits | None = None) -> LinkSanitization:
+    """Byte-level inert-link sanitization for a working copy (never in place).
+
+    Byte-identical passthrough when no inert ``attachedTemplate`` link exists,
+    so clean inputs keep their exact identity; only a real strip rewrites the
+    package (deterministically packed).
+    """
+    limits = limits or ZipLimits()
+    parts = _read_parts_bytes(data, limits)
+    stripped, journal = strip_inert_attached_template_links(parts, limits)
+    if not journal:
+        return LinkSanitization(data, ())
+    return LinkSanitization(_pack_parts_bytes(stripped), tuple(journal))
 
 
 def _read_parts(path: str | Path, limits: ZipLimits) -> dict[str, bytes]:
@@ -828,7 +946,13 @@ def _enumerate_paragraphs(root: etree._Element, limits: ZipLimits, *,
 def inspect_docx(path: str | Path, *, full: bool = False, limits: ZipLimits | None = None,
                  allow_existing_revisions: bool = False) -> DocumentInspection:
     limits = limits or ZipLimits()
-    source, parts = _read_source_and_parts(path, limits)
+    parts = _read_parts(path, limits)
+    source = Path(path).read_bytes()
+    # Inert attachedTemplate remnants of Word .doc→.docx saves are stripped for
+    # the INSPECTION view only (hyperlink and every other external target keep
+    # the original gate).  File bytes on disk and ``source_sha256`` stay raw;
+    # delivery pipelines keep their own explicit working-copy normalization.
+    parts, _ = strip_inert_attached_template_links(parts, limits)
     _validate_package(parts, limits, full=full,
                       allow_existing_revisions=allow_existing_revisions)
     if allow_existing_revisions:
@@ -939,13 +1063,17 @@ def validate_edit_plan(source: str | Path, edits: Sequence[Mapping[str, Any]],
         else:
             raise DocxError("CONTENT_SOURCE_INVALID")
         start, end = edit.get("start"), edit.get("end")
-        insertion = edit.get("operation") == "insert"
+        operation = str(edit.get("operation") or "replace")
+        insert_after = operation in {"insert", "insert_after"}
+        insertion = insert_after or operation == "insert_before"
         if not isinstance(start, int) or not isinstance(end, int) or not (0 <= start <= end <= len(paragraph.text)) or (start == end) != insertion:
             raise DocxError("EDIT_RANGE_INVALID")
         if insertion:
             anchor = edit.get("anchor", {})
             anchor_start, anchor_end = anchor.get("start"), anchor.get("end")
-            if not isinstance(anchor_start, int) or not isinstance(anchor_end, int) or not (0 <= anchor_start < anchor_end == start):
+            adjacent = anchor_end == start if insert_after else anchor_start == start
+            if not isinstance(anchor_start, int) or not isinstance(anchor_end, int) \
+                    or not (0 <= anchor_start < anchor_end) or not adjacent:
                 raise DocxError("INSERT_ANCHOR_INVALID")
             anchor_text = paragraph.text[anchor_start:anchor_end]
             if anchor_text != anchor.get("text") or _sha(anchor_text.encode("utf-8")) != anchor.get("sha256"):
@@ -1035,6 +1163,10 @@ def _revision(tag: str, revision_id: int, author: str, when: str,
 
 
 def _inserted_runs(template_run: etree._Element, value: str) -> list[etree._Element]:
+    if not value:
+        # A delete keeps an empty w:ins counterpart so the selective-review
+        # pairing contract (odd del_id / even ins_id) stays intact.
+        return []
     runs: list[etree._Element] = []
     for number, line in enumerate(value.split("\n")):
         if number:
@@ -1114,6 +1246,9 @@ def _edit_region(root: etree._Element, edit: Mapping[str, Any], limits: ZipLimit
     selected = [(node, lo, hi) for node, lo, hi in nodes if hi > start and lo < end]
     if start == end:
         selected = next(([item] for item in nodes if item[1] < start <= item[2]), [])
+        if not selected and nodes and start == nodes[0][1]:
+            # insert_before lands at the very start of a writable segment.
+            selected = [nodes[0]]
     if not selected:
         raise DocxError("XML_MAPPING_DRIFT")
     # Never rewrite text that another author inserted: the accepted view is
@@ -1483,33 +1618,24 @@ def normalize_tracked_base(data: bytes, *, limits: ZipLimits | None = None,
     """Return a flattened-view (base) bytes for a task input DOCX.
 
     Task input normalization (2026-10-31 product decision): a contract that
-    still carries another department's tracked changes enters the recall
-    pipeline through its **accepted view** — every ``w:ins``/``w:moveTo`` keeps
-    its content, every ``w:del``/``w:moveFrom`` is dropped, and range markers,
+    still carries another department's tracked changes enters the writer
+    through its **accepted view** — every ``w:ins``/``w:moveTo`` keeps its
+    content, every ``w:del``/``w:moveFrom`` is dropped, and range markers,
     cell markers and property-change snapshots are removed everywhere in the
-    package (main story, tables, SDT content, headers/footers, footnotes,
-    endnotes and comments).  The original marks are *not* carried into the
-    output; the engine's new revisions are the only tracked changes a delivery
-    ever shows.  ``disposition="reject"`` offers the mirrored rejected view
-    (original document before review marks) for engines/tests that need to
-    diff against the pre-review text: inserted content and marks disappear,
-    deleted content is restored, property changes are rolled back from their
-    snapshots.
+    package.  The original marks are *not* carried into the output; the
+    engine's new revisions are the only tracked changes a delivery ever
+    shows.  Inputs without any revision tag are returned byte-identical with
+    ``had_tracked_changes == False```.
 
-    Inputs without any revision tag are returned byte-identical with
-    ``had_tracked_changes False`` so the normal path keeps its exact behavior.
-    The transform reuses the Compare accept-all implementation (and its
-    reject mirror) and the same full package validation before and after; the
-    normalized package is written
-    through the deterministic ZIP writer, re-opened and must match the
-    transformed parts exactly, like Compare input preparation.  Unsupported
-    structures (for example a paragraph-mark merge the writer cannot join)
-    fail closed with a typed ``DocxError`` instead of passing silently.
+    ``disposition="reject"`` is not implemented in this module branch; the
+    recall engine's mirror lives with its caller.  Unsupported structures
+    fail closed with a typed ``DocxError`` instead of passing silently
+    (``DOCUMENT_PROTECTED`` keeps failing exactly like the strict path).
     """
-    from .compare.revisions import _accept_revisions, _reject_revisions, _write_normalized_package
+    from .compare.revisions import _accept_revisions, _write_normalized_package
 
-    if disposition not in {"accept", "reject"}:
-        raise ValueError(f"disposition must be 'accept' or 'reject', got {disposition!r}")
+    if disposition != "accept":
+        raise ValueError("only disposition='accept' is supported by this writer")
     limits = limits or ZipLimits()
     original_sha256 = _sha(data)
     parts = _read_parts_bytes(data, limits)
@@ -1526,10 +1652,7 @@ def normalize_tracked_base(data: bytes, *, limits: ZipLimits | None = None,
         root = _xml(content, limits)
         if not _has_word_revisions(root):
             continue
-        if disposition == "accept":
-            accepted += _accept_revisions(root)
-        else:
-            accepted += _reject_revisions(root)
+        accepted += _accept_revisions(root)
         changed[name] = etree.tostring(root, encoding="UTF-8", xml_declaration=True)
     # Full validation rejects any Word revision tag left behind, so a missed
     # combination cannot leak tracked marks into the flattened base.

@@ -17,6 +17,7 @@ from pathlib import Path
 from .edit_summary import (OUTCOME_LABELS, delivery_text, edit_count,
                            outcome_label, summary_detail)
 from .recall import ENGINE_ID as RECALL_ENGINE_ID
+from .direct_pipeline import ENGINE_ID as DIRECT_ENGINE_ID, ENGINE_VERSION as DIRECT_ENGINE_VERSION
 from .store import (Conflict, NotFound, ReportJsonError, RunStore, SCHEMA_VERSION,
                      engine_build, parse_report_json, servable_artifact_kinds)
 
@@ -28,7 +29,8 @@ from .store import (Conflict, NotFound, ReportJsonError, RunStore, SCHEMA_VERSIO
 _DOCUMENT_COLUMNS = """f.task_id,f.client_id,f.ordinal,f.name,f.size,f.upload_status,
     f.error_code AS file_error,f.document_id,d.batch_id,d.status,
     d.qualification_status,d.delivery_status,d.error_code AS document_error,
-    d.source_sha256,d.report_json,d.updated_at AS document_updated_at,d.execution_mode"""
+    d.source_sha256,d.report_json,d.updated_at AS document_updated_at,d.execution_mode,
+    d.conversion_state"""
 _DOCUMENT_FROM = "task_files f LEFT JOIN documents d ON d.id=f.document_id"
 _JOB_STATUS = "COALESCE(d.status,'not_started')"
 _ELIGIBILITY = "COALESCE(NULLIF(d.qualification_status,''),'pending')"
@@ -85,9 +87,20 @@ class TaskStore:
                     batch_id TEXT PRIMARY KEY REFERENCES batches(id)
                 );
             """)
+            db.executescript("""
+                CREATE TABLE IF NOT EXISTS admin_audit_log (
+                    id TEXT PRIMARY KEY,
+                    actor TEXT NOT NULL, action TEXT NOT NULL,
+                    task_id TEXT NOT NULL DEFAULT '', document_id TEXT NOT NULL DEFAULT '',
+                    detail TEXT NOT NULL DEFAULT '', created_at REAL NOT NULL
+                );
+            """)
             for name, definition in {"engine_id": "TEXT NOT NULL DEFAULT ''",
                                      "guide_version_id": "TEXT NOT NULL DEFAULT ''",
                                      "guide_rules_sha256": "TEXT NOT NULL DEFAULT ''",
+                                     "guide_schema_version": "TEXT NOT NULL DEFAULT ''",
+                                     "engine_version": "TEXT NOT NULL DEFAULT ''",
+                                     "snapshot_json": "MEDIUMTEXT NOT NULL DEFAULT ''",
                                      "mode": "VARCHAR(32) NOT NULL DEFAULT 'delivery'",
                                      "disabled_rule_ids": "TEXT NOT NULL DEFAULT '[]'",
                                      "model_preferences": "MEDIUMTEXT NOT NULL DEFAULT '{}'"}.items():
@@ -103,7 +116,8 @@ class TaskStore:
 
     def create(self, owner, name, source, files, idempotency_key=None,
                engine_id="", guide_version_id="", guide_rules_sha256="", mode="delivery",
-               disabled_rule_ids=None, model_preferences=None, model_preferences_factory=None):
+               disabled_rule_ids=None, model_preferences=None, model_preferences_factory=None,
+               guide_schema_version="", engine_version="", snapshot: dict | None = None):
         """Create a task bound to a rule source.
 
         ``source`` is the bound guide version for the recall-first engine; the
@@ -121,6 +135,9 @@ class TaskStore:
             if model_preferences_factory is not None:
                 model_preferences = model_preferences_factory(db)
             binding = [engine_id, guide_version_id, guide_rules_sha256]
+            snapshot_json = json.dumps(snapshot or {}, ensure_ascii=False, sort_keys=True)
+            if guide_schema_version or engine_version or snapshot:
+                binding += [guide_schema_version, engine_version, snapshot_json]
             if disabled:
                 binding.append(disabled)
             if model_preferences:
@@ -142,11 +159,13 @@ class TaskStore:
                     return self._snapshot(db, self._owned(db, owner, old["id"]))
             task_id, now = uuid.uuid4().hex, time.time()
             db.execute("""INSERT INTO tasks(id,owner,name,ruleset_version,ruleset_sha256,engine_id,
-                guide_version_id,guide_rules_sha256,mode,disabled_rule_ids,idempotency_key,request_hash,
+                guide_version_id,guide_rules_sha256,guide_schema_version,engine_version,snapshot_json,
+                mode,disabled_rule_ids,idempotency_key,request_hash,
                 created_at,updated_at,model_preferences)
-                VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                        (task_id, owner, name, source_version, source_sha256, engine_id,
-                        guide_version_id, guide_rules_sha256, mode,
+                        guide_version_id, guide_rules_sha256, guide_schema_version, engine_version,
+                        snapshot_json, mode,
                         json.dumps(disabled, ensure_ascii=False), idempotency_key, fingerprint, now, now,
                         json.dumps(model_preferences or {}, ensure_ascii=False)))
             db.executemany("INSERT INTO task_files(task_id,client_id,ordinal,name,size) VALUES(?,?,?,?,?)",
@@ -255,6 +274,8 @@ class TaskStore:
             report, failure = self._decode_report(row["report_json"])
             result[row["task_id"]].append({
                 "upload_status": row["upload_status"],
+                "result_schema": (report.get("report_contract")
+                                  if isinstance(report, dict) and report else None),
                 "job_status": row["status"] or "not_started",
                 "eligibility": row["qualification_status"],
                 "delivery_status": row["delivery_status"] or "not_generated",
@@ -347,9 +368,23 @@ class TaskStore:
         return clause, [error_code, error_code]
 
     @staticmethod
+    def _direct_row_extras(raw_report_json):
+        """裁决 D2：直通报告行追加 result_schema/edit_count（旧报告绝不带）。"""
+        if not raw_report_json or "direct_edit_v1" not in raw_report_json[:400]:
+            return {}
+        report, _ = TaskStore._decode_report(raw_report_json)
+        if not report or report.get("report_contract") != "direct_edit_v1":
+            return {}
+        from .direct_report import written_count
+        block = report.get("direct_edit") if isinstance(report.get("direct_edit"), dict) else {}
+        return {"result_schema": "direct_edit_v1", "edit_count": written_count(report),
+                "revision_tier": str(block.get("revision_tier") or "strict_dual_layer")}
+
+    @staticmethod
     def _document_from_row(row, task_id, artifacts, view):
         document_id = row["document_id"]
         reasons, phase, report_error = view
+        extras = TaskStore._direct_row_extras(row["report_json"] if document_id else None)
         kinds = artifacts.get(document_id, ()) if document_id else ()
         return {
             "task_id": task_id,
@@ -364,6 +399,7 @@ class TaskStore:
             "delivery_status": row["delivery_status"] or "not_generated",
             "execution_mode": (row["execution_mode"] or "") if document_id else "",
             "error_code": row["document_error"] or row["file_error"],
+            "conversion_state": (row["conversion_state"] or "") if document_id else "",
             "report_url": (f"/api/tasks/{task_id}/documents/{document_id}/report"
                            if document_id and row["report_json"] else None),
             "downloads": ({kind: f"/api/tasks/{task_id}/documents/{document_id}/download/{kind}"
@@ -376,7 +412,7 @@ class TaskStore:
             "artifact_count": len(kinds),
             "reason_codes": reasons,
             "ordinal": row["ordinal"],
-        }
+        } | extras
 
     def _task_views(self, db, task_id):
         """One pass over a task's files for reason codes, phases and options."""
@@ -441,12 +477,16 @@ class TaskStore:
         # A task is legacy once it was produced by a retired engine. The runtime
         # serves the guide-bound engine only, so anything else is read-only
         # history even when it still has a first-class task row.
-        legacy = legacy or (row["engine_id"] or "") != RECALL_ENGINE_ID
+                # A task is legacy once it was produced by a retired engine (the
+        # direct-through engine included for reference is never legacy).
+        legacy = legacy or (row["engine_id"] or "") != DIRECT_ENGINE_ID
         phase = "交付" if terminal else max(
             (doc for doc in docs if doc.get("phase")),
             key=lambda doc: doc.get("document_updated_at", 0),
             default={},
         ).get("phase", "")
+        result_schema = next((doc["result_schema"] for doc in docs
+                              if doc.get("result_schema")), None)
         try:
             disabled_rule_ids = json.loads(row["disabled_rule_ids"] or "[]")
         except (TypeError, ValueError):
@@ -456,11 +496,16 @@ class TaskStore:
         return {"id": row["id"], "name": row["name"], "legacy": legacy, "ruleset_version": row["ruleset_version"],
                 "ruleset_sha256": row["ruleset_sha256"], "status": status,
                 "engine_id": row["engine_id"], "mode": row["mode"] or "delivery",
+                "result_schema": result_schema,
                 "disabled_rule_ids": disabled_rule_ids,
                 "model_preferences": json.loads(row["model_preferences"] or "{}")
                     if "model_preferences" in row.keys() else {},
                 "guide_snapshot": {"version_id": row["guide_version_id"],
-                                   "rules_sha256": row["guide_rules_sha256"]},
+                                   "rules_sha256": row["guide_rules_sha256"],
+                                   "schema_version": (row["guide_schema_version"] or "")
+                                   if "guide_schema_version" in row.keys() else "",
+                                   "engine_version": (row["engine_version"] or "")
+                                   if "engine_version" in row.keys() else ""},
                 "upload_status": "complete" if uploaded == total else "sealed_incomplete" if row["sealed"] else "partial" if uploaded else "pending",
                 "total": total, "uploaded": uploaded, "pending_upload": sum(d["upload_status"] == "pending" for d in docs),
                 "rejected": sum(d["upload_status"] == "rejected" for d in docs),
@@ -819,6 +864,432 @@ class TaskStore:
         result["reason_options"] = reason_options
         return result
 
+    # ------------------------------------------------------------------
+    # Admin 任务看板（仅 role=admin 调用路径使用）
+    # ------------------------------------------------------------------
+
+    def _admin_audit(self, db, actor: str, action: str, task_id: str = "",
+                     document_id: str = "", detail: str = "") -> None:
+        db.execute("INSERT INTO admin_audit_log(id,actor,action,task_id,document_id,detail,created_at) "
+                   "VALUES(?,?,?,?,?,?,?)",
+                   (uuid.uuid4().hex, actor, action, task_id, document_id, detail, time.time()))
+
+    def admin_audit(self, actor: str, action: str, task_id: str = "",
+                    document_id: str = "", detail: str = "") -> None:
+        with self.store._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            self._admin_audit(db, actor, action, task_id, document_id, detail)
+
+    def admin_tasks(self, *, q: str = "", status: str | None = None,
+                    page: int = 1, page_size: int = 50) -> dict[str, Any]:
+        """Admin 全库任务：分页+q+状态筛；执行计数+最近错误码。
+
+        状态筛沿用前端状态口径：status_calc=tasks 行导出的状态。返回历史 legacy
+        映射**不混入**（历史数据不主动暴露）。
+        """
+        clauses, params = [], []
+        if q:
+            clauses.append("(LOWER(t.name) LIKE ? OR LOWER(t.owner) LIKE ? OR t.id LIKE ?)")
+            like = f"%{q.casefold()}%"
+            params += [like, like, like]
+        where = " AND " + " AND ".join(clauses) if clauses else ""
+        aggregate = """(SELECT f.task_id AS oid,
+            COUNT(f.client_id) AS total,
+            COUNT(CASE WHEN d.status='succeeded' THEN 1 END) AS succeeded,
+            COUNT(CASE WHEN d.status='failed' THEN 1 END) AS failed,
+            COUNT(CASE WHEN d.status IN ('queued','retry_wait') THEN 1 END) AS queued,
+            COUNT(CASE WHEN d.status IN ('leased','running') THEN 1 END) AS running,
+            (SELECT COALESCE(NULLIF(d2.error_code,''),NULLIF(f2.error_code,''))
+               FROM task_files f2 LEFT JOIN documents d2 ON d2.id=f2.document_id
+              WHERE f2.task_id=f.task_id AND COALESCE(d2.error_code,f2.error_code) IS NOT NULL
+              ORDER BY COALESCE(d2.updated_at,0) DESC LIMIT 1) AS recent_error
+            FROM task_files f LEFT JOIN documents d ON d.id=f.document_id
+            GROUP BY f.task_id)"""
+        with self.store._connect() as db:
+            # 状态筛落在导出状态上：先取候选上限行再在 Python 侧筛——
+            # 保持 total/page 与筛选口径严格一致（Admin 面板规模受控 5000）。
+            rows = db.execute(
+                f"""SELECT t.id,t.owner,t.name,t.engine_id,t.mode,t.sealed,t.paused,t.created_at,
+                    a.total,a.succeeded,a.failed,a.queued,a.running,a.recent_error
+                FROM tasks t LEFT JOIN {aggregate} a ON a.oid=t.id
+                WHERE 1=1{where} ORDER BY t.created_at DESC LIMIT 5000""",
+                params).fetchall()
+        items = []
+        for row in rows:
+            of_total = int(row["total"] or 0)
+            succeeded = int(row["succeeded"] or 0)
+            failed = int(row["failed"] or 0)
+            running = int(row["running"] or 0)
+            queued = int(row["queued"] or 0)
+            if failed and succeeded + failed == of_total:
+                task_status = "completed_with_exceptions" if succeeded else "failed"
+            elif succeeded + failed == of_total and of_total:
+                task_status = "completed"
+            elif row["paused"]:
+                task_status = "paused"
+            elif running:
+                task_status = "running"
+            elif queued:
+                task_status = "queued"
+            else:
+                task_status = "uploading"
+            if status and status != task_status:
+                continue
+            items.append({
+                "id": row["id"], "name": row["name"], "owner": row["owner"],
+                "engine_id": row["engine_id"], "mode": row["mode"],
+                "status": task_status, "sealed": bool(row["sealed"]), "paused": bool(row["paused"]),
+                "progress": {"total": of_total, "succeeded": succeeded, "failed": failed,
+                             "queued": queued, "running": running},
+                "recent_error_code": row["recent_error"] or "",
+                "created_at": datetime.fromtimestamp(row["created_at"], timezone.utc).isoformat(),
+            })
+        total = len(items)
+        if page_size < 1:
+            page_size = 50
+        start = (page - 1) * page_size
+        return {"items": items[start:start + page_size], "total": total,
+                "page": page, "page_size": page_size}
+
+    def admin_documents(self, task_id: str) -> dict[str, Any]:
+        """Admin 视角单任务文档行：状态/错误码/重试次数/下一步时间/耗时/写回数。"""
+        with self.store._connect() as db:
+            task = db.execute("SELECT id FROM tasks WHERE id=?", (task_id,)).fetchone()
+            if task is None:
+                raise NotFound("task not found")
+            rows = db.execute(f"""SELECT {_DOCUMENT_COLUMNS} FROM {_DOCUMENT_FROM}
+                WHERE f.task_id=? ORDER BY f.ordinal""", (task_id,)).fetchall()
+            batch = db.execute(
+                f"""SELECT d.id,d.attempt,d.next_attempt_at,d.started_at,d.finished_at
+                    FROM task_files f JOIN documents d ON d.id=f.document_id
+                    WHERE f.task_id=? ORDER BY f.ordinal""", (task_id,)).fetchall()
+        timings = {row["id"]: dict(row) for row in batch}
+        artifacts = {}
+        with self.store._connect() as db:
+            for row in db.execute("SELECT document_id,kind FROM artifacts ORDER BY document_id,kind"):
+                artifacts.setdefault(row["document_id"], []).append(row["kind"])
+        items = []
+        for row in rows:
+            view = self._reason_view(row["report_json"], row["document_error"] or row["file_error"])
+            extras = self._direct_row_extras(row["report_json"] if row["document_id"] else None)
+            base = self._document_from_row(row, task_id, artifacts, view)
+            timing = timings.get(row["document_id"] or "", {})
+            started, finished = timing.get("started_at"), timing.get("finished_at")
+            duration = (round(float(finished) - float(started), 1)
+                        if finished and started else None)
+            items.append({**base, **extras,
+                          "status": base["job_status"],
+                          "attempt": timing.get("attempt"),
+                          "next_attempt_at": timing.get("next_attempt_at"),
+                          "duration_seconds": duration,
+                          "edit_count": extras.get("edit_count"),
+                          "revision_tier": extras.get("revision_tier")})
+        return {"items": items, "total": len(items)}
+
+    def admin_retry_document(self, actor: str, document_id: str) -> dict[str, Any]:
+        """管理员强制重试：不查属主、不受 attempt<3；仅 failed/retry_wait 可再排。
+
+        running/succeeded 一律 409 诚实文案；并发回排队在 fencing 下天然安全。
+        attempt 数值继续加不重置；审计痕迹落 admin_audit_log + documents 注记。
+        """
+        now = time.time()
+        with self.store._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            row = db.execute("""SELECT d.id,d.status,d.attempt,d.batch_id,d.fencing_token,
+                b.status AS batch_status, f.task_id, f.name
+                FROM documents d
+                JOIN batches b ON b.id=d.batch_id
+                JOIN task_files f ON f.document_id=d.id
+                WHERE d.id=?""", (document_id,)).fetchone()
+            if row is None:
+                raise NotFound("document not found")
+            if row["status"] in ("leased", "running"):
+                raise Conflict("ADMIN_RETRY_RUNNING")
+            if row["status"] == "succeeded":
+                raise Conflict("ADMIN_RETRY_NO_WORK")
+            if row["status"] not in ("failed", "retry_wait"):
+                raise Conflict("ADMIN_RETRY_STATE_INVALID")
+            db.execute("""UPDATE documents SET status='queued',lease_until=NULL,next_attempt_at=NULL,
+                error_code=NULL,admin_requeue_count=admin_requeue_count+1,
+                admin_requeued_by=?,admin_requeued_at=?,updated_at=?
+                WHERE id=?""", (actor, now, now, document_id))
+            db.execute("UPDATE batches SET status=?,updated_at=? WHERE id=?",
+                       ("paused" if row["batch_status"] == "paused" else "queued", now, row["batch_id"]))
+            self._admin_audit(db, actor, "admin_document_retry", row["task_id"],
+                              document_id, f"name={row['name']}")
+        return self.admin_document_summary(document_id)
+
+    def _admin_task_owner(self, task_id: str) -> str:
+        with self.store._connect() as db:
+            row = db.execute("SELECT owner FROM tasks WHERE id=?", (task_id,)).fetchone()
+        if row is None:
+            raise NotFound("task not found")
+        return str(row["owner"])
+
+    def admin_pause_task(self, actor: str, task_id: str) -> dict[str, Any]:
+        owner = self._admin_task_owner(task_id)
+        result = self.control(owner, task_id, "pause")
+        with self.store._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            self._admin_audit(db, actor, "admin_task_pause", task_id)
+        return result
+
+    def admin_resume_task(self, actor: str, task_id: str) -> dict[str, Any]:
+        owner = self._admin_task_owner(task_id)
+        result = self.control(owner, task_id, "resume")
+        with self.store._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            self._admin_audit(db, actor, "admin_task_resume", task_id)
+        return result
+
+    def admin_cancel_task(self, actor: str, task_id: str) -> dict[str, Any]:
+        """cancel：未开始的 queued/retry_wait 文档终态失败 ADMIN_CANCELLED；
+        running/leased 文档自然终态（不强行中止）。"""
+        self._admin_task_owner(task_id)
+        now = time.time()
+        with self.store._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            affected = db.execute("""UPDATE documents SET status='failed',
+                error_code='ADMIN_CANCELLED',lease_until=NULL,next_attempt_at=NULL,
+                finished_at=COALESCE(finished_at,?),updated_at=?
+                WHERE status IN ('queued','retry_wait') AND batch_id IN
+                    (SELECT batch_id FROM task_batches WHERE task_id=?)""",
+                (now, now, task_id)).rowcount
+            running = db.execute("""SELECT COUNT(*) AS n FROM documents d
+                JOIN task_batches tb ON tb.batch_id=d.batch_id
+                WHERE tb.task_id=? AND d.status IN ('leased','running')""",
+                (task_id,)).fetchone()["n"]
+            for bid in db.execute("SELECT batch_id FROM task_batches WHERE task_id=?",
+                                  (task_id,)).fetchall():
+                StoreSessionHelper = None
+                remaining = db.execute("SELECT COUNT(*) FROM documents WHERE batch_id=? AND status NOT IN ('succeeded','failed')",
+                                       (bid["batch_id"],)).fetchone()[0]
+                db.execute("UPDATE batches SET status=?,updated_at=? WHERE id=?",
+                           ("completed" if not remaining else "queued", now, bid["batch_id"]))
+            self._admin_audit(db, actor, "admin_task_cancel", task_id,
+                              detail=f"cancelled={affected},running_kept={running}")
+        return {"task_id": task_id, "cancelled": affected, "running_kept": running,
+                "total": self.admin_tasks(q=task_id)["items"][0]["progress"]}
+
+    def admin_model_usage(self, from_ts: float | None, to_ts: float | None,
+                          model: str = "", task_type: str = "") -> dict[str, Any]:
+        """只读聚合模型账本：调用数/tokens/费用/失败率/均时；filter by from/to/model/task_type。"""
+        from .config import local_data_dir
+        from .db import Database
+        import os as _os
+        import sqlite3 as _sq
+        ledger = _os.environ.get("FUNDLEX_MODEL_LEDGER",
+                                 str(local_data_dir() / "model_budget.sqlite"))
+        clauses, params = [], []
+        if from_ts:
+            clauses.append("started >= ?")
+            params.append(from_ts)
+        if to_ts:
+            clauses.append("started <= ?")
+            params.append(to_ts)
+        if model:
+            clauses.append("json_extract(metadata,'$.configured_model') = ?")
+            params.append(model)
+        if task_type:
+            clauses.append("json_extract(metadata,'$.task_type') = ?")
+            params.append(task_type)
+        where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
+        try:
+            with _sq.connect(f"file:{ledger}?mode=ro", uri=True) as conn:
+                conn.row_factory = _sq.Row
+                rows = conn.execute(
+                    f"""SELECT json_extract(metadata,'$.configured_model') AS model,
+                        json_extract(metadata,'$.task_type') AS task_type,
+                        COUNT(*) AS calls,
+                        SUM(CASE WHEN status='completed' THEN 1 ELSE 0 END) AS ok,
+                        COALESCE(SUM(charged_cost),0) AS cost,
+                        COALESCE(SUM(CAST(json_extract(metadata,'$.prompt_tokens') AS INTEGER)),0) AS ptok,
+                        COALESCE(SUM(CAST(json_extract(metadata,'$.completion_tokens') AS INTEGER)),0) AS ctok,
+                        COALESCE(AVG(CAST(json_extract(metadata,'$.latency_ms') AS REAL)),0) AS avg_ms
+                        FROM requests {where}
+                        GROUP BY model, task_type ORDER BY cost DESC""", params).fetchall()
+        except _sq.Error as exc:
+            raise RuntimeError(f"model ledger aggregate failed: {exc}") from exc
+        items = [{
+            "model": r["model"] or "", "task_type": r["task_type"] or "",
+            "calls": r["calls"], "ok": r["ok"], "failed": r["calls"] - r["ok"],
+            "failure_rate": round((r["calls"] - r["ok"]) / r["calls"], 4) if r["calls"] else 0,
+            "cost_usd": round(float(r["cost"]), 4),
+            "prompt_tokens": int(r["ptok"] or 0), "completion_tokens": int(r["ctok"] or 0),
+            "avg_latency_ms": round(float(r["avg_ms"] or 0), 1),
+        } for r in rows]
+        return {"items": items, "total": len(items),
+                "from_ts": from_ts, "to_ts": to_ts}
+
+    def admin_system_status(self) -> dict[str, Any]:
+        from .config import local_data_dir
+        from .store import engine_build, service_build, SCHEMA_VERSION
+        from .direct_pipeline import ENGINE_VERSION, ENGINE_ID
+        with self.store._connect() as db:
+            depths = {r[0] or "": r[1] for r in
+                      db.execute("SELECT d.status,COUNT(*) FROM documents d JOIN batches b ON b.id=d.batch_id GROUP BY d.status").fetchall()}
+            conv = {r[0]: r[1] for r in
+                    db.execute("SELECT conversion_state,COUNT(*) FROM documents GROUP BY conversion_state").fetchall() if r[0]}
+            pending_convert = db.execute(
+                "SELECT COUNT(*) FROM documents WHERE conversion_state='pending_convert'").fetchone()[0]
+        # 队列外的账本最近调用年代（与模型调用账本对齐观测，非模型调用本身）。
+        last_model_start = None
+        import os as _os, sqlite3 as _sq
+        ledger = _os.environ.get("FUNDLEX_MODEL_LEDGER",
+                                 str(local_data_dir() / "model_budget.sqlite"))
+        try:
+            with _sq.connect(f"file:{ledger}?mode=ro", uri=True) as conn:
+                r = conn.execute("SELECT MAX(started) FROM requests").fetchone()
+                if r and r[0]:
+                    last_model_start = datetime.fromtimestamp(r[0], timezone.utc).isoformat()
+        except _sq.Error:
+            last_model_start = None
+        import subprocess as _sp, shutil as _su
+        services = {}
+        if _su.which("systemctl"):
+            for svc in ("fundlex-recall-api", "fundlex-recall-worker",
+                        "fundlex-guide-worker", "fundlex-compare-worker",
+                        "fundlex-feishu"):
+                try:
+                    out = _sp.run(["systemctl", "is-active", f"{svc}.service"],
+                                  capture_output=True, timeout=5, text=True, check=False)
+                    services[svc] = out.stdout.strip() or "unknown"
+                except Exception as exc:  # noqa: BLE001 - 观测面
+                    services[svc] = f"unavailable:{type(exc).__name__}"
+        else:
+            services = {s: "unavailable" for s in ("fundlex-recall-api", "fundlex-recall-worker",
+                                                    "fundlex-guide-worker", "fundlex-compare-worker",
+                                                     "fundlex-feishu")}
+        return {"queue_depth": depths, "pending_convert": pending_convert,
+                "conversion_states": conv,
+                "last_model_call_at": last_model_start,
+                "engine": {"id": ENGINE_ID, "version": ENGINE_VERSION},
+                "engine_build": engine_build(), "service_build": service_build(),
+                "schema_version": SCHEMA_VERSION, "services": services}
+
+    def admin_audit_list(self, *, page: int = 1, page_size: int = 50) -> dict[str, Any]:
+        with self.store._connect() as db:
+            total = db.execute("SELECT COUNT(*) AS n FROM admin_audit_log").fetchone()["n"]
+            rows = db.execute("SELECT actor,action,task_id,document_id,detail,created_at "
+                              "FROM admin_audit_log ORDER BY created_at DESC LIMIT ? OFFSET ?",
+                              (page_size, (page - 1) * page_size)).fetchall()
+        return {"total": total, "page": page, "page_size": page_size,
+                "items": [{**dict(r),
+                           "created_at": datetime.fromtimestamp(r["created_at"], timezone.utc).isoformat()}
+                          for r in rows]}
+
+    def admin_artifacts(self, task_id: str) -> dict[str, Any]:
+        self._admin_task_owner(task_id)
+        with self.store._connect() as db:
+            rows = db.execute("""SELECT f.document_id,f.name AS filename,a.kind,a.sha256,a.size
+                FROM task_files f JOIN artifacts a ON a.document_id=f.document_id
+                WHERE f.task_id=? ORDER BY f.ordinal,a.kind""", (task_id,)).fetchall()
+        return {"task_id": task_id,
+                "items": [{**dict(r)} for r in rows]}
+
+    def admin_artifact_download(self, task_id: str, document_id: str, kind: str,
+                                 actor: str) -> tuple[bytes, str]:
+        owner = self._admin_task_owner(task_id)
+        with self.store._connect() as db:
+            linked = db.execute("""SELECT f.document_id,d.batch_id FROM task_files f
+                JOIN documents d ON d.id=f.document_id WHERE f.task_id=? AND f.document_id=?""",
+                (task_id, document_id)).fetchone()
+            if linked is None or not linked["document_id"]:
+                raise NotFound("document not found")
+        with self.store._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            self._admin_audit(db, actor, "admin_artifact_download", task_id, document_id, kind)
+        data, digest = self.store.read_artifact(owner, linked["batch_id"], document_id, kind)
+        return data, digest
+
+    def admin_delete_task(self, actor: str, task_id: str, *, confirm: str) -> dict[str, Any]:
+        """硬删 task/task_files/documents/artifacts/batches 与对象字节；必须
+        ``confirm == task_id``。产物先为 oracle 收集，结清后由库内事务负责
+        行清按，对象文件单独清理不计进入库失败文明性。"""
+        self._admin_task_owner(task_id)
+        confirm = (confirm or "").strip()
+        if confirm != task_id:
+            raise ValueError("CONFIRM_MISMATCH")
+        object_keys: set[str] = set()
+        with self.store._connect() as db:
+            rows = db.execute("""SELECT d.input_key, a.object_key, d.converted_key
+                FROM task_files f
+                JOIN documents d ON d.id=f.document_id
+                LEFT JOIN artifacts a ON a.document_id=d.id
+                WHERE f.task_id=?""", (task_id,)).fetchall()
+            for r in rows:
+                for key in (r["input_key"], r["object_key"], r["converted_key"]):
+                    if key:
+                        object_keys.add(str(key))
+            batch_rows = db.execute("SELECT batch_id FROM task_batches WHERE task_id=?",
+                                    (task_id,)).fetchall()
+        with self.store._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            for brief in batch_rows:
+                bid = brief["batch_id"] if isinstance(brief, dict) else brief["batch_id"]
+                # FK 顺序：artifacts → task_files 内的文档引用 → documents → task_batches → batches
+                db.execute("DELETE FROM artifacts WHERE document_id IN (SELECT id FROM documents WHERE batch_id=?)", (bid,))
+                db.execute("UPDATE task_files SET document_id=NULL WHERE document_id IN (SELECT id FROM documents WHERE batch_id=?)", (bid,))
+                db.execute("DELETE FROM documents WHERE batch_id=?", (bid,))
+                db.execute("DELETE FROM task_batches WHERE batch_id=?", (bid,))
+                db.execute("DELETE FROM batches WHERE id=?", (bid,))
+            db.execute("DELETE FROM task_files WHERE task_id=?", (task_id,))
+            db.execute("DELETE FROM tasks WHERE id=?", (task_id,))
+            self._admin_audit(db, actor, "admin_task_delete", task_id,
+                              detail=f"objects={len(object_keys)}")
+        for key in object_keys:
+            try:
+                self.store.object_path(key).unlink(missing_ok=True)
+            except (OSError, StoreError):
+                pass
+        return {"task_id": task_id, "deleted": True, "objects_removed": len(object_keys)}
+
+    def admin_document_summary(self, document_id: str) -> dict[str, Any]:
+        with self.store._connect() as db:
+            row = db.execute("""SELECT d.id,d.status,d.error_code,d.attempt,d.next_attempt_at,
+                d.admin_requeue_count,d.admin_requeued_by,d.admin_requeued_at,f.task_id
+                FROM documents d JOIN task_files f ON f.document_id=d.id WHERE d.id=?""",
+                (document_id,)).fetchone()
+        if row is None:
+            raise NotFound("document not found")
+        return {"document_id": row["id"], "task_id": row["task_id"], "status": row["status"],
+                "error_code": row["error_code"], "attempt": row["attempt"],
+                "next_attempt_at": row["next_attempt_at"],
+                "admin_requeue_count": row["admin_requeue_count"],
+                "admin_requeued_by": row["admin_requeued_by"],
+                "admin_requeued_at": row["admin_requeued_at"]}
+
+    def retry_document(self, owner: str, task_id: str, document_id: str) -> dict:
+        """手动重试一份终端失败的合同：回排队列，错误码清算；attempt 计数不动。
+
+        仅当：当前用户持有任务、文档属于任务、job 终态 failed、attempt 未达
+        上限（Worker 默认 3 次技术重试）。其他状态（进行中/已成功/未处理）
+        返回状态冲突而非静默重排，避免并发下抢租约。
+        """
+        if task_id.startswith("legacy-"):
+            raise Conflict("HISTORICAL_TASK_READ_ONLY")
+        with self.store._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            task = self._owned(db, owner, task_id)
+            row = db.execute("""SELECT d.id,d.status,d.attempt,d.batch_id,b.status AS batch_status
+                FROM task_files f JOIN documents d ON d.id=f.document_id
+                JOIN batches b ON b.id=d.batch_id
+                WHERE f.task_id=? AND f.document_id=?""", (task_id, document_id)).fetchone()
+            if row is None:
+                raise NotFound("document not found")
+            if row["status"] != "failed":
+                raise Conflict("DOCUMENT_RETRY_STATE_INVALID")
+            if int(row["attempt"]) >= 3:
+                raise Conflict("DOCUMENT_RETRY_EXHAUSTED")
+            now = time.time()
+            db.execute("""UPDATE documents SET status='queued',lease_until=NULL,next_attempt_at=NULL,
+                error_code=NULL,updated_at=? WHERE id=?""", (now, document_id))
+            if row["batch_status"] not in {"paused"}:
+                db.execute("UPDATE batches SET status='queued',updated_at=? WHERE id=?",
+                           (now, row["batch_id"]))
+            db.execute("UPDATE tasks SET updated_at=? WHERE id=?", (now, task_id))
+        return self.get(owner, task_id)
+
     def document(self, owner: str, task_id: str, document_id: str) -> dict:
         """Return one task document without the list endpoint's page limit."""
         if task_id.startswith("legacy-"):
@@ -905,9 +1376,10 @@ class TaskStore:
                         receipt["error_code"] = error
                         receipts.append(receipt)
                         continue
-                    elif not error and (item["name"] != f["name"] or item["size"] != f["size"]):
-                        # FL-D1089：已有校验归因（如 UPLOAD_SIZE_LIMIT）不得被清单比对覆盖——
-                        # 上传读流截断尺寸必与清单不一致，会误报为「文件与清单不匹配」。
+                    elif (item["name"] != f["name"]
+                          or (int(item.get("original_size") or item["size"]) != f["size"])):
+                        # 声明口径=原件字节（manifest），落地口径=归一字节：
+                        # .doc 自动转换时两套尺寸天然不同，不判定清单冲突。
                         error = "MANIFEST_FILE_MISMATCH"
                     if error:
                         if f is not None:
@@ -918,18 +1390,24 @@ class TaskStore:
                     if ordinal == 0:
                         db.execute("""INSERT INTO batches(id,owner,ruleset_version,ruleset_sha256,mode,status,request_hash,
                             created_at,updated_at,engine_build,schema_version,engine_id,guide_version_id,
-                            guide_rules_sha256,disabled_rule_ids,model_preferences) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                            guide_rules_sha256,guide_schema_version,snapshot_json,disabled_rule_ids,model_preferences)
+                            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                                    (batch_id, owner, task["ruleset_version"], task["ruleset_sha256"],
                                     task["mode"] or "delivery",
                                     "paused" if task["paused"] else "queued",
                                     uuid.uuid4().hex, now, now, build, SCHEMA_VERSION, task["engine_id"],
                                     task["guide_version_id"], task["guide_rules_sha256"],
+                                    (task["guide_schema_version"] or "")
+                                    if "guide_schema_version" in task.keys() else "",
+                                    (task["snapshot_json"] or "")
+                                    if "snapshot_json" in task.keys() else "",
                                     task["disabled_rule_ids"] or "[]", task["model_preferences"] or "{}"))
                         db.execute("INSERT INTO task_batches VALUES(?,?)", (task_id, batch_id))
                     document_id = uuid.uuid4().hex
                     db.execute("""INSERT INTO documents(id,batch_id,ordinal,filename,source_sha256,source_size,input_key,
-                        status,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)""",
-                               (document_id, batch_id, ordinal, f["name"], item["digest"], item["size"], item["key"], "queued", now, now))
+                        status,conversion_state,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
+                               (document_id, batch_id, ordinal, f["name"], item["digest"], item["size"], item["key"],
+                                "queued", str(item.get("conversion_state") or ""), now, now))
                     ordinal += 1
                     published.add(item["key"])
                     db.execute("UPDATE task_files SET upload_status='accepted',error_code=NULL,document_id=? WHERE task_id=? AND client_id=?", (document_id, task_id, item["client_id"]))
@@ -978,6 +1456,20 @@ class TaskStore:
         """结果总览.md：面向合同交付的阅读件，不含资格/错误码/引擎标识等技术信息。"""
         summary = self.get(owner, task_id)
         docs = self.documents(owner, task_id, page_size=100000)["items"]
+        if summary.get("result_schema") == "direct_edit_v1" and not summary.get("legacy"):
+            # 直通任务：结果总览由 direct_report 统一渲染（实际写回对照）。
+            from .direct_report import render_overview
+            entries = []
+            for doc in docs:
+                doc_report: dict = {}
+                if doc["document_id"]:
+                    try:
+                        doc_report = self.store.get_report(owner, doc["batch_id"],
+                                                           doc["document_id"])
+                    except (NotFound, ReportJsonError):
+                        doc_report = {}
+                entries.append((doc["name"], doc_report, doc))
+            return render_overview(summary["name"], entries)
 
         def safe(value):
             return str(value or "—").replace("|", "\\|").replace("\r", " ").replace("\n", " ")
