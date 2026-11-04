@@ -20,6 +20,9 @@
 cd deploy && ./publish_workspace.sh   # 已含 frontend 白名单（FL-D1122 之后）
 sudo systemctl restart fundlex-recall-api fundlex-recall-worker
 systemctl is-active fundlex-recall-api fundlex-recall-worker  # 两 active 才算成
+# FL-D1127 起还有指引解析专职池(合同/指引互不阻塞),部署后确认:
+systemctl is-active fundlex-guide-parse-worker@1 fundlex-guide-parse-worker@2  # 两 active
+# 域分工:recall-worker=FUNDLEX_WORKFLOW_GUIDE=0(只合同);guide-parse-worker@N=FUNDLEX_WORKFLOW_CONTRACTS=0(只指引)
 ```
 
 依赖位：`/etc/fundlex-recall.env`（凭据不落 Git）+ MySQL 3307 + 产线 objects 数据分区。没有就只在本地临时实例跑（`funcher's tools/deploy' 有样例 seed path）。
