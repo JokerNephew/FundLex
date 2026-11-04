@@ -280,21 +280,6 @@ def process_direct_edit(input_path: Path, output_dir: Path, *,
     else:
         raise DirectPipelineError("DIRECT_WRITER_INVALID_RESULT")
 
-    # FL-D1133 基础档（用户 GO ~15:5x）：原合同带修订时,把原修改人的痕迹
-    # 盖回红线未被动刀的段落(归一治盲不动,产出观感恢复 FL-D1115 之前;
-    # 模块自带「可见文字逐字相同」硬校验,失败整单放弃=红线保持回补前)。
-    if delivery_status in ("complete", "incomplete") and \
-            int(report["preparation"].get("revisions_accepted") or 0) > 0:
-        try:
-            from .revision_restore import restore_source_revisions
-            report["revision_restore"] = restore_source_revisions(
-                redline_path, original_raw_bytes)
-        except Exception:  # noqa: BLE001 - 回补失败绝不拖累成品交付
-            import traceback as _tb
-            _tb.print_exc()
-            report["revision_restore"] = {"attempted": True, "rolled_back": True,
-                                          "reason": "unexpected exception"}
-
     actual = Path(write_result.get("final_path") or final_path)
     actual_redline = Path(write_result.get("redline_path") or redline_path)
     if delivery_status == "complete":
@@ -377,4 +362,29 @@ def process_direct_edit(input_path: Path, output_dir: Path, *,
                    "locate_stats": outcome.get("stats") or {},
                    "card_reports": outcome.get("card_reports") or []}
     report["diagnostics"] = {**report.get("diagnostics", {}), **diagnostics}
+
+    # FL-D1133 基础档（用户 GO ~15:5x）：原合同带修订时,把原修改人的痕迹
+    # 盖回红线未被动刀的段落(归一治盲不动,产出观感恢复 FL-D1115 之前;
+    # 模块自带「可见文字逐字相同」硬校验,失败整单放弃=红线保持回补前)。
+    # FL-D1133 事故①：回补必须在写回哈希复核(上方 DIRECT_WRITER_HASH_MISMATCH)
+    # 全部通过**之后**执行,并同步刷新报告里的 redline 指纹——提前跑会把
+    # 复核逼成误杀(16:05 用户广发安颐单实证),事后不刷新=报告指纹与实物不符。
+    if delivery_status in ("complete", "incomplete") and \
+            int(report["preparation"].get("revisions_accepted") or 0) > 0:
+        try:
+            from .revision_restore import restore_source_revisions
+            restore_report = restore_source_revisions(redline_path, original_raw_bytes)
+        except Exception:  # noqa: BLE001 - 回补失败绝不拖累成品交付
+            import traceback as _tb
+            _tb.print_exc()
+            restore_report = {"attempted": True, "rolled_back": True,
+                              "reason": "unexpected exception"}
+        report["revision_restore"] = restore_report
+        if (restore_report.get("restored_paragraphs")
+                and delivery_status == "complete"
+                and isinstance(report.get("direct_edit"), Mapping)
+                and isinstance(report["direct_edit"].get("artifacts"), dict)):
+            report["direct_edit"]["artifacts"]["redline_sha256"] = sha256_file(redline_path)
+            report["direct_edit"]["artifacts"]["redline_size"] = redline_path.stat().st_size
+            report["direct_edit"]["artifacts"]["restored"] = True
     return report
