@@ -429,7 +429,7 @@
     const st=$(`model-${prefix}-status`);st.dataset.tone='';st.textContent='配置已更改，尚未验证。';
   });
   document.addEventListener('change',e=>{
-    if(e.target.id==='gd-diff-from'||e.target.id==='gd-diff-to'){const d=state.guideDiff;if(!d||d.prog)return;if(e.target.id==='gd-diff-from')d.from=e.target.value;else d.to=e.target.value;return;}if(e.target.id==='review-author-filter'){const v=e.target.value||'';state.reviewAuthorFilter=v;const srcSel=v.startsWith('src:');const author=srcSel?v.slice(4):'';const srcCount=srcSel?(state.review?.source_revisions||[]).filter(s=>(String(s.author||'').trim()||'（未署名）')===author).length:0;document.querySelectorAll('.rev-item[data-rev-item]').forEach(li=>{li.hidden=!!v&&(srcSel||li.dataset.revAuthor!==v);});const visible=[...document.querySelectorAll('.rev-item[data-rev-item]')].filter(li=>!li.hidden).length;const t=document.querySelector('.review-list-title');if(t)t.textContent=srcSel?`${author}的原文修订 ${srcCount} 条已并入正文（不可在清单处理）`:`改动清单 · ${visible} / ${state.review?.revisions?.length||0} 条`;return;}
+    if(e.target.id==='gd-diff-from'||e.target.id==='gd-diff-to'){const d=state.guideDiff;if(!d||d.prog)return;if(e.target.id==='gd-diff-from')d.from=e.target.value;else d.to=e.target.value;return;}if(e.target.id==='review-author-filter'){const v=e.target.value||'';state.reviewAuthorFilter=v;const isSrcOnly=v&&(state.review?.source_revisions||[]).some(s=>String(s.author||'').trim()===v)&&!(state.review?.revisions||[]).some(r=>String(r.author||'').trim()===v);document.querySelectorAll('.rev-item[data-rev-item]').forEach(li=>{li.hidden=!!v&&li.dataset.revAuthor!==v;});const visible=[...document.querySelectorAll('.rev-item[data-rev-item]')].filter(li=>!li.hidden).length;const t=document.querySelector('.review-list-title');if(t)t.textContent=isSrcOnly?`${v}的修订来自原文件，已并入正文`:`改动清单 · ${visible} / ${state.review?.revisions?.length||0} 条`;return;}
 if(e.target.id==='gd-diff-filter'){const d=state.guideDiff;if(d){d.filter=e.target.value||'';d.cursor=-1;gdRenderRail(d);}return;}if(e.target.id==='gd-diff-show-sources'){const d=state.guideDiff;if(d){d.showSources=e.target.checked;if(d.td&&d.view!=='classic')gdRenderPanes(d);}return;}
     const card=e.target.closest('.model-edit-form');if(!card)return;
     const prefix=card.closest('[data-model-role]')?.dataset.modelRole;if(!prefix)return;
@@ -1072,13 +1072,13 @@ if(e.target.id==='gd-diff-filter'){const d=state.guideDiff;if(d){d.filter=e.targ
     const review=state.review, body=$('detail-body'); if(!review||!body) return;
     const chosen=review.chosen || {};
     const nav=reviewNavInfo(review);
-    // FL-D1132 修订（用户口径 2026-11-04 ~14:4x）：不要「原文自带修订」列表组，
-    // 只把原修改人接回筛选器（带条数标注,选中示原文修订已并入正文）。
+    // FL-D1132 定稿口径（用户令 2026-11-04 ~15:0x）：下拉只老老实实显示修改人名字——
+    // 原修改人与 FundLex 平列，无条数标注；选中原修改人时标题行提示其修订已并入正文。
     const revAuthors=[...new Set(review.revisions.map(r=>String(r.author||'').trim()).filter(Boolean))];
-    const srcAuthors={};(review.source_revisions||[]).forEach(s=>{const a=String(s.author||'').trim()||'（未署名）';srcAuthors[a]=(srcAuthors[a]||0)+1;});
-    const srcOpts=Object.entries(srcAuthors).filter(([a])=>!revAuthors.includes(a)).map(([a,n])=>`<option value="src:${esc(a)}">${esc(a)}（原文修订 ${n} 条）</option>`).join('');
+    const srcAuthors=[...new Set((review.source_revisions||[]).map(s=>String(s.author||'').trim()).filter(Boolean))];
+    const allAuthors=[...new Set([...revAuthors,...srcAuthors])];
     state.reviewAuthorFilter='';
-    const authorFilterHtml=(revAuthors.length||srcOpts)?`<label class="review-author-filter">修改人 <select id="review-author-filter" class="control-select" aria-label="按修改人筛选" data-fl-selectvend="off"><option value="">全部修改人</option>${revAuthors.map(a=>`<option value="${esc(a)}">${esc(a)}</option>`).join('')}${srcOpts?`<option disabled>── 原文件的修订 ──</option>${srcOpts}`:''}</select></label>`:'';
+    const authorFilterHtml=allAuthors.length>=1?`<label class="review-author-filter">修改人 <select id="review-author-filter" class="control-select" aria-label="按修改人筛选" data-fl-selectvend="off"><option value="">全部修改人</option>${allAuthors.map(a=>`<option value="${esc(a)}">${esc(a)}</option>`).join('')}</select></label>`:'';
     const items=review.revisions.map(r=>{
       const verdict=chosen[r.del_id] || 'accept';
       const before=r.before && r.before.trim() ? quoteBox('原文',r.before,'quote-before') : '';
