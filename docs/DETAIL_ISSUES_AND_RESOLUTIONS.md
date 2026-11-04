@@ -9966,3 +9966,8 @@ H＝E×…
 - 720a1d8 裁:产线 FL-D1121 已带热读生效是家主的件,我剥出只留 reflog,方向已收敛。
 - 新令:逢表先产 sha→候选 sha→差意,不再单向名单。
   - 2026-11-04 ~10:1x FL-D1115 上产：指纹 engine=1ee4e742/service=c37afbce；字节核验五项全绿（prepare 归一=3/FL-D1093 logging=2/D1114 缺省=拒=1/admin 域=3）；近 5min worker 零错；2h 巡到 /tmp/opencode/batch-run/results/patrol-fd1115.log，14:2x 出结论后主线闭环呈你。720a1d8 域外件=主线家件，照旧 reflog 保留不再追移。
+
+## FL-D1122 六度前端覆盖事故+秒回补（2026-11-04 ~10:0x，已回补·已验证）
+- 现场：GO 放行波（e56ff54→产 1ee4e742）前脚落，后脚产线五前端被冲回 2026-11-03 21:41 老节（app.js 21:41/compare.js 14:20/sectionnav 11:33 老节）——主线凌晨 FL-D1120（五形态/进度尺）+FL-D1121（修改指引V2 命名）再被吞。后端五件这次全在（六协对缝纪律确于冲了）根子在「发布器带的是树里旧前端的归档字节,不是产线现行」。
+- 处置：秒回补 6 件（app.js/app.css/compare.html/compare.js/sectionnav/status_labels），产还原热读,登录页零错;备份 /tmp/opencode/frontend-pre-fd1122-wave7。
+- 三度纠偏升级到**前端发布物禁带白名单机制（候选含 frontend/* 一律静默拒绝）**，线上发布令同步下。
