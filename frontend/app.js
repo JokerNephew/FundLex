@@ -782,7 +782,7 @@ if(e.target.id==='gd-diff-filter'){const d=state.guideDiff;if(d){d.filter=e.targ
   document.addEventListener('submit',e=>{if(e.target&&e.target.id==='feishu-app-form')feishuAppSubmit(e);});
   // FL-D1120补锚6：后端 exceptions 字段含 incomplete；「无报错=完成」语义下
   // 异常徽标/进度红闸一律按 失败+接收失败 计（不再采纳旧 exceptions 字段，避免漏改语义蔓延）。
-  function taskMetrics(t){const failed=t.failed||0,rejected=t.rejected||0,dc=t.delivery_counts||{};return {success:t.successful??((dc.complete||0)+(dc.complete_with_exceptions||0)),anomaly:failed+rejected,breakdown:`失败 ${failed} · 接收失败 ${rejected}`};}
+  function taskMetrics(t){const failed=t.failed||0,rejected=t.rejected||0,dc=t.delivery_counts||{};return {success:(dc.complete||0)+(dc.complete_with_exceptions||0)+(dc.incomplete||0),anomaly:failed+rejected,breakdown:`失败 ${failed} · 接收失败 ${rejected}`};}
   function taskRow(t){const m=taskMetrics(t),pct=t.total?Math.round(100*(t.completed||0)/t.total):0;return `<tr data-row-key="${esc(t.id)}"><td><span class="filename task-list-name" title="${esc(t.name)}">${esc(t.name)}</span></td><td><strong>${t.total}</strong></td><td title="${esc(m.breakdown)}"><span class="task-success">${m.success}</span> / <span class="task-error">${m.anomaly}</span></td><td>${badge(t.status)}</td><td><div class="task-progress"><div class="progress-line mini">${progressHTML(t)}</div><small>${pct}% · ${t.completed}/${t.total} 份终态</small></div></td><td class="task-created-time">${esc(new Date(t.created_at).toLocaleString('zh-CN'))}</td><td><button class="btn-link" data-task="${esc(t.id)}">查看</button></td></tr>`;}
   async function loadTasks(quiet=false) {
     saveRevisionFilters();const t=ticket('tasks'),rows=$('task-rows'),hadData=state.tasksLoaded&&!state.tasksFailed;
