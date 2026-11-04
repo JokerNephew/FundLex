@@ -940,7 +940,7 @@ if(e.target.id==='gd-diff-filter'){const d=state.guideDiff;if(d){d.filter=e.targ
     if(delivery==='not_generated')return 'failed';
     if(delivery==='complete'||delivery==='incomplete')return delivery;
     return directCount(report,doc)>=1?'complete':'incomplete';}
-  const DIRECT_OUTCOME_TEXT={complete:'完成',incomplete:'未完成',processing:'处理中',failed:'处理失败'};
+  const DIRECT_OUTCOME_TEXT={complete:'完成',incomplete:'处理完成',processing:'处理中',failed:'处理失败'};
   function directNote(report,doc){const o=directOutcome(report,doc);if(o==='complete')return `实际修改 ${directCount(report,doc)} 处；「完成」表示本次处理已形成可交付修改并提供下载，不代表合同所有条款均已复核完毕。`;if(o==='processing')return '合同仍在处理中，结束后会显示实际修改结果。';if(o==='failed')return '本次处理发生故障，没有形成可交付的修改；可重新上传该合同再试一次。';return '本次按指引核对后没有形成可交付的修改，合同未做改动。';}
   // 附带项①：失败行把错误 entries 的第一行错误码+脱敏堆尾捎进 reason（路径不外露）
   function directFailureDigest(doc){const entries=Array.isArray(doc.errors)?doc.errors:[];
