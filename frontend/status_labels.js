@@ -7,7 +7,7 @@
     retry_wait: '等待重试', paused: '已暂停', not_started: '尚未接收',
     completed: '处理完成', completed_with_exceptions: '处理结束（含异常）',
     succeeded: '已处理', failed: '处理失败', pending: '未判定',
-    complete: '文件已完整交付', incomplete: '结果不完整', not_generated: '未生成',
+    complete: '文件已完整交付', incomplete: '处理完成', not_generated: '未生成',
     complete_with_exceptions: '已交付（部分需人工核对）',
   });
   window.FUNDLEX_GUIDE_STATUSES = Object.freeze({
