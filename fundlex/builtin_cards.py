@@ -24,8 +24,9 @@ from typing import Any
 BUILTIN_CARD_V1_ID = "builtin-cards-v1"
 # 用户口径（2026-11-03）：默认可执行内置 = 生产真实模型解析的 V2 卡包冻结种子。
 # （guides/builtin_cards_v2.json，源自 guide_versions aa5edf83 的 rules_json。）
-# FL-D1124（用户令 2026-11-04）：新账号兜底默认=用户已解析的存量指引 V2（bf4991，见 FL-D1123）。
-BUILTIN_CARD_DEFAULT_ID = "bf499150221c42c4967e81f220c64987"
+# FL-D1128（用户令 2026-11-04 ~11:3x）：兜底默认=用户 10:39:27 重传解析的存量指引 V2
+# （6046eb6c，承接 FL-D1123/1124 的 bf4991 版；原件 sha ff95dfdb）。
+BUILTIN_CARD_DEFAULT_ID = "6046eb6cb23b40518aaa0f9c49c5e1fc"
 BUILTIN_CARD_PARSER_VERSION = "builtin-converted-1"
 BUILTIN_CARD_SOURCE_PATH_HINT = "builtin_guide_v1.json (机械转换)"
 

@@ -10012,3 +10012,9 @@ H＝E×…
 - 根因：guide_jobs 解析跑在 fundlex-recall-worker 同一进程的 _run_once 循环里(先指引后合同)——指引解析(模型逐条款,分钟级~十分钟级)期间该槽位停摆;合同长作业占满槽位时指引解析排队=「指引解析被其他任务阻塞」。
 - 修法：jobs.py 加域开关 FUNDLEX_WORKFLOW_GUIDE/FUNDLEX_WORKFLOW_CONTRACTS(默认全开=旧行为,hausekeeping 只随合同域);产线 recall-worker 置 GUIDE=0;新建模板服务 fundlex-guide-parse-worker@.service(CONTRACTS=0)开 2 实例——指引解析专职池互不阻塞,claim 按 owner 串行设计原生支持多实例。
 - 验证:四服务 active(guide-parse@1/@2 NRestarts=0);Worker 单测 guide-only/contracts-only/默认三态断言过；产线 home=200;boot 期一条 MySQL 未就绪瞬断 uvicorn 父进程自愈(标记观察)。
+
+## FL-D1128 内置默认指引切换为用户 10:39:27 重传版（2026-11-04 ~11:4x，用户令·已上产·已验证）
+- 用户在 10:39:27.727 又传一版同名指引（6046eb6c，11 组卡，sha ff95dfdb，与 09:54 的 bf4991 不同文件修订），令将其改为默认内置。
+- 处置：①6046eb6c→built_in=1/owner=''/released/frozen_builtin_v2；②bf4991 退回普通用户版本（built_in=0→owner=580bbe3d，status=parsed）；③guide_config 三户全部→6046eb6c（其中 580bbe3d 上传后即被 auto 选中，另两户本次 system 切换）；④canonical=用户 10:39 原件 builtin_cards_v2r2_source.docx（25583B,sha ff95dfdb 对得上）；⑤BUILTIN_CARD_DEFAULT_ID 常量→6046eb6c（新账号兜底同步换向），发布两件对缝（d6141dff/e4cde20a,frontend=否）。
+- 验证：DEFAULT_ID/canonical/库面三户全绿，四服务 active,home=200;release 支 8f65514 已推 GitHub;库表备份 guide-tables-pre-fd1128.sql。
+- 观察项：bf4991 的 filename 在 10:0x~10:3x 间曾被改写为 'aa5edf83…be.docx'（非本次操作所致，来源待查，退回时已顺手改回中文名）;API 重启瞬断自愈重复出现（MySQL 未就绪竞态，待根治登记）。
