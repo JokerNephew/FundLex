@@ -10065,4 +10065,5 @@ H＝E×…
 - 根因（我埋的雷）：1133 回补钩点放在 pipeline 写回哈希复核**之前**——回补改写 redline.docx 后，复核拿到的文件 sha 与写回器自报 sha 不一致→误杀。**单点一文件顺序事故,非算法问题**。
 - 处置：钩点移到 doc_edit 复核全部通过之后;回补有实效时同步刷新 report.direct_edit.artifacts 的 redline_sha256/size 并打 restored 标记(文件不留口径差);仿真全链 complete+qualified+指纹一致;热修 release 364d26a 在产(restarted worker 15:1x zero错)。
 - 补偿：受害文档(cce0433a)已 admin_requeue 通道回队(admin_requeue_count+1,by=opencode-fd1133-hotfix),由 worker 自动重跑;跑成后我在巡检里核回补署名并回报。
+- **重跑=产线灰度首征(16:22 完工)**：同文档 succeeded,revision_restore.restored_marks=190;实物红线作者分布=王悦棋 146/“销售费用新规专项修订” 44/FundLex 8——原修改人痕迹与我方并列,完全恢复 FL-D1115 之前观感;normalization 受理校验自证文字零漂移。
 - 教训入法:凡「产线写文件」的钩子,必须自觉排在**该文件所有消费方的指纹/完整性复核之后**;以后凡动 pipeline 产物的补丁,必须过「ra>0 全链仿真」门(本次补在测试之外,已补目录)。
