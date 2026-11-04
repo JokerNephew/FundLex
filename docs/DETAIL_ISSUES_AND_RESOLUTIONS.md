@@ -9971,3 +9971,14 @@ H＝E×…
 - 现场：GO 放行波（e56ff54→产 1ee4e742）前脚落，后脚产线五前端被冲回 2026-11-03 21:41 老节（app.js 21:41/compare.js 14:20/sectionnav 11:33 老节）——主线凌晨 FL-D1120（五形态/进度尺）+FL-D1121（修改指引V2 命名）再被吞。后端五件这次全在（六协对缝纪律确于冲了）根子在「发布器带的是树里旧前端的归档字节,不是产线现行」。
 - 处置：秒回补 6 件（app.js/app.css/compare.html/compare.js/sectionnav/status_labels），产还原热读,登录页零错;备份 /tmp/opencode/frontend-pre-fd1122-wave7。
 - 三度纠偏升级到**前端发布物禁带白名单机制（候选含 frontend/* 一律静默拒绝）**，线上发布令同步下。
+
+
+## FL-D1122 前端覆盖第六案（2026-11-04 FL-D1115 放波附带事故）
+
+- 病灶：集成树残留 2026-11-03 510f17c 前端归档随后端波同包上产,覆盖产线临备(cdb45a4+720a1d8 热读件)——白名单化前从未声明过「后端波逐前禁带 frontend/」。
+- 三线裁定：波成立(FL-D1115 产线绿)、前端覆盖案独立立 FL-D1122;即刻起发布器载荷白名单化(frontend/* 遇红即扔+日志清单+不得"零变更"附带,放行券制)。
+- 执行:① 产线回热(ca 主线手工恢复 qa-base 现行 {含720a1d8/五刀后缘} 字节,不见归档);② 发布器白名单补丁(tools/deploy/fundlex-publish.sh)+同步 /usr/local/sbin+drift 双验;③ 4h 内交「00:00 /opt 五前端=【产线 sha】vs 主线 vs 我的算签名」跟着两验;④ 逢表「先产/候选/差意/带frontend?(默认必须=否)」。
+
+
+## 2026-11-04 FL-D1122 处置完成
+- 产线五前端恢复 canonical 720a1d8 字节(md5 同);白名单补丁打进 publisher(root+repo 双桶+drift OK+语弃 OK);实测干跑=REJECT(86 件前端全列拒单);逢表尾=产sha/候选sha/差意/带frontend(默认=否)。stale 备份保留了底 if 需要。
