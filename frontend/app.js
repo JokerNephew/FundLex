@@ -429,7 +429,7 @@
     const st=$(`model-${prefix}-status`);st.dataset.tone='';st.textContent='配置已更改，尚未验证。';
   });
   document.addEventListener('change',e=>{
-    if(e.target.id==='gd-diff-from'||e.target.id==='gd-diff-to'){const d=state.guideDiff;if(!d||d.prog)return;if(e.target.id==='gd-diff-from')d.from=e.target.value;else d.to=e.target.value;return;}if(e.target.id==='review-author-filter'){const v=e.target.value||'';state.reviewAuthorFilter=v;document.querySelectorAll('.rev-item[data-rev-item]').forEach(li=>{li.hidden=!!v&&li.dataset.revAuthor!==v;});const visible=[...document.querySelectorAll('.rev-item[data-rev-item]')].filter(li=>!li.hidden).length;const t=document.querySelector('.review-list-title');if(t)t.textContent=`改动清单 · ${visible} / ${state.review?.revisions?.length||0} 条`;return;}
+    if(e.target.id==='gd-diff-from'||e.target.id==='gd-diff-to'){const d=state.guideDiff;if(!d||d.prog)return;if(e.target.id==='gd-diff-from')d.from=e.target.value;else d.to=e.target.value;return;}if(e.target.id==='review-author-filter'){const v=e.target.value||'';state.reviewAuthorFilter=v;const srcSel=v.startsWith('src:');const author=srcSel?v.slice(4):'';const srcCount=srcSel?(state.review?.source_revisions||[]).filter(s=>(String(s.author||'').trim()||'（未署名）')===author).length:0;document.querySelectorAll('.rev-item[data-rev-item]').forEach(li=>{li.hidden=!!v&&(srcSel||li.dataset.revAuthor!==v);});const visible=[...document.querySelectorAll('.rev-item[data-rev-item]')].filter(li=>!li.hidden).length;const t=document.querySelector('.review-list-title');if(t)t.textContent=srcSel?`${author}的原文修订 ${srcCount} 条已并入正文（不可在清单处理）`:`改动清单 · ${visible} / ${state.review?.revisions?.length||0} 条`;return;}
 if(e.target.id==='gd-diff-filter'){const d=state.guideDiff;if(d){d.filter=e.target.value||'';d.cursor=-1;gdRenderRail(d);}return;}if(e.target.id==='gd-diff-show-sources'){const d=state.guideDiff;if(d){d.showSources=e.target.checked;if(d.td&&d.view!=='classic')gdRenderPanes(d);}return;}
     const card=e.target.closest('.model-edit-form');if(!card)return;
     const prefix=card.closest('[data-model-role]')?.dataset.modelRole;if(!prefix)return;
@@ -983,7 +983,7 @@ if(e.target.id==='gd-diff-filter'){const d=state.guideDiff;if(d){d.filter=e.targ
     const kinds=outcome==='complete'?['final','redline','selected_final','selected_redline']:['redline','selected_redline'];
     const buttons=kinds.filter(kind=>downloads[kind]).map(directDownloadButton).join('');
     html+=`<div class="result-action-grid">${buttons?`<section class="detail-section result-files"><h3>下载区</h3><div class="detail-actions">${buttons}</div><p class="subnote">${esc(DIRECT_FINAL_NOTE)}</p></section>`:''}${report&&outcome==='complete'?revisionSection(doc,report):''}</div>`;
-    if(report&&outcome==='complete'&&tierNote)html+=`<p class="subnote">修订审查的「改动清单」=本次按指引的修改（我方修订）；原文件自带的修订在清单下方单独列出（原文修订，已并入正文）；${esc(tierNote)}</p>`;
+    if(report&&outcome==='complete'&&tierNote)html+=`<p class="subnote">修订审查的「改动清单」=本次按指引的修改（我方修订）；原文件的修订已并入正文，其修改人可在「修改人」筛选里查看；${esc(tierNote)}</p>`;
     if(changes.length){
       html+=`<section class="detail-section"><h3>改了哪些条款 · ${changes.length} 处</h3>${changes.map((c,i)=>`<details class="action-evidence"><summary><span class="clause-section">${i+1}. ${esc(c.location)}</span> <span class="badge b-blue">${esc(c.action)}</span> <span class="chip">${esc(c.cardTitle)}</span></summary><div class="clause-compare">${c.before?quoteBox('改之前',c.before,'quote-before'):''}${quoteBox('改成了什么',c.after||'（删除该句）','quote-after')}</div></details>`).join('')}</section>`;
     }else if(outcome==='processing'){
@@ -1072,9 +1072,13 @@ if(e.target.id==='gd-diff-filter'){const d=state.guideDiff;if(d){d.filter=e.targ
     const review=state.review, body=$('detail-body'); if(!review||!body) return;
     const chosen=review.chosen || {};
     const nav=reviewNavInfo(review);
+    // FL-D1132 修订（用户口径 2026-11-04 ~14:4x）：不要「原文自带修订」列表组，
+    // 只把原修改人接回筛选器（带条数标注,选中示原文修订已并入正文）。
     const revAuthors=[...new Set(review.revisions.map(r=>String(r.author||'').trim()).filter(Boolean))];
+    const srcAuthors={};(review.source_revisions||[]).forEach(s=>{const a=String(s.author||'').trim()||'（未署名）';srcAuthors[a]=(srcAuthors[a]||0)+1;});
+    const srcOpts=Object.entries(srcAuthors).filter(([a])=>!revAuthors.includes(a)).map(([a,n])=>`<option value="src:${esc(a)}">${esc(a)}（原文修订 ${n} 条）</option>`).join('');
     state.reviewAuthorFilter='';
-    const authorFilterHtml=revAuthors.length>=1?`<label class="review-author-filter">修改人 <select id="review-author-filter" class="control-select" aria-label="按修改人筛选" data-fl-selectvend="off"><option value="">全部修改人</option>${revAuthors.map(a=>`<option value="${esc(a)}">${esc(a)}</option>`).join('')}</select></label>`:'';
+    const authorFilterHtml=(revAuthors.length||srcOpts)?`<label class="review-author-filter">修改人 <select id="review-author-filter" class="control-select" aria-label="按修改人筛选" data-fl-selectvend="off"><option value="">全部修改人</option>${revAuthors.map(a=>`<option value="${esc(a)}">${esc(a)}</option>`).join('')}${srcOpts?`<option disabled>── 原文件的修订 ──</option>${srcOpts}`:''}</select></label>`:'';
     const items=review.revisions.map(r=>{
       const verdict=chosen[r.del_id] || 'accept';
       const before=r.before && r.before.trim() ? quoteBox('原文',r.before,'quote-before') : '';
@@ -1103,7 +1107,7 @@ if(e.target.id==='gd-diff-filter'){const d=state.guideDiff;if(d){d.filter=e.targ
           <div class="review-doc" id="review-doc">${review.html}</div></div>
         <div class="review-splitter" id="review-splitter" role="separator" aria-label="调整改动清单宽度" aria-orientation="vertical" aria-valuemin="280" aria-valuemax="680" aria-valuenow="360" tabindex="0" title="拖动调整修订清单宽度，双击恢复默认"></div>
         <aside class="review-list" id="review-rail"><h3><span class="review-list-title">改动清单 · ${review.revisions.length} 条</span> ${authorFilterHtml}<span class="review-kbd">A 接受 · R 拒绝</span><button class="section-collapse-toggle" id="review-rail-collapse" type="button" aria-expanded="true" aria-controls="review-rail" aria-label="折叠或展开改动清单栏" title="折叠改动清单栏" data-title-expand="展开改动清单栏" data-title-collapse="折叠改动清单栏" data-text-expand="«" data-text-collapse="»">»</button></h3>
-          <ol class="rev-list">${items||'<li class="subnote">本合同没有可选择的修订。</li>'}</ol>${(()=>{const src=(review.source_revisions||[]);if(!src.length)return '';const rows=src.map(s=>`<li class="rev-item rev-item-source"><div class="rev-head"><span class="rid">#${s.index}</span>${s.author?`<span class="rev-author" title="原修改人">${esc(s.author)}</span>`:''}<span class="rule">${s.kind==='delete'?'原文删除':s.kind==='insert'?'原文插入':'原文修改'}</span></div><div class="rev-body">${s.before?`<del class="rev-del">${esc(s.before)}</del>`:''}${s.after?`<ins class="rev-ins">${esc(s.after)}</ins>`:''}</div></li>`).join('');return `<h3 class="rev-source-title">原文自带修订 · ${src.length} ${review.source_revisions_truncated?'+':''}条<span class="subnote">（来自原文件的修订痕迹，仅供核对，不参与接受/拒绝；已按「接受修订」并入正文）</span></h3><ol class="rev-list rev-list-source">${rows}</ol>`;})()}</aside>
+          <ol class="rev-list">${items||'<li class="subnote">本合同没有可选择的修订。</li>'}</ol></aside>
       </div>
       <div class="review-actions"><button class="btn btn-primary" data-action="generate-selected">生成选择版合同</button>
         <button class="btn" data-action="review-close">返回报告</button>
